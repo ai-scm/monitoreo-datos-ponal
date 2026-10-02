@@ -1,0 +1,24 @@
+# Scripts y artefactos antiguos (referencia local, no versionar)
+scripts-antiguos/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.venv/
+venv/
+env/
+
+# Salidas de los scripts
+salida/
+*.csv
+
+# Archivos empaquetados / binarios
+*.zip
+
+# Sistema operativo / editores
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
