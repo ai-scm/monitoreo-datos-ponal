@@ -12,6 +12,10 @@ antiguedad de credenciales y la deteccion de cambios usan solo APIs de AWS.
 Alcance de bases (endpoints descubiertos, sin necesitar contrasena):
   - Las 8 bases del pipeline Glue (host:puerto desde las Glue Connections).
   - Las bases replicadas por DMS (ServerName/Port de los DMS endpoints).
+  - Endpoints on-premise FIJOS de SIVICC (172.28.18.185:1538) y RNMC
+    (cnp.prod.mdp.local:1538), cuyo trafico depende de la VPN compartida ofite-bogota-*
+    (ver 2-Integraciones/docs-investigacion/VPN-ONPREMISE-ESTADO.md). El ping TCP a
+    estos detecta la degradacion de esa VPN.
   - Secretos pon-prod-secad-<SIGLA>-on-premise (antiguedad de credenciales).
 
 Deteccion de cambios (lo que realmente importa para "cambios de IP"):
@@ -84,6 +88,15 @@ DATABASE_TO_SECRET = {
     "TELEPOL": "pon-prod-telepol-on-premise",
     "DBOPER": "pon-prod-DBOPER-on-premise",
     "ALI": "pon-prod-ALI-secret",
+}
+
+# Endpoints on-premise CONOCIDOS que no siempre se descubren por Glue/DMS pero cuyo
+# trafico depende de la VPN compartida ofite-bogota-*. Se agregan fijos para que el
+# ping TCP (en VPC environment) detecte la degradacion de esa VPN (ver el hallazgo
+# transversal 2-Integraciones/docs-investigacion/VPN-ONPREMISE-ESTADO.md).
+ENDPOINTS_ONPREM_FIJOS = {
+    "SIVICC (on-premise)": {"host": "172.28.18.185", "port": 1538, "service": "", "fuente": "fijo"},
+    "RNMC (on-premise)": {"host": "cnp.prod.mdp.local", "port": 1538, "service": "", "fuente": "fijo"},
 }
 
 # Acepta jdbc:oracle:thin:@//HOST:PUERTO/SVC y jdbc:oracle:thin://@HOST:PUERTO/SVC.
@@ -227,6 +240,18 @@ def descubrir_endpoints(filtro_siglas=None):
                ubicacion=f"DMS (region {REGION})",
                accion=("Falta dms:DescribeEndpoints." if code in ("AccessDeniedException", "AccessDenied")
                        else "Revisa permisos/region de DMS."))
+
+    # 2c) Endpoints on-premise FIJOS (SIVICC/RNMC) cuyo trafico depende de la VPN
+    # compartida. Se agregan solo si no estan ya cubiertos por otro endpoint con el
+    # mismo host:puerto (dedup), y respetando el filtro por sigla.
+    hosts_puertos_vistos = {(e["host"], e["port"]) for e in endpoints.values()}
+    for nombre, ep in ENDPOINTS_ONPREM_FIJOS.items():
+        if (ep["host"], ep["port"]) in hosts_puertos_vistos:
+            continue
+        if not _coincide(nombre, ep["host"], ep.get("service", "")):
+            continue
+        endpoints.setdefault(nombre, dict(ep))
+
     return endpoints
 
 
