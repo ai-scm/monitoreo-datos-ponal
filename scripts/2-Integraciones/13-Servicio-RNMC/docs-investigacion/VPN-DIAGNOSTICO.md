@@ -4,11 +4,17 @@ Esto **no** lo monitorea `monitor_rnmc.py`. Es una nota de diagnóstico para cua
 pipeline RNMC falle **sin causa aparente en los jobs** (jobs sin `FAILED` claro, pero
 los datos no llegan o la ingesta se seca).
 
-## Qué se observó
+> **Hallazgo transversal**: esto afecta a las tres integraciones on-premise (SIVICC,
+> RNMC, SECAD), no solo a RNMC. El estado completo y actualizado de los túneles está en
+> `../../docs-investigacion/VPN-ONPREMISE-ESTADO.md`. Esta nota conserva el enfoque
+> específico de cómo impacta a RNMC.
 
-Las conexiones VPN compartidas que llevan el tráfico **on-premise** de RNMC usan
-túneles con nombre `ofite-bogota-*`. En la investigación mostraron **estado mixto**:
-algunos túneles **DOWN**.
+## Qué se observó (estado crítico actual)
+
+Las conexiones VPN compartidas que llevan el tráfico **on-premise** de RNMC
+(`cnp.prod.mdp.local:1538`) usan túneles `ofite-bogota-*`. Estado real:
+**7 de 8 túneles caídos**, solo `ofite-bogota-fortinet-accelerated` (túnel 1) UP
+sosteniendo todo. Punto único de falla (ver el doc transversal para la tabla completa).
 
 ## Por qué importa para RNMC
 

@@ -1,4 +1,4 @@
-# Monitoreo — Scripts de CloudShell
+# monitoreo-datos-ponal — Scripts de CloudShell
 
 Scripts de monitoreo **independientes y autocontenidos** (cada uno se sube suelto a
 CloudShell y se corre con `python3`). Todos de **solo lectura** salvo donde se indique.
@@ -25,11 +25,13 @@ scripts/
 │   ├── 3-Refresh-Athena/             monitor_athena_refresh.py    ✅ implementado
 │   ├── 4-Centralizacion-Logs/        monitor_logs.py              ✅ implementado
 │   ├── 7-Conexiones-DBs-DMS/         monitor_conexion.py          ✅ implementado
+│   ├── 15-Frescura-Datos/            monitor_frescura_datos.py    ⛔ diseñado (bloqueado: falta permiso Athena)
 │   └── BASE-SCRIPTS-PENDIENTES.md    (doc de diseño de la categoría)
 │
 ├── 2-Integraciones/
 │   ├── 12-Migracion-SIVICC/          monitor_migracion_sivicc.py  ✅ implementado
-│   └── 13-Servicio-RNMC/             monitor_rnmc.py              ✅ implementado
+│   ├── 13-Servicio-RNMC/             monitor_rnmc.py              ✅ implementado
+│   └── docs-investigacion/           (hallazgos transversales: VPN, arquitectura)
 │
 ├── 3-Prediccion/                     (desarrollo en el otro equipo)
 │   ├── 5-Ejecucion-Prediccion/
@@ -56,6 +58,7 @@ propósito para que cada script sea autocontenido.
 | Categoría | Puntos | Estado |
 |-----------|--------|--------|
 | **1 — Base de Datos** | 1, 2, 3, 4, 7 | ✅ los 5 implementados |
+| **1 — Base de Datos (extra)** | 15 | ⛔ diseñado, bloqueado por permiso Athena |
 | **2 — Integraciones** | 12, 13 | ✅ los 2 implementados |
 | **3 — Predicción** | 5, 8, 9, 14 | 🖥️ en el otro equipo |
 | **4 — Planta Nacional** | 6 | 🖥️ en el otro equipo |
@@ -73,7 +76,8 @@ propósito para que cada script sea autocontenido.
 | 2 | `monitor_dms.py` | Replication tasks de DMS; clasifica fallidas/detenidas por severidad y relaciona secretos | diario | solo lectura |
 | 3 | `monitor_athena_refresh.py` | Refresh de bases Athena vía el último crawl de 12 crawlers (de 68); 56 fuera a propósito | diario | solo lectura |
 | 4 | `monitor_logs.py` | Higiene de log groups Glue/DMS/Lambda + clasificación de errores + localización del recurso | diario | solo lectura; usa Logs Insights |
-| 7 | `monitor_conexion.py` | Cambios de IP/host/puerto/credenciales de las bases + ping TCP opcional | 1–2 semanas | escribe snapshot en `$HOME` |
+| 7 | `monitor_conexion.py` | Cambios de IP/host/puerto/credenciales de las bases + ping TCP opcional (incluye endpoints fijos SIVICC/RNMC on-premise) | 1–2 semanas | escribe snapshot en `$HOME` |
+| 15 | `monitor_frescura_datos.py` | **Frescura de datos** (`MAX(fecha)` vía Athena) de 4 bases confirmadas; 8 pendientes de confirmar | diario | ⛔ **bloqueado**: requiere `athena:*` + `ATHENA_OUTPUT_S3` |
 
 ### 2 — Integraciones
 
@@ -88,6 +92,36 @@ propósito para que cada script sea autocontenido.
 |---|--------|---------------|------------|-------|
 | 10 | `monitor_carga_kb.py` | Ingesta de las 2 KBs de Bedrock del chatbot (de 4); carga **manual**, no se evalúa frescura | diario | solo lectura; usa `bedrock-agent:*` |
 | 11 | `monitor_auditoria_conversaciones_glue.py` | Job Glue de auditoría de conversaciones (DynamoDB→Parquet) + su Glue Trigger | diario | solo lectura; **no** sincroniza la KB (choque de nombres) |
+
+---
+
+## Hallazgos de infraestructura (contexto, no todo se monitorea)
+
+Hallazgos de las investigaciones de la cuenta que **no** necesariamente se traducen en
+un chequeo de script (son contexto de arquitectura, dependencias de red o huecos a
+construir). Documentados para no re-investigarlos. Detalle en los `docs-investigacion/`.
+
+| Hallazgo | Dónde se documenta | ¿En un script? |
+|----------|--------------------|----------------|
+| **VPN on-premise crítica** — 7/8 túneles `ofite-bogota-*` caídos; punto único de falla para SIVICC, RNMC y SECAD | `2-Integraciones/docs-investigacion/VPN-ONPREMISE-ESTADO.md` | ⚠️ indirecto: ping TCP de endpoints fijos en el punto 7 (solo en VPC env) |
+| **`RNMC-to-RDS` es job de Glue, no DMS** | `2-Integraciones/docs-investigacion/HALLAZGOS-INTEGRACIONES.md` | ✅ ya correcto en `monitor_rnmc.py` |
+| **Endpoint DMS huérfano** `pon-prod-db-postgres-instance-1` (sin uso) | idem | ❌ no (sin uso) |
+| **Paso `RDS → S3` no existe** (hueco de arquitectura a construir) | idem | ❌ no existe |
+| **SECAD** — fan-out de ~60 tareas DMS; `mesan-secad` en `FATAL_ERROR` | idem | ❌ punto futuro (patrón `monitor_dms.py` ampliado) |
+| **Lambda PBX rota** `pon-prod-pbx-auditoria-procesados-files` (`NameError`, dominio PBX) | `1-Base-Datos/4-Centralizacion-Logs/docs-investigacion/LAMBDA-PBX-ROTA.md` | ❌ no (otro dominio; sería monitor propio de PBX) |
+| **No hay centralización de logs** (0 Kinesis/Firehose/subscription filters) | idem | ✅ `monitor_logs.py` lo reporta como informativo |
+
+### Decisiones pendientes de contexto externo
+
+- **Permiso Athena** (`athena:StartQueryExecution` + S3): necesario para activar el
+  punto 15 (frescura de datos). Hoy el rol no lo tiene → el script sale BLOQUEADO.
+- **Columnas de fecha de 8 bases**: pendientes de confirmar con el equipo de datos
+  antes de ampliar el punto 15 más allá de las 4 confirmadas (SIEDCO, SECAD, ALI, SIMEP).
+- **Turnos SIVICC** (validaciones sobre `usr_mnvcc.turno`): en espera; la base
+  `pon-prod-raw-sivicc-incremental-shadow` es muy nueva (inestable), mismo criterio que
+  los recursos "experimentales".
+- **DynamoDB `pon-prod-expertopol-Document-inventory`**: bloqueada por aprobación de
+  `describe_table`; cuando se resuelva se decide si alimenta un chequeo del punto 10.
 
 ---
 

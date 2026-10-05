@@ -36,6 +36,12 @@ credenciales comparando contra la corrida anterior. **Solo lectura.**
 2. **Descubre endpoints** sin necesitar contraseña:
    - 8 bases del pipeline Glue → host:puerto de las Glue Connections (`glue:GetConnection`).
    - Bases replicadas por DMS → ServerName/Port de los endpoints Oracle (`dms:DescribeEndpoints`).
+   - **Endpoints on-premise fijos**: SIVICC (`172.28.18.185:1538`) y RNMC
+     (`cnp.prod.mdp.local:1538`), agregados a mano porque su tráfico depende de la VPN
+     compartida `ofite-bogota-*` (hoy en estado crítico — ver
+     `../../2-Integraciones/docs-investigacion/VPN-ONPREMISE-ESTADO.md`). El ping TCP a
+     estos detecta la degradación de esa VPN. Se omiten si ya los cubre otro endpoint
+     con el mismo host:puerto.
 3. **Antigüedad de credenciales**: los 8 secretos + los `pon-prod-secad-<SIGLA>-on-premise`
    (`secretsmanager:ListSecrets` + `DescribeSecret`). Avisa si superan 365 días.
 4. **Detección de cambios** (lo principal): guarda un snapshot en `$HOME` y lo
@@ -61,8 +67,22 @@ python3 monitor_conexion.py                 # descubre + credenciales + detecci�
 python3 monitor_conexion.py --con-avisos    # muestra también los avisos (credenciales viejas)
 python3 monitor_conexion.py --sin-snapshot  # solo estado actual, sin guardar/comparar
 python3 monitor_conexion.py --ping          # fuerza el ping TCP (útil solo en VPC environment)
+python3 monitor_conexion.py --sigla MEBUC   # acota a una o varias bases (coma): --sigla MEBUC,DEARA
+python3 monitor_conexion.py --timeout 3     # timeout TCP por endpoint en segundos (default 2)
 python3 monitor_conexion.py --no-export
 ```
+
+### Flags
+
+| Flag | Qué hace |
+|------|----------|
+| `--sin-snapshot` | No guarda/compara el snapshot; solo reporta el estado actual. |
+| `--ping` | Fuerza el ping TCP aunque no se detecte ruta (útil en VPC environment). |
+| `--sigla S[,S...]` | Acota a una o varias bases (separadas por coma). Sin esto, revisa todas. |
+| `--timeout N` | Timeout TCP por endpoint en segundos (por defecto 2). |
+| `--con-avisos` | Muestra los AVISOS en el resumen (el CSV siempre los incluye). |
+| `--detallado` | Salida larga, sin spinner de progreso. |
+| `--no-export` | No escribe el CSV. |
 
 ## Salida
 

@@ -175,3 +175,10 @@ Si el negocio esperaba que estos logs **sí** estuvieran centralizados en un des
 script solo puede *señalar*, no "verificar como rota" (no existe el pipeline a
 verificar). Conviene documentarla y decidir aparte si se implementa esa
 centralización; `monitor_logs.py` seguirá reportándola como AVISO hasta entonces.
+
+Confirmación de la investigación: **no existe infraestructura de centralización
+funcionando** (0 Kinesis, sin Firehose relacionado, sin subscription filters). La
+única Lambda con pinta de "auditoría de archivos" (`pon-prod-pbx-auditoria-procesados-files`)
+está **rota al 100%** pero es del dominio **PBX**, no de los logs del pipeline de datos
+— ver `docs-investigacion/LAMBDA-PBX-ROTA.md`. Si se quiere vigilar ese componente,
+corresponde a un monitor propio de PBX, no a este script.
