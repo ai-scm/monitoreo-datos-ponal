@@ -1,0 +1,7 @@
+{
+"type": "FeatureCollection",
+"name": "ac0548625dfc4b0881854dabe3f42722",
+"features": [
+{ "type": "Feature", "properties": { "FECHA_HORA": null, "LONGITUD": null, "LATITUD": null, "PESO": null, "UnidadBase": null, "cuadrante": null, "BD": null, "UnidadBase_codigo": null }, "geometry": null }
+]
+}

@@ -1,0 +1,6 @@
+Optimizacion_26241_20261003_1_F_B01.geojson
+Optimizacion_26241_20261003_1_F_CP01.geojson
+Optimizacion_26241_20261003_2_F_B01.geojson
+Optimizacion_26241_20261003_2_F_CP01.geojson
+Optimizacion_26241_20261003_3_F_B01.geojson
+Optimizacion_26241_20261003_3_F_CP01.geojson

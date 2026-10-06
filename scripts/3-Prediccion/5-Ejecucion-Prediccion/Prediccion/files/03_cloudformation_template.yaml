@@ -1,0 +1,366 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: |
+  Solución de automatización para validación de predicciones en AWS
+  Incluye: Lambda, EventBridge, SNS, IAM, CloudWatch
+
+Parameters:
+  Environment:
+    Type: String
+    Default: prod
+    AllowedValues: [dev, staging, prod]
+    Description: Ambiente de ejecución
+
+  S3Bucket:
+    Type: String
+    Default: pon-prod-ml-iapol
+    Description: Bucket S3 donde están los datos de predicción
+
+  AlertEmail:
+    Type: String
+    Description: Email para recibir alertas de errores
+    AllowedPattern: ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$
+
+  AlertThreshold:
+    Type: Number
+    Default: 50
+    Description: Umbral de errores para enviar alerta
+
+  LogRetentionDays:
+    Type: Number
+    Default: 30
+    AllowedValues: [1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, 400, 545, 731, 1827, 3653]
+    Description: Días de retención de logs en CloudWatch
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: "Configuración del Ambiente"
+        Parameters:
+          - Environment
+          - S3Bucket
+      - Label:
+          default: "Alertas"
+        Parameters:
+          - AlertEmail
+          - AlertThreshold
+      - Label:
+          default: "Monitoreo"
+        Parameters:
+          - LogRetentionDays
+
+Resources:
+  # =========================================================================
+  # SNS Topic para Alertas
+  # =========================================================================
+
+  ValidationAlertsTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub "validation-alerts-${Environment}"
+      DisplayName: "Alertas de Validación de Predicciones"
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: ValidacionPredicciones
+
+  ValidationAlertsSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref ValidationAlertsTopic
+      Protocol: email
+      Endpoint: !Ref AlertEmail
+
+  # =========================================================================
+  # IAM Role para Lambda
+  # =========================================================================
+
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: S3ReadWrite
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: S3ListAndRead
+                Effect: Allow
+                Action:
+                  - s3:ListBucket
+                  - s3:GetObject
+                Resource:
+                  - !Sub "arn:aws:s3:::${S3Bucket}"
+                  - !Sub "arn:aws:s3:::${S3Bucket}/*"
+              - Sid: S3WriteResults
+                Effect: Allow
+                Action:
+                  - s3:PutObject
+                Resource: !Sub "arn:aws:s3:::${S3Bucket}/ValidationReports/*"
+        - PolicyName: SNSPublish
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: sns:Publish
+                Resource: !Ref ValidationAlertsTopic
+        - PolicyName: CloudWatchLogs
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/*"
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
+  # =========================================================================
+  # Lambda Function
+  # =========================================================================
+
+  ValidacionPredictionesFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "validar-predicciones-${Environment}"
+      Description: "Valida predicciones almacenadas en S3"
+      Runtime: python3.11
+      Handler: index.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 900
+      MemorySize: 512
+      Environment:
+        Variables:
+          S3_BUCKET: !Ref S3Bucket
+          AWS_REGION: !Ref AWS::Region
+          SNS_TOPIC_ARN: !Ref ValidationAlertsTopic
+          ALERT_THRESHOLD: !Ref AlertThreshold
+          ENVIRONMENT: !Ref Environment
+      Code:
+        ZipFile: |
+          # NOTA: Reemplazar con el contenido de validar_predicciones_lambda.py
+          # Para deploy, actualizar este código mediante CI/CD o CLI
+          import json
+          import logging
+          
+          logger = logging.getLogger()
+          logger.setLevel(logging.INFO)
+          
+          def lambda_handler(event, context):
+              logger.info(f"Event recibido: {json.dumps(event)}")
+              return {
+                  "statusCode": 200,
+                  "body": json.dumps({"mensaje": "Lambda placeholder - actualizar código"})
+              }
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: ValidacionPredicciones
+
+  LambdaLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/validar-predicciones-${Environment}"
+      RetentionInDays: !Ref LogRetentionDays
+
+  # =========================================================================
+  # EventBridge Rule para Scheduling
+  # =========================================================================
+
+  ValidacionScheduleRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub "validar-predicciones-weekly-${Environment}"
+      Description: "Ejecuta validación de predicciones cada lunes a las 02:00 AM UTC-5"
+      ScheduleExpression: "cron(0 2 ? * MON *)"  # Lunes 02:00 AM UTC (07:00 UTC-5)
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt ValidacionPredictionesFunction.Arn
+          Id: ValidacionPredictionesTarget
+          RoleArn: !GetAtt EventBridgeExecutionRole.Arn
+          Input: !Sub |
+            {
+              "desde": "AUTO",
+              "hasta": null,
+              "sigla": null,
+              "alert_threshold": ${AlertThreshold}
+            }
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
+  LambdaInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ValidacionPredictionesFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt ValidacionScheduleRule.Arn
+
+  # =========================================================================
+  # IAM Role para EventBridge
+  # =========================================================================
+
+  EventBridgeExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: events.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: InvokeLambda
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: lambda:InvokeFunction
+                Resource: !GetAtt ValidacionPredictionesFunction.Arn
+
+  # =========================================================================
+  # CloudWatch Alarms
+  # =========================================================================
+
+  LambdaErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "validar-predicciones-errors-${Environment}"
+      AlarmDescription: "Alerta cuando Lambda tiene errores"
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref ValidacionPredictionesFunction
+      AlarmActions:
+        - !Ref ValidationAlertsTopic
+      TreatMissingData: notBreaching
+
+  LambdaTimeoutAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "validar-predicciones-timeout-${Environment}"
+      AlarmDescription: "Alerta si Lambda se acerca al timeout"
+      MetricName: Duration
+      Namespace: AWS/Lambda
+      Statistic: Maximum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 850000  # 850 segundos en milisegundos
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref ValidacionPredictionesFunction
+      AlarmActions:
+        - !Ref ValidationAlertsTopic
+      TreatMissingData: notBreaching
+
+  LambdaDurationAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "validar-predicciones-duration-${Environment}"
+      AlarmDescription: "Alerta si Lambda demora mucho (>120s)"
+      MetricName: Duration
+      Namespace: AWS/Lambda
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 120000  # 120 segundos
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref ValidacionPredictionesFunction
+      AlarmActions:
+        - !Ref ValidationAlertsTopic
+      TreatMissingData: notBreaching
+
+  # =========================================================================
+  # CloudWatch Dashboard
+  # =========================================================================
+
+  ValidationDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: !Sub "ValidacionPredicciones-${Environment}"
+      DashboardBody: !Sub |
+        {
+          "widgets": [
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  [ "AWS/Lambda", "Invocations", { "stat": "Sum", "dimensions": { "FunctionName": "${ValidacionPredictionesFunction}" } } ],
+                  [ ".", "Errors", { "stat": "Sum", "dimensions": { "FunctionName": "${ValidacionPredictionesFunction}" } } ],
+                  [ ".", "Duration", { "stat": "Average", "dimensions": { "FunctionName": "${ValidacionPredictionesFunction}" } } ]
+                ],
+                "period": 300,
+                "stat": "Average",
+                "region": "${AWS::Region}",
+                "title": "Lambda Metrics - Últimas 24 horas"
+              }
+            },
+            {
+              "type": "log",
+              "properties": {
+                "query": "fields @timestamp, @message, @level | stats count() by @level",
+                "region": "${AWS::Region}",
+                "title": "Log Summary"
+              }
+            }
+          ]
+        }
+
+Outputs:
+  LambdaFunctionArn:
+    Description: ARN de la función Lambda
+    Value: !GetAtt ValidacionPredictionesFunction.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-LambdaArn"
+
+  LambdaFunctionName:
+    Description: Nombre de la función Lambda
+    Value: !Ref ValidacionPredictionesFunction
+    Export:
+      Name: !Sub "${AWS::StackName}-LambdaName"
+
+  SNSTopicArn:
+    Description: ARN del topic SNS para alertas
+    Value: !Ref ValidationAlertsTopic
+    Export:
+      Name: !Sub "${AWS::StackName}-SNSTopicArn"
+
+  EventBridgeRuleArn:
+    Description: ARN de la regla de EventBridge
+    Value: !GetAtt ValidacionScheduleRule.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-EventBridgeRuleArn"
+
+  LogGroupName:
+    Description: Nombre del CloudWatch Log Group
+    Value: !Ref LambdaLogGroup
+    Export:
+      Name: !Sub "${AWS::StackName}-LogGroup"
+
+  DashboardURL:
+    Description: URL del Dashboard de CloudWatch
+    Value: !Sub "https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=${ValidationDashboard}"
