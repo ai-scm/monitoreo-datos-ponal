@@ -21,6 +21,15 @@ Uso en CloudShell:
     python3 monitor_jobs.py --horas 48
     python3 monitor_jobs.py --con-avisos    # muestra tambien avisos (RUNNING, sin corridas)
     python3 monitor_jobs.py --no-export
+
+Severidad:
+  - SUCCEEDED dentro de la ventana            -> OK
+  - SUCCEEDED pero FUERA de la ventana        -> FALLA (no corrio cuando debia; investigar
+                                                 conexion a la BD con el script A, scheduler
+                                                 de Glue, o la fuente de datos).
+  - FAILED / TIMEOUT / ERROR / STOPPED        -> FALLA
+  - RUNNING / STARTING / STOPPING / WAITING   -> AVISO
+  - sin ejecuciones registradas               -> AVISO
 """
 
 import argparse
@@ -282,10 +291,26 @@ def check_jobs(horas):
         if estado == "SUCCEEDED":
             msg = f"Ultimo run OK ({started_txt})."
             if fuera_ventana:
-                msg += f" OJO: fue hace mas de {horas:g} h; puede que no haya corrido en la ventana."
-                record(f"{db}  ({job})", WARN, mensaje=msg,
+                # Decision (A): un job cuyo ULTIMO run exitoso quedo FUERA de la ventana
+                # esperada se trata como FALLA, no como AVISO. El motivo es que, aunque el
+                # job no haya "fallado" (su ultimo run fue SUCCEEDED), el hecho de que NO
+                # haya corrido dentro de la ventana suele ser la señal visible de un
+                # problema real que este script no mide directamente: por ejemplo, la base
+                # Oracle origen esta inaccesible (caso TELEPOL, sin conexion), el scheduler
+                # dejo de disparar el job, o la fuente dejo de entregar datos. Marcarlo como
+                # FALLA obliga a investigar la causa (conexion a la BD con el script A,
+                # scheduler/trigger en Glue, o la fuente) en lugar de dejarlo pasar como un
+                # aviso silencioso. La verificacion de conexion a la base en si la hace el
+                # script A (monitor_conexion.py); aqui solo se eleva la severidad para que
+                # el job viejo-exitoso no se confunda con un job sano.
+                msg += (f" OJO: fue hace mas de {horas:g} h; NO corrio en la ventana esperada. "
+                        "Investiga la causa: conexion a la BD origen (p.ej. TELEPOL sin conexion, "
+                        "ver script A), scheduler/trigger de Glue, o la fuente de datos.")
+                record(f"{db}  ({job})", FAIL, mensaje=msg,
                        ubicacion=f"Glue job '{job}' run {run_id}",
-                       accion="Verifica el scheduler; el job no corrio en la ventana esperada.")
+                       accion=("El job no corrio en la ventana. Investiga: 1) conexion a la BD "
+                               "origen con el script A (monitor_conexion.py); 2) el scheduler/"
+                               "trigger del job en Glue; 3) si la fuente dejo de entregar datos."))
             else:
                 record(f"{db}  ({job})", OK, mensaje=msg,
                        ubicacion=f"Glue job '{job}' run {run_id}")
@@ -370,7 +395,8 @@ def main():
     parser.add_argument("--horas", type=float, default=DEFAULT_HORAS,
                         help=f"Ventana en horas (por defecto {DEFAULT_HORAS:g}).")
     parser.add_argument("--con-avisos", action="store_true",
-                        help="Muestra tambien los AVISOS (RUNNING, sin corridas, fuera de ventana).")
+                        help="Muestra tambien los AVISOS (RUNNING, sin corridas). "
+                             "Nota: 'fuera de ventana' ahora es FALLA, no aviso.")
     parser.add_argument("--detallado", action="store_true", help="Salida larga (sin progreso dinamico).")
     parser.add_argument("--no-export", action="store_true", help="No genera CSV.")
     args = parser.parse_args()
