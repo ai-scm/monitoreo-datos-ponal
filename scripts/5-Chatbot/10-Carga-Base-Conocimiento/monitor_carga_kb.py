@@ -14,12 +14,14 @@ las otras 2 son de prueba / otra tecnologia y quedan FUERA a proposito):
      Generalidades) desde el bucket pon-prod-data-no-estructurada.
      Criterio por data source (ultimo ingestion job):
        - COMPLETE                                   -> OK (sin importar la antiguedad)
-       - COMPLETE con numberOfDocumentsFailed > 0   -> AVISO (indexacion parcial)
+       - COMPLETE con numberOfDocumentsFailed > 0   -> FALLA (indexacion parcial: hay
+                                                       documentos que NO quedaron indexados)
        - FAILED                                     -> FALLA
        - IN_PROGRESS / STARTING                     -> AVISO
      IMPORTANTE: la carga es MANUAL/humana (no se sube a diario). NO se evalua
      "frescura" por ventana: que la ultima ingesta sea vieja NO es un problema. Lo
-     que importa es que, cuando se cargue, NO falle (de ahi los docs fallidos = AVISO).
+     que importa es que, cuando se cargue, NO falle: por eso una ingesta COMPLETE que
+     deja documentos fallidos (indexacion parcial) se trata como FALLA, no como aviso.
 
   2. KBBrChatKbStaENFMEE14EKB2A93F4E2 (NPYXAA8O6H) — bot personalizado, 1 data source
      hacia pon-prod-ml-iapol. DORMIDO: sin actividad de ingesta desde 2025-02-17.
@@ -251,11 +253,14 @@ def _evaluar_data_source_principal(bedrock, kb_id, kb_nombre, ds):
         # La carga de la KB es MANUAL/humana: no se sube a diario. Por eso la antiguedad
         # de la ultima ingesta NO es un problema (quitada la regla de "frescura por
         # ventana" que generaba falsos positivos). Lo que importa es que, cuando se
-        # cargue, NO falle: por eso los documentos fallidos SI son AVISO.
+        # cargue, NO falle: por eso una ingesta COMPLETE con documentos fallidos
+        # (indexacion parcial) es FALLA, no aviso: esos documentos NO quedaron indexados
+        # y el bot no los puede usar hasta corregirlos.
         if docs_fail > 0:
-            record(etiqueta, WARN, naturaleza=PRINCIPAL,
+            record(etiqueta, FAIL, naturaleza=PRINCIPAL,
                    mensaje=(f"Ingesta COMPLETE ({st_txt}) pero con {docs_fail} documento(s) fallido(s) "
-                            f"de {docs_scan} escaneados (indexacion parcial). "
+                            f"de {docs_scan} escaneados (indexacion parcial: esos documentos NO "
+                            "quedaron indexados). "
                             "Causa tipica: '400 Too many input tokens' (documento supera el max de 8192)."),
                    ubicacion=ubic,
                    accion="Revisa los documentos fallidos (dividir/recortar los que superan el limite de tokens).")

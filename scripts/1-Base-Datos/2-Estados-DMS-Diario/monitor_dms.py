@@ -7,10 +7,18 @@ estan detenidas, clasifica el error y lo resume. **Solo lectura.**
 
 Flujo (mismo esquema que los scripts A y B):
   1. Identidad AWS (con que rol se ejecuta).
-  2. Estado de todas las replication tasks (dms:DescribeReplicationTasks):
-     las FAILED / STOPPED se analizan; las RUNNING/otras se cuentan como OK.
-  3. Clasificacion del error de cada tarea con problema (tipo + severidad + accion),
-     y busqueda de los secretos relacionados (por sigla) con su antiguedad.
+  2. Estado de todas las replication tasks (dms:DescribeReplicationTasks).
+     La severidad se decide PRIMERO por el Status de la tarea (no por el clasificador):
+       - FAILED                                       -> FALLA (siempre)
+       - STOPPED                                      -> AVISO (siempre)
+       - RUNNING "con errores" (Load completed with   -> AVISO
+         errors / Replication ongoing with errors)
+       - RUNNING limpio (Load completed, replication  -> OK
+         ongoing / Replication ongoing)
+     El clasificador de error (classify_error) ya NO decide la severidad: solo aporta
+     el tipo de error y la accion sugerida para el detalle.
+  3. Para las tareas con problema, se agrega el tipo de error (clasificador) y la
+     busqueda de los secretos relacionados (por sigla) con su antiguedad.
 
 NO revisa jobs de Glue (script B) ni hace ping a las bases (script A).
 
@@ -60,21 +68,16 @@ SIGLAS = [
 ]
 
 # --------------------------------------------------------------------------------------
-# Severidad / estados de salida. Mapeamos la severidad del clasificador DMS
-# (CRITICAL/HIGH/MEDIUM/INFO) a los 3 estados comunes OK/AVISO/FALLA.
+# Severidad / estados de salida.
+# NOTA: la severidad final (OK/AVISO/FALLA) la decide el Status de la tarea en
+# check_dms_tasks (failed=FALLA, stopped=AVISO, running-con-errores=AVISO), NO el
+# clasificador. La severidad del clasificador (CRITICAL/HIGH/MEDIUM/INFO) se conserva
+# solo como dato descriptivo (columna severidad_dms del CSV).
 # --------------------------------------------------------------------------------------
 OK = "OK"
 WARN = "AVISO"
 FAIL = "FALLA"
 ICON = {OK: "[ OK  ]", WARN: "[AVISO]", FAIL: "[FALLA]"}
-
-# CRITICAL/HIGH -> FALLA ; MEDIUM -> AVISO ; INFO -> AVISO (informativo)
-SEVERIDAD_A_ESTADO = {
-    "CRITICAL": FAIL,
-    "HIGH": FAIL,
-    "MEDIUM": WARN,
-    "INFO": WARN,
-}
 
 RESULTS = []
 CON_AVISOS = False
@@ -258,7 +261,33 @@ def check_dms_tasks():
         return
 
     total = len(tasks)
-    problematicas = [t for t in tasks if t.get("Status", "").lower() in ("failed", "stopped")]
+
+    # --------------------------------------------------------------------------------
+    # La severidad se decide PRIMERO por el Status (regla pedida):
+    #   - failed                         -> FALLA (siempre)
+    #   - stopped                        -> AVISO (siempre)
+    #   - running CON errores            -> AVISO
+    #     ("Load completed with errors, replication ongoing" / "Replication ongoing
+    #      with errors" en la consola = Status running + TablesErrored > 0 en
+    #      ReplicationTaskStats).
+    #   - running limpio                 -> OK
+    #     ("Load completed, replication ongoing" / "Replication ongoing").
+    # El clasificador classify_error ya NO decide la severidad; solo aporta el tipo
+    # de error y la accion sugerida para el detalle.
+    # --------------------------------------------------------------------------------
+    def _severidad_por_status(task):
+        status = task.get("Status", "").lower()
+        stats = task.get("ReplicationTaskStats", {}) or {}
+        tables_errored = int(stats.get("TablesErrored", 0) or 0)
+        if status == "failed":
+            return FAIL
+        if status == "stopped":
+            return WARN
+        if status == "running" and tables_errored > 0:
+            return WARN  # "con errores": Load completed/Replication ongoing WITH errors
+        return None  # running limpio u otro estado benigno -> OK (no se detalla)
+
+    problematicas = [t for t in tasks if _severidad_por_status(t) is not None]
     ok_count = total - len(problematicas)
 
     # Registro informativo del panorama.
@@ -272,8 +301,11 @@ def check_dms_tasks():
         paso(f"Analizando tareas con problema... ({idx}/{len(problematicas)}) {task_id}")
         status = task.get("Status", "?")
         last_error = task.get("LastFailureMessage", "") or "(sin mensaje)"
+        stats = task.get("ReplicationTaskStats", {}) or {}
+        tables_errored = int(stats.get("TablesErrored", 0) or 0)
+        # El estado (severidad final) lo manda el Status; el clasificador solo describe.
+        estado = _severidad_por_status(task)
         tipo, sev, accion = classify_error(task)
-        estado = SEVERIDAD_A_ESTADO.get(sev, WARN)
 
         related = find_related_secrets(sm, task_id)
         sec_txt = ""
@@ -282,7 +314,15 @@ def check_dms_tasks():
             crit = " [>365d]" if s["age_days"] and s["age_days"] > SECRET_AGE_WARN_DAYS else ""
             sec_txt += f" | Secret {s['name']} [{s['sigla']}] ({edad}{crit})"
 
-        cuerpo = f"Estado {status.upper()} | Tipo {tipo} [{sev}]. {last_error[:150]}{sec_txt}"
+        if estado == WARN and status.lower() == "running" and tables_errored > 0:
+            # Caso running con errores: la señal es TablesErrored, no un fallo terminal.
+            cuerpo = (f"Estado RUNNING con errores ({tables_errored} tabla(s) con error) "
+                      f"| Tipo {tipo}. {last_error[:150]}{sec_txt}")
+            accion = ("Replicacion en curso pero con tablas en error: revisa esas tablas en "
+                      "CloudWatch Logs / tabla de control (awsdms). " + accion)
+        else:
+            cuerpo = f"Estado {status.upper()} | Tipo {tipo}. {last_error[:150]}{sec_txt}"
+
         record(task_id, estado, mensaje=cuerpo,
                ubicacion=f"DMS task '{task_id}' (region {REGION})",
                accion=accion, severidad=sev)
