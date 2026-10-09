@@ -33,14 +33,15 @@ scripts/
 │   ├── 13-Servicio-RNMC/             monitor_rnmc.py              ✅ implementado
 │   └── docs-investigacion/           (hallazgos transversales: VPN, arquitectura)
 │
-├── 3-Prediccion/                     (desarrollo en el otro equipo)
-│   ├── 5-Ejecucion-Prediccion/
-│   ├── 8-Zonas-Atencion-Fusion/
-│   ├── 9-Scripts-Adicionales/
-│   └── 14-Anticipacion-Demanda/
+├── 3-Prediccion/                     (equipo de predicción; otro estilo, no sigue el patrón común)
+│   ├── 5-Ejecucion-Prediccion/       Prediccion/ (solución IaC: Lambda + EventBridge + SNS + CFN/Terraform) 📦 material
+│   ├── 8-Zonas-Atencion-Fusion/      Optimizacion/validador_optimizacion_cloudshell.py  ✅ validador S3
+│   ├── 9-Scripts-Adicionales/        MatricesPrediccion/validador_matrices_cloudshell.py ✅ validador S3
+│   ├── 14-Anticipacion-Demanda/      (solo README placeholder)
+│   └── Jobs and task/                (inventario AWS, mapa del pipeline, acta de sesión)
 │
-├── 4-Planta-Nacional/                (desarrollo en el otro equipo)
-│   └── 6-Carga-Planta-Nacional/
+├── 4-Planta-Nacional/
+│   └── 6-Carga-Planta-Nacional/      alerta48horas.py  ✅ Lambda (alerta reporte Movistar Webex > 48 h)
 │
 ├── 5-Chatbot/
 │   ├── 10-Carga-Base-Conocimiento/        monitor_carga_kb.py                     ✅ implementado
@@ -60,8 +61,10 @@ propósito para que cada script sea autocontenido.
 | **1 — Base de Datos** | 1, 2, 3, 4, 7 | ✅ los 5 implementados |
 | **1 — Base de Datos (extra)** | 15 | ⛔ diseñado, bloqueado por permiso Athena |
 | **2 — Integraciones** | 12, 13 | ✅ los 2 implementados |
-| **3 — Predicción** | 5, 8, 9, 14 | 🖥️ en el otro equipo |
-| **4 — Planta Nacional** | 6 | 🖥️ en el otro equipo |
+| **3 — Predicción** | 8, 9 | ✅ 2 validadores S3 (equipo de predicción, otro estilo) |
+| **3 — Predicción** | 5 | 📦 material/solución IaC (no es un script CloudShell) |
+| **3 — Predicción** | 14 | 🖥️ pendiente (solo README) |
+| **4 — Planta Nacional** | 6 | ✅ `alerta48horas.py` (Lambda) |
 | **5 — Chatbot** | 10, 11 | ✅ los 2 implementados |
 
 ---
@@ -85,6 +88,32 @@ propósito para que cada script sea autocontenido.
 |---|--------|---------------|------------|-------|
 | 12 | `monitor_migracion_sivicc.py` | Backfills/migración SIVICC, clasificados por **naturaleza** (régimen / backfill / estático / experimental / DMS dormida) | diario | solo lectura; excluye `V2_SIVICC-migration-to-RDS` (es CNP) |
 | 13 | `monitor_rnmc.py` | Pipeline por lotes RNMC (sin API): jobs Glue, Lambda (cadena rota), reglas EventBridge, Glue Trigger `daily_rds`, DMS | diario | solo lectura; usa `cloudwatch:GetMetricStatistics` |
+
+### 3 — Predicción
+
+> **Nota**: esta categoría la mantiene el **equipo de predicción** y **no sigue el
+> patrón común** del resto del repo (no usa `OK/AVISO/FALLA`, ni `check_identity`, ni
+> los flags `--con-avisos/--detallado/--no-export`). Son validadores de artefactos en
+> S3 (bucket `pon-prod-ml-iapol`, prefijo `PrediccionMdP/<año>/<semana>/<SIGLA>/<unidad>/`)
+> con su propio estilo (emojis de progreso, salida CSV empaquetada en ZIP) y material de
+> una solución de automatización. Se documentan aquí para reflejar lo que hay en el repo.
+
+| # | Script / Material | Qué hace | Frecuencia | Notas |
+|---|-------------------|----------|------------|-------|
+| 8 | `8-Zonas-Atencion-Fusion/Optimizacion/validador_optimizacion_cloudshell.py` | Valida en S3 que cada día tenga los **6 archivos de optimización** (`1/2/3_F_B01` y `_CP01`, `.geojson`) por SIGLA/unidad en el rango de semanas | semanal (manual) | lee S3; `--desde/--hasta/--sigla/--mostrar-todas` |
+| 9 | `9-Scripts-Adicionales/MatricesPrediccion/validador_matrices_cloudshell.py` | Valida en S3 la cobertura de las **24 horas** de los archivos de predicción (`Prediccion_<unidad>_<fecha>_<hora>.pkl`) por SIGLA/unidad | semanal (manual) | lee S3; mismos flags que el punto 8 |
+| 5 | `5-Ejecucion-Prediccion/Prediccion/` | **Material/solución IaC** (no es un script CloudShell): automatización del validador de predicciones como Lambda + EventBridge (lunes 02:00 UTC-5) + SNS + CloudWatch, con plantillas CloudFormation/Terraform y guías de deployment/operación | — | documentación + código de referencia |
+| 14 | `14-Anticipacion-Demanda/` | Pendiente (solo README placeholder) | — | 🖥️ en el equipo de predicción |
+
+También hay material de contexto en `3-Prediccion/Jobs and task/` (inventario AWS
+`XCrimeApp`, mapa del pipeline, acta de sesión de monitoreo) y archivos de ejemplo en
+`9-Scripts-Adicionales/Hechos/` (`.geojson` de muestra, capturas).
+
+### 4 — Planta Nacional
+
+| # | Script | Qué hace | Frecuencia | Notas |
+|---|--------|----------|------------|-------|
+| 6 | `6-Carga-Planta-Nacional/alerta48horas.py` | **Lambda** (`lambda_handler`): revisa el ZIP más reciente en `s3://pbx-cdr-view/input_emails/` y, si el último reporte de llamadas **Movistar Webex** tiene **≥ 48 h**, publica una alerta por SNS | event-driven (Lambda) | no es un script CloudShell; usa `s3:ListObjects` + `sns:Publish` |
 
 ### 5 — Chatbot
 
