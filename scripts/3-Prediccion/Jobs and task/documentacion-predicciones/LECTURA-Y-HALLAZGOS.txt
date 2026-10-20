@@ -1,5 +1,5 @@
 MAPEO DEL PIPELINE DE PREDICCIONES PONAL / XCRIMEAPP
-Elaboración: 19 de octubre de 2026. Idioma: español.
+Elaboración: 19 de octubre de 2026. 
 
 ENTREGABLES
 Pipeline-Predicciones-PONAL.pdf: dos láminas para compartir.

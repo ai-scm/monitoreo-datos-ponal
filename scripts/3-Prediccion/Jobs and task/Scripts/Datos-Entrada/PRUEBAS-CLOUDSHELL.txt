@@ -1,0 +1,176 @@
+MONITOR DE DATOS DE ENTRADA: COMPARACION 15 CONTRA 15
+
+Subir solamente monitor_datos_entrada.py a CloudShell, reemplazando la version
+anterior. Es un unico script autocontenido; no necesita el repositorio.
+
+PRUEBA ACTUAL: UNA UNIDAD, LAS 3 BDs
+
+export ATHENA_OUTPUT_S3='s3://pon-prod-ml-iapol/ValidationReports/MonitorDatosEntrada/'
+python3 monitor_datos_entrada.py \
+  --database 'pon-prod-mdp' --fecha 'fecha_hora' \
+  --unidad 'unidad_base' --filtrar-unidad 'CAI MORASURCO' \
+  --sigla 'sigla' --filtrar-sigla 'MEPAS' \
+  --fuente 'bd' --latitud 'latitud' --longitud 'longitud' \
+  --comparar-periodos --ventana-dias 15 \
+  --ejecutar --con-avisos --timeout 600
+
+--comparar-periodos activa la nueva comparacion acotada en UNA consulta Athena.
+--ventana-dias es 15 por defecto; se puede indicar explicitamente.
+El 20 oct 2026: periodo anterior 20 sep-4 oct, reciente 5-19 oct (ambos inclusivos).
+Se excluye hoy por ser incompleto. El reloj se fija al inicio en America/Bogota.
+--zona-datos UTC permite fechas sin zona almacenadas en UTC.
+
+Sin --comparar-periodos se conserva el modo anterior de auditoria historica.
+Su comparacion tambien usa el nuevo valor por defecto de 15 dias. Si necesitas
+reproducir una prueba anterior de 7 dias, indicar --ventana-dias 7.
+
+RESULTADOS
+
+SALIDA EN CONSOLA: en --comparar-periodos la vista normal es una tabla con sigla,
+unidad, BD, conteos anterior/reciente, cambio porcentual, racha de dias sin datos
+y estado. El cambio es positivo para aumento y negativo para disminucion.
+Los nombres largos se muestran en varias lineas sin perder texto. Al final se
+muestran unidades, total de controles/estados y una sola ruta de la carpeta S3.
+El cierre incluye siglas distintas, unidades distintas (sigla + nombre) y numero
+de combinaciones unidad-BD del reporte. El estado de una unidad es el mas severo
+de sus BDs: OK, AVISO o FALLA. Se separa del conteo de controles. Si se excedio
+--max-grupos se rotula RESUMEN PARCIAL, sin presentar los conteos como nacionales.
+El esquema Glue, ARN, SQL, detalle de cada aviso y rutas de cada subida se muestran
+solo con --detallado. --con-avisos no vuelve a imprimir todos los avisos en este
+modo; los estados ya figuran en la tabla y la explicacion queda en control.csv.
+Los errores y FALLA siguen visibles. Los controles pendientes de alcance se
+indican al cierre. --detalle-diario conserva su salida diaria opcional.
+
+DESTINO S3 FIJO DE LOS REPORTES (nuevo):
+s3://pon-prod-ml-iapol/ValidationReports/MonitorDatosEntrada/
+  YYYY-MM-DD/HH-MM-SS_microsegundos/general.csv
+  YYYY-MM-DD/HH-MM-SS_microsegundos/diario.csv
+  YYYY-MM-DD/HH-MM-SS_microsegundos/control.csv
+  YYYY-MM-DD/HH-MM-SS_microsegundos/_athena/ (resultados internos)
+
+En modo --comparar-periodos se suben automaticamente los tres CSV reales del
+monitor a esa carpeta por ejecucion, usando hora de Colombia. No se sobrescriben
+otras ejecuciones. La consola muestra [S3] Subido para cada archivo confirmado y
+la ruta de la carpeta al terminar. Si falla alguna subida, se informa error (salida
+3); pueden existir archivos parciales, y se conservan las copias locales.
+Requiere permiso de escritura S3 en ese prefijo y permisos de cifrado si aplican.
+Discovery y --solo-sql no suben reportes. --no-export deshabilita ambas copias.
+
+Los archivos UUID.csv y UUID.csv.metadata son resultados INTERNOS de Athena,
+no los reportes del monitor. Para las consultas nuevas se pide guardarlos bajo
+ATHENA_OUTPUT_S3/YYYY-MM-DD/HH-MM-SS_microsegundos/_athena/.
+Se fija la misma fecha/hora antes de iniciar Athena y antes de subir los tres CSV.
+Con la ruta acordada, _athena/ queda junto a general.csv, diario.csv y control.csv.
+Se conservan los resultados internos; no se ejecuta ninguna eliminacion.
+Un workgroup puede imponer otra ubicacion: en ese caso Athena usa la del workgroup.
+Los resultados antiguos con UUID no se mueven ni se eliminan. Los nuevos reportes
+con nombres cortos usan siempre la ruta fija acordada, independiente del workgroup.
+El modo historico sin detalle sube solamente control.csv; usar --comparar-periodos
+para obtener general.csv, diario.csv y control.csv.
+
+La comparacion produce por sigla/unidad las BDs confirmadas RNMC, SECAD, SIEDCO.
+Las fuentes vacias o nuevas observadas tambien se conservan y generan aviso.
+No se asume que las tres BDs deban aportar a cada unidad: cero es un AVISO de
+combinacion sin datos, no una certificacion de falla de ingestion.
+
+En salida/ de CloudShell se escriben:
+  resumen_datos_entrada_<timestamp>.csv: resumen, una fila por sigla/unidad/BD.
+  diario_datos_entrada_<timestamp>.csv: conteos de cada dia, incluidos ceros.
+  controles_datos_entrada_<timestamp>.csv: controles con OK/AVISO/FALLA y detalle.
+  datos_entrada_<timestamp>.json: configuracion, metadata, consulta y resumen.
+  datos_entrada_<timestamp>.sql: SQL enviado a Athena.
+
+Timestamp comun de inicio en hora Colombia (UTC-5), independiente de --zona-datos:
+YYYY-MM-DD_HH-MM-SS_microsegundos. Ejemplo:
+resumen_datos_entrada_2026-10-20_11-30-00_123456.csv
+Los microsegundos evitan colisiones en ejecuciones seguidas. El modo historico usa
+tambien controles_/diario_/fuentes_ al inicio del nombre. CSV antiguos no se renombran.
+
+Resumen: limites de ambos periodos, conteos, diferencia reciente-anterior,
+porcentaje de caida, base suficiente, ultima fecha EN EL PERIODO, edad en horas,
+dias sin registros (total y recientes), racha sin registros al cierre, calidad,
+cobertura, estado y motivos. No se presenta como conteo de todo el historico.
+La racha se limita a los 30 dias analizados: 30 significa al menos ese intervalo
+sin registros, sin concluir nada sobre fechas anteriores.
+
+--con-avisos muestra avisos en auditoria historica. --detallado muestra todos los controles y el SQL.
+--detalle-diario agrega el diario a la consola; el CSV diario siempre se genera.
+--solo-sql genera SQL sin ejecutarlo (aun lee metadata Glue y verifica identidad).
+--no-export evita reportes locales y su subida S3; no evita resultados internos de Athena.
+ATHENA_WORKGROUP o --workgroup elige el workgroup; el workgroup puede imponer su
+destino, cifrado y limites para los resultados internos de Athena. Los CSV del
+monitor se suben a la ruta fija indicada arriba; JSON y SQL se conservan locales.
+
+CALIDAD Y FRESCURA: LIMITES EXPLICITOS
+
+Con el filtro normal de fecha, solo entran fechas validas de los 30 dias. No es
+posible atribuir una fecha nula/no interpretable a ese periodo ni verificar las
+fechas futuras fuera del filtro. Esos controles se marcan NO_EVALUADO, nunca cero.
+Coordenadas nulas/no numericas o fuera de [-90,90]/[-180,180] se cuentan por BD
+sobre los registros validos del periodo; no valida que caigan dentro de la unidad.
+La ultima fecha es la ultima dentro de los 30 dias completos: no consulta hoy ni
+el historico anterior. fecha_hora parece ser fecha del hecho, no fecha de carga.
+La recencia de incidentes no prueba frescura de ingestion ni aptitud del modelo.
+
+Para calidad de fechas existe la auditoria historica anterior, o una seleccion
+por particiones de fecha verificadas (ver abajo). No declarar OK sobre lo no medido.
+
+EFICIENCIA Y PARTICIONES
+
+La nueva consulta agrupa una sola vez y limita el analisis temporal. Filtrar por
+fecha_hora no garantiza reducir bytes fisicos: depende del formato, organizacion
+y optimizacion del motor. LIMIT limita grupos, no bytes escaneados.
+El script imprime las PartitionKeys reales de Glue, no las infiere del nombre.
+
+Solo despues de comprobar que year/month/day son las particiones Y representan
+la misma fecha de los hechos que fecha_hora, se puede agregar:
+  --particiones-fecha-confirmadas
+Esto genera predicados directos por year/month/day (sin funciones sobre las claves),
+aceptando 1/01 para month/day de tipo string. Rechaza claves ausentes o tipos no
+soportados. NO usar si las particiones representan ingestion u otra fecha: podria
+omitir incidentes. La confirmacion semantica corresponde al operador, no la prueba
+el simple esquema Glue. Con esa opcion, calidad de fechas mide todos los registros
+en las particiones seleccionadas, incluidos nulos/futuros/inconsistentes; conteos
+diarios y coordenadas siguen limitados a fechas validas del periodo.
+No ejecutar MSCK, crear particiones ni cambiar infraestructura desde el monitor.
+
+COBERTURA CON CATALOGO (OPCIONAL)
+
+Para detectar unidades sin datos, subir tambien el CSV entregado y agregar:
+  --catalogo-unidades 'EstructuraNacionaOperativalPONAL_listo.csv'
+Se admite separador punto y coma, coma, tabulador o barra vertical y UTF-8/BOM.
+Se toman solo filas con UNIDAD_ID no vacio, excluyendo niveles de jerarquia sin ID.
+Al pasar este archivo el operador selecciona esas filas como alcance esperado;
+confirmar primero que corresponde a las unidades participantes en prediccion.
+Cruce exacto por SIGLA_FISICA + DEPENDENCIA (se recortan espacios exteriores).
+No se adivinan equivalencias por similitud ni se certifica vigencia de las unidades.
+Se respetan los filtros de unidad/sigla. Unidades observadas fuera del catalogo
+se conservan con AVISO. Sin catalogo y sin filtro de unidad no se detectan unidades
+completamente ausentes de los 30 dias. Una BD ausente por unidad sigue siendo aviso.
+
+--max-grupos 1000 limita grupos de sigla/unidad/BD devueltos. Si se excede, FALLA
+por cobertura INCOMPLETA; no se inventan ausencias desde resultados truncados.
+Para ampliar posteriormente a todo el catalogo, quitar los dos filtros de valores
+y aumentar --max-grupos (por ejemplo 10000). Probar primero la unidad seleccionada.
+
+UMBRALES Y ACCESOS
+
+Umbrales exploratorios: --max-horas 48 --caida-pct 50 --min-base 20
+--max-invalidos-pct 1. Base insuficiente es AVISO, caida de volumen es AVISO;
+no son pruebas de carga fallida. Una calidad totalmente invalida puede ser FALLA.
+Los dias sin registros no generan por si solos una falla.
+
+STS GetCallerIdentity verifica cuenta 926162397524; --cuenta permite otra cuenta.
+Glue GetTable obtiene esquema; GetDatabases se usa solo sin --database.
+Athena: StartQueryExecution, GetQueryExecution, GetQueryResults, StopQueryExecution.
+Ademas requieren acceso al catalogo, datos y resultados, y Lake Formation/KMS si
+aplican. El script no modifica roles, tablas ni datos de origen. Ctrl+C/timeout
+solicitan cancelar solo su consulta; comprobar en Athena si la cancelacion falla.
+
+Exit: 0 sin FALLA (puede contener AVISO o solo discovery/SQL), 1 FALLA,
+2 argumentos, 3 bloqueado/error de consulta o archivos, 130 interrupcion.
+Falta comprobar el nuevo modo y la configuracion de particiones en AWS real.
+
+Referencias:
+https://docs.aws.amazon.com/athena/latest/ug/partitions.html
+https://docs.aws.amazon.com/athena/latest/ug/data-types-timestamps.html
