@@ -1,0 +1,91 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1390" viewBox="0 0 1600 1390" role="img" aria-label="Pipeline de predicciones · servicios y datos">
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 Z" fill="#325c76"/></marker></defs>
+<style>text{font-family:DejaVu Sans,sans-serif;fill:#173346} .title{font-size:34px;font-weight:bold} .sub{font-size:17px;fill:#4b6373} .node-title{font-size:22px;font-weight:bold} .body{font-size:17px} .label{font-size:15px;paint-order:stroke;stroke:#f7fafc;stroke-width:6px;stroke-linejoin:round} .small{font-size:15px;fill:#526978}</style>
+<rect width="1600" height="1390" fill="#f7fafc"/>
+<rect width="1600" height="9" fill="#087f8c"/>
+<text x="40" y="60" class="small">PONAL / XCRIMEAPP · RECONSTRUCCIÓN DOCUMENTAL · 19 OCT 2026</text>
+<text x="40" y="108" class="title">Pipeline de predicciones · servicios y datos</text>
+<text x="40" y="143" class="sub">Núcleo confirmado por el PDF: timeFrame=TURNO vía POST /pred/completo. Los nombres AWS se cruzan con el inventario.</text>
+<rect x="40" y="220" width="300" height="150" rx="14" fill="#e6f3f5" stroke="#178593" stroke-width="2" />
+<text x="59" y="252" class="node-title">Frontend</text>
+<text x="59" y="281" class="body">Solicita una predicción</text>
+<text x="59" y="306" class="body">Recibe id_proceso</text>
+<text x="59" y="331" class="body">Consulta estado y mapa</text>
+<rect x="440" y="220" width="390" height="150" rx="14" fill="#e6f3f5" stroke="#178593" stroke-width="2" />
+<text x="459" y="252" class="node-title">SER · Flask / Waitress</text>
+<text x="459" y="281" class="body">pon-xcrimePredictionDemanda-</text>
+<text x="459" y="306" class="body">services · puerto 8080</text>
+<text x="459" y="331" class="body">Candidato: pred-demanda-ser</text>
+<rect x="980" y="220" width="540" height="150" rx="14" fill="#e6f3f5" stroke="#178593" stroke-width="2" />
+<text x="999" y="252" class="node-title">Tarea efímera · ECS / Fargate</text>
+<text x="999" y="281" class="body">Sci-XCrimeGeneradorCuadrantes</text>
+<text x="999" y="306" class="body">ECR: pon-prod-xcrime-predicciones-repository</text>
+<text x="999" y="331" class="body">Unidad × día × turno; sin endpoint público</text>
+<path d="M340 260 H440" fill="none" stroke="#325c76" stroke-width="2.5" marker-end="url(#arrow)"/>
+<text x="353" y="245" class="label">POST</text>
+<path d="M440 331 H340" fill="none" stroke="#325c76" stroke-width="2.5" marker-end="url(#arrow)"/>
+<text x="347" y="315" class="label">200 + id</text>
+<path d="M830 276 H980" fill="none" stroke="#325c76" stroke-width="2.5" marker-end="url(#arrow)"/>
+<text x="851" y="259" class="label">ecs:RunTask</text>
+<text x="865" y="307" class="small">asíncrono</text>
+<rect x="40" y="500" width="300" height="145" rx="14" fill="#edf0fb" stroke="#7181b8" stroke-width="2" />
+<text x="59" y="532" class="node-title">Athena · mdp_limpio</text>
+<text x="59" y="561" class="body">Histórico por CAD, unidad</text>
+<text x="59" y="586" class="body">y fechas de entrenamiento</text>
+<text x="59" y="611" class="body">Lectura SQL → CSV</text>
+<rect x="440" y="500" width="390" height="145" rx="14" fill="#edf0fb" stroke="#7181b8" stroke-width="2" />
+<text x="459" y="532" class="node-title">DynamoDB · estado</text>
+<text x="459" y="561" class="body">pon-prod-prediccion-demanda-{cad}</text>
+<text x="459" y="586" class="body">SER: procesando → tarea: final/error</text>
+<text x="459" y="611" class="body">Índice: fecha_unidad_global_index</text>
+<rect x="980" y="500" width="540" height="145" rx="14" fill="#edf0fb" stroke="#7181b8" stroke-width="2" />
+<text x="999" y="532" class="node-title">S3 · pon-prod-ml-iapol</text>
+<text x="999" y="561" class="body">Lee: UnidadesBase/{CAD}-UnidadesBase.geojson</text>
+<text x="999" y="586" class="body">Escribe: PrediccionMdP/ → GeoJSON + PKL</text>
+<text x="999" y="611" class="body">Prediccion_* y PuntosApoyo_*</text>
+<path d="M190 500 V420 H1060 V370" fill="none" stroke="#325c76" stroke-width="2.5" marker-end="url(#arrow)"/>
+<text x="260" y="411" class="label">histórico → tarea (consulta iniciada por Fargate)</text>
+<path d="M600 370 V500" fill="none" stroke="#325c76" stroke-width="2.5" marker-end="url(#arrow)"/>
+<text x="612" y="468" class="label">put_item / query</text>
+<path d="M1110 370 V454 H785 V500" fill="none" stroke="#325c76" stroke-width="2.5" marker-end="url(#arrow)"/>
+<text x="841" y="447" class="label">update_item</text>
+<path d="M1340 370 V500" fill="none" stroke="#325c76" stroke-width="2.5" marker-end="url(#arrow)"/>
+<text x="1250" y="482" class="label">GET maestros / PUT resultados</text>
+<path d="M980 606 H875 V350 H830" fill="none" stroke="#325c76" stroke-width="2.5" marker-end="url(#arrow)"/>
+<text x="878" y="665" class="label">GET GeoJSON</text>
+<text x="40" y="694" class="body">Consulta posterior desde frontend a SER:</text>
+<text x="40" y="726" class="small">/info/unidad_fecha · /geo/disponibles_unidad_fecha</text>
+<text x="40" y="752" class="small">/geo/one_path · combina unidades hijas si es estación</text>
+<rect x="980" y="745" width="540" height="130" rx="14" fill="#edf0fb" stroke="#7181b8" stroke-width="2" />
+<text x="999" y="777" class="node-title">API PONAL · autenticación y turnos</text>
+<text x="999" y="806" class="body">rnmc2web.policia.gov.co:5074</text>
+<text x="999" y="831" class="body">Si no responde en 30 s: turnos 91 / 89 / 90</text>
+<path d="M1520 790 H1550 V310 H1520" fill="none" stroke="#325c76" stroke-width="2.5" marker-end="url(#arrow)"/>
+<text x="1479" y="696" class="label">turnos</text>
+<text x="40" y="815" class="node-title">200 OK confirma el lanzamiento; el resultado se consulta después.</text>
+<text x="40" y="849" class="body">finalizado tampoco acredita calidad estadística: el resultado puede provenir de Uniform.</text>
+<text x="40" y="927" class="node-title">RECURSOS RELACIONADOS DEL INVENTARIO · CONEXIONES POR CONFIRMAR</text>
+<rect x="40" y="955" width="480" height="190" rx="14" fill="#fff5e6" stroke="#c38728" stroke-width="2" stroke-dasharray="7 5"/>
+<text x="59" y="987" class="node-title">01 · Preparación / automatización</text>
+<text x="59" y="1016" class="body">Lambdas pre/datacleaning + launch-fargate</text>
+<text x="59" y="1041" class="body">EC2 autoprediccion.prod.mdp.ponal</text>
+<text x="59" y="1066" class="body">Falta confirmar cron, destinos ECS y</text>
+<text x="59" y="1091" class="body">productor/catálogo de mdp_limpio.</text>
+<rect x="555" y="955" width="480" height="190" rx="14" fill="#fff5e6" stroke="#c38728" stroke-width="2" stroke-dasharray="7 5"/>
+<text x="574" y="987" class="node-title">02 · Fusión / optimización / copia</text>
+<text x="574" y="1016" class="body">Glue: fusion-demanda, optimizaciones,</text>
+<text x="574" y="1041" class="body">copia-optimizaciones y copy-predicciones</text>
+<text x="574" y="1066" class="body">Existen recursos; no se ha probado</text>
+<text x="574" y="1091" class="body">la secuencia ni los prefijos de intercambio.</text>
+<rect x="1070" y="955" width="490" height="190" rx="14" fill="#fff5e6" stroke="#c38728" stroke-width="2" stroke-dasharray="7 5"/>
+<text x="1089" y="987" class="node-title">03 · Validación de resultados</text>
+<text x="1089" y="1016" class="body">validar-predicciones-prod: logs en XLSX</text>
+<text x="1089" y="1041" class="body">Referencia local: S3 → reportes + SNS</text>
+<text x="1089" y="1066" class="body">EventBridge y SNS: wiring desplegado</text>
+<text x="1089" y="1091" class="body">pendiente; validadores manuales en repo.</text>
+<text x="40" y="1190" class="body">Cruce clave: ECS!13 usa el mismo ECR que el PDF; falta la evidencia RunTask para confirmar el ejecutor exacto.</text>
+<text x="40" y="1223" class="body">ECS!6 respalda SER. ECS!24 y ECS!32 son frontend/BFF candidatos; el PDF no demuestra su encadenamiento.</text>
+<text x="40" y="1256" class="body">ECS!36 y ECS!38: 0 tareas en la captura no implica fallo en cargas efímeras. Véase matriz-recursos.csv.</text>
+<text x="40" y="1341" class="small">Fuentes: Mapa-del-Pipeline.pdf (pp. 1–4) + inventario XLSX (corte 22 sep 2026) + referencias locales.</text>
+<text x="40" y="1366" class="small">Línea continua: flujo documentado. Recuadro ámbar: relación pendiente. No se verificó AWS en vivo.</text>
+</svg>

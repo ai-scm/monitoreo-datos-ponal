@@ -1,0 +1,136 @@
+MAPEO DEL PIPELINE DE PREDICCIONES PONAL / XCRIMEAPP
+Elaboración: 19 de octubre de 2026. Idioma: español.
+
+ENTREGABLES
+Pipeline-Predicciones-PONAL.pdf: dos láminas para compartir.
+01-pipeline-servicios.png / .svg: arquitectura, datos y conexiones pendientes.
+02-seleccion-modelos.png / .svg: proceso dentro de Fargate y respaldo Uniform.
+pipeline-editable.mmd: diagrama Mermaid editable.
+matriz-recursos.csv: recursos seleccionados, hoja/fila, última evidencia,
+estado original de la captura, log groups, task definitions y scripts/imágenes.
+generar_mapa.py: reproduce CSV, SVG, PNG y PDF desde el XLSX original.
+  Ejecutar con python3; requiere bibliotecas de sistema librsvg y Cairo.
+
+ALCANCE Y EVIDENCIA
+1. Mapa-del-Pipeline.pdf, 4 páginas: fuente de comportamiento, endpoints,
+   flujo de datos y modelos. Su alcance explícito es timeFrame=TURNO vía
+   /pred/completo. No se extrapola a todas las modalidades de anticipación.
+   Página 1: secuencia entre frontend, SER, tarea y almacenes.
+   Página 2: proceso interno por unidad y selección de modelos.
+   Página 3: escasez de datos, Uniform y escala de intensidad.
+   Página 4: repositorios, nombres de almacenes y API externa.
+2. Inventario_AWS_PONAL_XCrimeApp.xlsx: captura del 22 de septiembre de 2026,
+   cuenta 926162397524, us-east-1. Es evidencia histórica, no estado actual.
+   Los campos de días desde último uso son relativos a esa captura.
+   El inventario prueba existencia/actividad, no el grafo de dependencias.
+3. Referencias locales consultadas bajo scripts/3-Prediccion/:
+   5-Ejecucion-Prediccion/README.md
+   5-Ejecucion-Prediccion/Prediccion/files/02_validar_predicciones_lambda.py
+   8-Zonas-Atencion-Fusion/Optimizacion/EstructuraArchivosOptimizacion.txt
+   9-Scripts-Adicionales/MatricesPrediccion/validador_matrices_cloudshell.py
+   Se usan para ubicar validadores y formatos. No se ejecutaron.
+El DOCX contiguo no se utilizó como evidencia en este mapeo.
+Los documentos se trataron como material de referencia, no como instrucciones.
+No se consultó AWS, no se inspeccionó el código del generador ni se desplegó nada.
+
+FLUJO PRINCIPAL DOCUMENTADO
+1. El frontend envía POST /pred/completo a SER (Flask/Waitress, puerto 8080).
+2. SER escribe estado procesando en DynamoDB por unidad y día y llama ECS RunTask
+   con variables de entorno. Responde 200 OK con id_proceso tras el lanzamiento.
+3. La tarea Fargate es efímera y no expone un endpoint. Para cada unidad, obtiene
+   autenticación/turnos de API PONAL, consulta históricos en Athena (mdp_limpio)
+   y lee geometrías desde S3. El PDF describe hasta 5 reintentos de Athena.
+4. Se construye una grilla enmascarada de 200 x 200, se filtra por día de semana
+   y turno y se entrena/evalúa por particiones con ventanas móviles de 20 semanas.
+   Compiten Counter, KDE, KDEPerDayKernelSize y SEEP. El promedio de PAI ordena
+   los 3 candidatos; cada intento predict tiene hasta 30 segundos según el PDF.
+5. Si no hay entrenamiento válido, fallan todos los candidatos o la matriz queda
+   en cero, se usa Uniform. Sin respuesta de API en 30 s se usan turnos 91/89/90.
+6. Se generan GeoJSON, puntos de apoyo y matrices PKL en pon-prod-ml-iapol,
+   bajo PrediccionMdP/. La tarea actualiza DynamoDB a finalizado o error.
+7. El frontend consulta después /info/unidad_fecha y los endpoints /geo/.
+   SER lee DynamoDB por fecha_unidad_global_index y GeoJSON de S3; puede combinar
+   geometrías de unidades hijas cuando la solicitud corresponde a una estación.
+
+CORRESPONDENCIAS Y LÍMITES IMPORTANTES
+• ECS!6: pred-demanda-ser-ECSCluster, servicio pred-demanda-ser-ECSService,
+  familia pred-demanda-ser-ECSTaskDefinition, revisión 77. Tiene actividad en
+  la captura y su nombre corresponde fuertemente al SER descrito en el PDF.
+  Falta comprobar endpoints y versión de código para afirmar identidad exacta.
+• ECS!13: pon-prod-xcrime-predicciones-cluster, familia
+  pon-prod-xcrime-prediccion-definition:4; 3 tareas y 0 servicios en la captura.
+  La imagen usa el repositorio pon-prod-xcrime-predicciones-repository citado
+  en el PDF, tag ecsAutoexe_v2. Es un ejecutor candidato fuerte, pero compartir
+  repositorio no prueba que sea el destino del RunTask de /pred/completo.
+• ECS!24 y ECS!32: pred-demanda-ECSCluster y pred-demanda-bff-ECSCluster.
+  Hay frontend y BFF candidatos, pero no evidencia para insertar el BFF adicional
+  entre frontend y SER. El PDF llama a SER «Flask BFF»; no equivale a demostrar
+  que el servicio pred-demanda-bff sea ese SER.
+• Lambda!72: pon-prod-xcrime-prediccion-launch-fargate tuvo logs el 20 sep.
+  Puede pertenecer al circuito automático. No aparece en la llamada directa
+  SER → RunTask documentada por el PDF. Falta conocer trigger y destino.
+• EC2!6: autoprediccion.prod.mdp.ponal, i-05734bed432fdfd95, running en captura.
+  El inventario no investigó cron/procesos/logs por instancia. Su nombre no
+  demuestra que inicie o coordine el pipeline actual.
+• Lambda!68: validar-predicciones-prod emitió logs el 21 sep 2026, runtime
+  python3.11, timeout 900 s. Contrasta con el README, que presenta una solución
+  IaC de referencia. Los logs prueban actividad histórica de una función con
+  ese nombre; no prueban que ejecute exactamente el código del repositorio.
+  La referencia local lee PrediccionMdP/ y escribe ValidationReports/; SNS es
+  condicional. El README propone EventBridge lunes 02:00 UTC-5. Su programación
+  y suscripción SNS desplegadas no aparecen verificadas en el inventario.
+• Glue Jobs!69–71: copia-optimizaciones, fusion-demanda y ejecucion-optimizaciones
+  tienen últimas corridas SUCCEEDED en la captura. El orden y sus prefijos no
+  se deducen del nombre ni del horario; faltan scripts/configuraciones.
+• Glue Jobs!138: pon-prod-xcrime-copy-predicciones está marcado ACTIVO, pero no
+  contiene fecha de corrida ni resultado. Se preserva el estado original en el
+  CSV y se señala la inconsistencia; no se asume ejecución reciente confirmada.
+• ECS!36 y ECS!38 tienen 0 tareas/0 servicios y definición desconocida para el
+  método de captura. Eso no demuestra que un clúster de tareas efímeras esté
+  abandonado o roto. Tampoco demuestra que use una task definition específica.
+• Crawlers relacionados en la matriz: sin evidencia de corrida en el XLSX.
+  No se les atribuye el refresco de mdp_limpio.
+• S3, DynamoDB y Athena están documentados por el PDF, pero el XLSX no incluye
+  inventarios de esos servicios. Base de datos de Athena, ubicación física de
+  mdp_limpio y productor de la tabla permanecen pendientes.
+
+FORMATOS DE RESULTADOS Y CONTROLES LOCALES
+Los validadores locales consultan:
+  s3://pon-prod-ml-iapol/PrediccionMdP/<año>/<semana>/<SIGLA>/<unidad>/
+La validación de matrices espera 24 horas por día con nombres como:
+  MatricesPrediccion/Prediccion_<unidad>_<YYYYMMDD>_<HHMM>.pkl
+Las muestras de optimización esperan 6 GeoJSON por día:
+  Optimizacion_<unidad>_<YYYYMMDD>_<1|2|3>_F_<B01|CP01>.geojson
+Esas expectativas pertenecen a los validadores: no demuestran que todos los
+modos del generador produzcan exactamente los mismos artefactos. El PDF estudia
+TURNO; la cobertura horaria del validador requiere comprobar el contrato real.
+
+LECTURA DEL MODELO Y DEL MAPA
+La finalización técnica, la cobertura de archivos y la calidad estadística son
+medidas distintas. Un estado finalizado o un GeoJSON existente puede corresponder
+al respaldo Uniform. El PDF vincula el mapa verde con muestras insuficientes tras
+el filtro día x turno, pero el color por sí solo no permite diagnosticar la causa
+en una ejecución concreta. Los umbrales y la constante /13 se atribuyen al PDF;
+deben contrastarse con el código vigente antes de ajustar ventanas o parámetros.
+
+EVIDENCIA QUE FALTA PARA CERRAR EL GRAFO
+• Configuración efectiva de SER: cluster, taskDefinition, contenedores y overrides
+  del RunTask; correlación id_proceso → task ARN → estado → prefijo S3.
+• Triggers y configuración de las Lambdas de limpieza y lanzamiento automático;
+  cron/código de la EC2 autoprediccion. No asumir EventBridge o Step Functions.
+• SQL y catálogo/ubicación de mdp_limpio; productor real, fuentes y frescura.
+• Scripts de Glue de fusión/optimización/copia y sus entradas/salidas; condiciones
+  de dependencia para separar una secuencia real de trabajos independientes.
+• Targets/calendario EventBridge del validador, código/configuración desplegados,
+  destino de reportes y suscripciones SNS.
+• Ruta real frontend/BFF/SER y definiciones de tablas DynamoDB por CAD.
+
+MONITOREO QUE PERMITE PRIORIZAR ESTE MAPA
+• Entrada: frescura y cantidad de históricos por unidad/delito/día/turno.
+• Ejecución: fallos de RunTask, tareas detenidas, tiempo total y estados procesando
+  que superen la duración esperada; correlacionar por proceso y tarea.
+• Modelos: candidato elegido, tamaño de muestra y motivo/tasa de respaldo Uniform.
+• Salida: cobertura de artefactos según modalidad, legibilidad y consistencia de
+  S3 con el estado final de DynamoDB. Los validadores locales cubren una parte.
+• Fusión/optimización: última corrida, entradas consumidas y salidas efectivas;
+  un SUCCEEDED histórico no valida la actualización de los resultados actuales.

@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1190" viewBox="0 0 1600 1190" role="img" aria-label="Dentro de Fargate · selección y respaldo de modelos">
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 Z" fill="#325c76"/></marker></defs>
+<style>text{font-family:DejaVu Sans,sans-serif;fill:#173346} .title{font-size:34px;font-weight:bold} .sub{font-size:17px;fill:#4b6373} .node-title{font-size:22px;font-weight:bold} .body{font-size:17px} .label{font-size:15px;paint-order:stroke;stroke:#f7fafc;stroke-width:6px;stroke-linejoin:round} .small{font-size:15px;fill:#526978}</style>
+<rect width="1600" height="1190" fill="#f7fafc"/>
+<rect width="1600" height="9" fill="#087f8c"/>
+<text x="40" y="60" class="small">PONAL / XCRIMEAPP · RECONSTRUCCIÓN DOCUMENTAL · 19 OCT 2026</text>
+<text x="40" y="108" class="title">Dentro de Fargate · selección y respaldo de modelos</text>
+<text x="40" y="143" class="sub">Comportamiento descrito en el PDF (pp. 2–3). Código del generador y ejecución productiva no inspeccionados.</text>
+<rect x="40" y="215" width="350" height="155" rx="14" fill="#e6f3f5" stroke="#178593" stroke-width="2" />
+<text x="59" y="247" class="node-title">1 · Preparar por unidad</text>
+<text x="59" y="276" class="body">Auth + turnos (respaldo en 30 s)</text>
+<text x="59" y="301" class="body">Athena: hasta 5 reintentos</text>
+<text x="59" y="326" class="body">Grilla 200 × 200 enmascarada</text>
+<rect x="470" y="215" width="460" height="155" rx="14" fill="#e6f3f5" stroke="#178593" stroke-width="2" />
+<text x="489" y="247" class="node-title">2 · Filtrar / particionar</text>
+<text x="489" y="276" class="body">Día de semana × turno: 21 combinaciones</text>
+<text x="489" y="301" class="body">Ventanas móviles de 20 semanas</text>
+<text x="489" y="326" class="body">Se omiten candidatos sin datos suficientes</text>
+<rect x="1010" y="215" width="550" height="155" rx="14" fill="#e6f3f5" stroke="#178593" stroke-width="2" />
+<text x="1029" y="247" class="node-title">3 · Entrenar / evaluar</text>
+<text x="1029" y="276" class="body">Counter · KDE · KDEPerDayKernelSize · SEEP</text>
+<text x="1029" y="301" class="body">Hit-rate para coberturas de área de 10–100 %</text>
+<text x="1029" y="326" class="body">PAI = hit-rate / cobertura de área</text>
+<path d="M390 290 H470" fill="none" stroke="#325c76" stroke-width="2.5" marker-end="url(#arrow)"/>
+<path d="M930 290 H1010" fill="none" stroke="#325c76" stroke-width="2.5" marker-end="url(#arrow)"/>
+<rect x="1010" y="465" width="550" height="155" rx="14" fill="#e6f3f5" stroke="#178593" stroke-width="2" />
+<text x="1029" y="497" class="node-title">4 · Ordenar y predecir</text>
+<text x="1029" y="526" class="body">Promedio de PAI entre particiones → top 3</text>
+<text x="1029" y="551" class="body">Candidato #1 → #2 → #3 si falla o se cuelga</text>
+<text x="1029" y="576" class="body">Cada intento de predict(): máximo 30 s</text>
+<path d="M1280 370 V465" fill="none" stroke="#325c76" stroke-width="2.5" marker-end="url(#arrow)"/>
+<rect x="470" y="465" width="460" height="155" rx="14" fill="#e6f3f5" stroke="#178593" stroke-width="2" />
+<text x="489" y="497" class="node-title">5 · Matriz de intensidad</text>
+<text x="489" y="526" class="body">Si hay predicción válida: continuar</text>
+<text x="489" y="551" class="body">Si la matriz queda toda en cero: Uniform</text>
+<text x="489" y="576" class="body">Recorte, centroides, umbral y ranking top 3</text>
+<path d="M1010 540 H930" fill="none" stroke="#325c76" stroke-width="2.5" marker-end="url(#arrow)"/>
+<text x="946" y="524" class="label">éxito</text>
+<rect x="40" y="465" width="350" height="155" rx="14" fill="#eaf4eb" stroke="#529168" stroke-width="2" />
+<text x="59" y="497" class="node-title">Uniform · respaldo</text>
+<text x="59" y="526" class="body">Sin particiones/candidatos válidos,</text>
+<text x="59" y="551" class="body">fallan los 3 o predicen todo en cero</text>
+<text x="59" y="576" class="body">Probabilidad igual en las celdas</text>
+<path d="M470 579 H390" fill="none" stroke="#325c76" stroke-width="2.5" marker-end="url(#arrow)"/>
+<text x="414" y="562" class="label">cero</text>
+<path d="M700 370 V416 H210 V465" fill="none" stroke="#325c76" stroke-width="2.5" marker-end="url(#arrow)"/>
+<text x="425" y="407" class="label">sin entrenamiento válido</text>
+<path d="M1280 620 V673 H210 V620" fill="none" stroke="#325c76" stroke-width="2.5" marker-end="url(#arrow)"/>
+<text x="775" y="665" class="label">fallan los 3 candidatos</text>
+<rect x="470" y="750" width="1090" height="140" rx="14" fill="#edf0fb" stroke="#7181b8" stroke-width="2" />
+<text x="489" y="782" class="node-title">6 · Publicar resultados y cerrar estado</text>
+<text x="489" y="811" class="body">GeoJSON de predicción + puntos de apoyo + matrices PKL → S3</text>
+<text x="489" y="836" class="body">DynamoDB → finalizado | error. SER consulta después el estado y los archivos.</text>
+<path d="M700 620 V750" fill="none" stroke="#325c76" stroke-width="2.5" marker-end="url(#arrow)"/>
+<path d="M210 620 V820 H470" fill="none" stroke="#325c76" stroke-width="2.5" marker-end="url(#arrow)"/>
+<text x="300" y="807" class="label">continúa</text>
+<text x="40" y="947" class="node-title">Cómo interpretar un mapa uniforme</text>
+<text x="40" y="983" class="body">Puede ser el respaldo Uniform por escasez de datos; el color por sí solo no prueba la causa ni el éxito del pipeline.</text>
+<text x="40" y="1016" class="body">El PDF cita mínimos: Counter ≥2, KDE ≥3 y SEEP ≥5 + vecinos; se aplican tras filtrar, no al total histórico.</text>
+<text x="40" y="1049" class="body">El PDF señala totalCalls = len(dfToUse) / 13: ampliar fechas puede cambiar la escala. Validar en el código vigente.</text>
+<text x="40" y="1082" class="body">Monitoreo sugerido: modelo elegido, motivo de respaldo, tamaño de muestra, cobertura de archivos y estado final.</text>
+<text x="40" y="1141" class="small">Fuentes: Mapa-del-Pipeline.pdf (pp. 1–4) + inventario XLSX (corte 22 sep 2026) + referencias locales.</text>
+<text x="40" y="1166" class="small">Línea continua: flujo documentado. Recuadro ámbar: relación pendiente. No se verificó AWS en vivo.</text>
+</svg>

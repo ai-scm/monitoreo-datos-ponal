@@ -1,0 +1,43 @@
+flowchart TB
+    subgraph CORE["Flujo documentado en PDF · timeFrame=TURNO · /pred/completo"]
+        UI["Frontend · identidad de despliegue pendiente"]
+        SER["SER Flask / Waitress :8080<br/>pon-xcrimePredictionDemanda-services"]
+        TASK["Tarea efímera ECS / Fargate<br/>Sci-XCrimeGeneradorCuadrantes"]
+        ATH["Athena · mdp_limpio<br/>histórico por CAD / unidad / fechas"]
+        API["API PONAL · autenticación y turnos<br/>respaldo a turnos 91/89/90 tras 30 s"]
+        S3["S3 · pon-prod-ml-iapol<br/>UnidadesBase/ y PrediccionMdP/"]
+        DDB["DynamoDB<br/>pon-prod-prediccion-demanda-{cad}"]
+        UI -->|"1. POST /pred/completo"| SER
+        SER -->|"2. put_item: procesando por unidad y día"| DDB
+        SER -->|"3. ecs:RunTask + variables de entorno"| TASK
+        SER -->|"4. 200 OK + id_proceso: solo confirma lanzamiento"| UI
+        TASK -->|"5. consulta SQL; hasta 5 reintentos según PDF"| ATH
+        ATH -->|"CSV histórico"| TASK
+        TASK -->|"get_token / get_info_turnos"| API
+        TASK -->|"GET geometrías / PUT GeoJSON y PKL"| S3
+        TASK -->|"6. update_item: finalizado o error"| DDB
+        UI -->|"7. /info/unidad_fecha; /geo/disponibles_unidad_fecha; /geo/one_path"| SER
+        SER -->|"query: fecha_unidad_global_index"| DDB
+        S3 -->|"SER lee GeoJSON; combina hijas para estación"| SER
+        SER -->|"estado y mapa"| UI
+    end
+    subgraph CRUCE["Correspondencias con inventario · corte 22 sep 2026"]
+        CSER["ECS!6 · pred-demanda-ser-ECSCluster<br/>correspondencia fuerte por nombre"]
+        CTASK["ECS!13 · pon-prod-xcrime-predicciones-cluster<br/>mismo ECR; falta RunTask/task ARN"]
+        CUI["ECS!24 · pred-demanda-ECSCluster<br/>frontend candidato"]
+        BFF["ECS!32 · pred-demanda-bff-ECSCluster<br/>BFF adicional: lugar en la ruta pendiente"]
+        CSER -.->|"correspondencia documental"| SER
+        CTASK -.->|"ejecutor candidato"| TASK
+        CUI -.->|"candidato por nombre"| UI
+    end
+    subgraph PENDING["Recursos existentes; conexiones y orden pendientes"]
+        CLEAN["Lambdas pre/datacleaning<br/>Glue SIEDCO / Premier One / Hexagon<br/>productor de mdp_limpio sin confirmar"]
+        AUTO["Lambda pon-prod-xcrime-prediccion-launch-fargate<br/>EC2 autoprediccion.prod.mdp.ponal<br/>cron y destino ECS pendientes"]
+        FUS["Glue fusión-demanda / optimizaciones / copias<br/>entradas y salidas no demostradas"]
+        VAL["Lambda validar-predicciones-prod<br/>actividad registrada en XLSX; wiring pendiente<br/>repo: referencia S3 → reportes + SNS"]
+        EMPTY["ECS!36 y ECS!38: cero tareas y servicios<br/>captura puntual; no demuestra abandono"]
+    end
+    classDef pending fill:#fff5e6,stroke:#c38728,stroke-dasharray:6 4,color:#173346
+    classDef data fill:#edf0fb,stroke:#7181b8,color:#173346
+    class CSER,CTASK,CUI,BFF,CLEAN,AUTO,FUS,VAL,EMPTY pending
+    class ATH,S3,DDB data
