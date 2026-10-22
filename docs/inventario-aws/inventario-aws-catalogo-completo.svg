@@ -1,0 +1,313 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2200" height="1950" viewBox="0 0 2200 1950" role="img" aria-labelledby="title desc">
+<title id="title">Catálogo completo Athena / Glue · PONAL</title><desc id="desc">Las 64 bases de datos ordenadas por conteo mínimo reportado de tablas y vistas, con conteos parciales marcados en ámbar. Escala lineal común de cero a 718.</desc>
+<rect width="2200" height="1950" fill="#f2f5fa"/>
+<rect x="0" y="0" width="2200" height="182" rx="0" fill="#15283f"/>
+<text x="60" y="44" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="700" fill="#8fb7de">PONAL  /  ATHENA + GLUE DATA CATALOG</text>
+<text x="60" y="104" font-family="DejaVu Sans, sans-serif" font-size="43" font-weight="700" fill="white">Catálogo completo: 64 bases de datos</text>
+<text x="60" y="150" font-family="DejaVu Sans, sans-serif" font-size="21" font-weight="400" fill="#d0ddec">Cuenta 926162397524 · Región indicada: us-east-1 · Conteos de tablas y vistas del texto aportado</text>
+<rect x="60" y="210" width="460" height="100" rx="16" fill="white" stroke="#dde5ef"/>
+<text x="82" y="255" font-family="DejaVu Sans, sans-serif" font-size="34" font-weight="700" fill="#2768db">64</text>
+<text x="240" y="263" font-family="DejaVu Sans, sans-serif" font-size="19" font-weight="400" fill="#586b80">bases de datos</text>
+<rect x="600" y="210" width="460" height="100" rx="16" fill="white" stroke="#dde5ef"/>
+<text x="622" y="255" font-family="DejaVu Sans, sans-serif" font-size="34" font-weight="700" fill="#2768db">≥3.792</text>
+<text x="780" y="263" font-family="DejaVu Sans, sans-serif" font-size="19" font-weight="400" fill="#586b80">tablas / vistas</text>
+<rect x="1140" y="210" width="460" height="100" rx="16" fill="white" stroke="#dde5ef"/>
+<text x="1162" y="255" font-family="DejaVu Sans, sans-serif" font-size="34" font-weight="700" fill="#586b80">5</text>
+<text x="1320" y="264" font-family="DejaVu Sans, sans-serif" font-size="19" font-weight="400" fill="#586b80">bases vacías</text>
+<rect x="1680" y="210" width="460" height="100" rx="16" fill="white" stroke="#dde5ef"/>
+<text x="1702" y="255" font-family="DejaVu Sans, sans-serif" font-size="34" font-weight="700" fill="#b56b0b">2</text>
+<text x="1860" y="263" font-family="DejaVu Sans, sans-serif" font-size="19" font-weight="400" fill="#586b80">conteos parciales</text>
+<text x="60" y="355" font-family="DejaVu Sans, sans-serif" font-size="19" font-weight="400" fill="#586b80">Orden según mínimo reportado. Escala lineal: 0–718. Ámbar = conteo parcial; gris = base vacía.</text>
+<rect x="60" y="390" width="1025" height="1416" rx="16" fill="white" stroke="#dde5ef"/>
+<text x="80" y="422" font-family="DejaVu Sans, sans-serif" font-size="16" font-weight="700" fill="#586b80">BASE DE DATOS</text>
+<text x="925" y="422" font-family="DejaVu Sans, sans-serif" font-size="16" font-weight="700" fill="#586b80">ENTRADAS</text>
+<rect x="70" y="443" width="1005" height="37" rx="5" fill="#f7f9fc"/>
+<text x="80" y="464" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon-prod-mdp</text>
+<rect x="662" y="452" width="277" height="15" rx="4" fill="#e8edf4"/>
+<rect x="662" y="452" width="277.0" height="15" rx="4" fill="#2768db"/>
+<text x="965" y="464" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="700" fill="#15283f">718</text>
+<text x="80" y="505" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon-prod-raw-sivicc</text>
+<rect x="662" y="493" width="277" height="15" rx="4" fill="#e8edf4"/>
+<rect x="662" y="493" width="154.3175487465181" height="15" rx="4" fill="#b56b0b"/>
+<text x="965" y="505" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="700" fill="#b56b0b">≥400</text>
+<rect x="70" y="525" width="1005" height="37" rx="5" fill="#f7f9fc"/>
+<text x="80" y="546" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon-prod-raw-telepol</text>
+<rect x="662" y="534" width="277" height="15" rx="4" fill="#e8edf4"/>
+<rect x="662" y="534" width="154.3175487465181" height="15" rx="4" fill="#b56b0b"/>
+<text x="965" y="546" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="700" fill="#b56b0b">≥400</text>
+<text x="80" y="587" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon-prod-raw-cnp</text>
+<rect x="662" y="575" width="277" height="15" rx="4" fill="#e8edf4"/>
+<rect x="662" y="575" width="120.75348189415041" height="15" rx="4" fill="#2768db"/>
+<text x="965" y="587" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="700" fill="#15283f">313</text>
+<rect x="70" y="607" width="1005" height="37" rx="5" fill="#f7f9fc"/>
+<text x="80" y="628" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon-prod-raw-dboper</text>
+<rect x="662" y="616" width="277" height="15" rx="4" fill="#e8edf4"/>
+<rect x="662" y="616" width="109.17966573816156" height="15" rx="4" fill="#2768db"/>
+<text x="965" y="628" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="700" fill="#15283f">283</text>
+<text x="80" y="669" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon-prod-raw-cnp-test</text>
+<rect x="662" y="657" width="277" height="15" rx="4" fill="#e8edf4"/>
+<rect x="662" y="657" width="103.77855153203343" height="15" rx="4" fill="#2768db"/>
+<text x="965" y="669" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="700" fill="#15283f">269</text>
+<rect x="70" y="689" width="1005" height="37" rx="5" fill="#f7f9fc"/>
+<text x="80" y="710" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon-prod-raw-cnp-alt</text>
+<rect x="662" y="698" width="277" height="15" rx="4" fill="#e8edf4"/>
+<rect x="662" y="698" width="96.44846796657382" height="15" rx="4" fill="#2768db"/>
+<text x="965" y="710" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="700" fill="#15283f">250</text>
+<text x="80" y="751" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon-prod-raw-geopol</text>
+<rect x="662" y="739" width="277" height="15" rx="4" fill="#e8edf4"/>
+<rect x="662" y="739" width="85.64623955431755" height="15" rx="4" fill="#2768db"/>
+<text x="965" y="751" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="700" fill="#15283f">222</text>
+<rect x="70" y="771" width="1005" height="37" rx="5" fill="#f7f9fc"/>
+<text x="80" y="792" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon_prod_raw_comparendo</text>
+<rect x="662" y="780" width="277" height="15" rx="4" fill="#e8edf4"/>
+<rect x="662" y="780" width="79.47353760445682" height="15" rx="4" fill="#2768db"/>
+<text x="965" y="792" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="700" fill="#15283f">206</text>
+<text x="80" y="833" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon_prod_raw_comparendo_v2</text>
+<rect x="662" y="821" width="277" height="15" rx="4" fill="#e8edf4"/>
+<rect x="662" y="821" width="78.70194986072423" height="15" rx="4" fill="#2768db"/>
+<text x="965" y="833" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="700" fill="#15283f">204</text>
+<rect x="70" y="853" width="1005" height="37" rx="5" fill="#f7f9fc"/>
+<text x="80" y="874" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon-prod-raw-disec</text>
+<rect x="662" y="862" width="277" height="15" rx="4" fill="#e8edf4"/>
+<rect x="662" y="862" width="72.9150417827298" height="15" rx="4" fill="#2768db"/>
+<text x="965" y="874" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="700" fill="#15283f">189</text>
+<text x="80" y="915" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon-prod-raw-simep</text>
+<rect x="662" y="903" width="277" height="15" rx="4" fill="#e8edf4"/>
+<rect x="662" y="903" width="38.96518105849582" height="15" rx="4" fill="#2768db"/>
+<text x="965" y="915" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="700" fill="#15283f">101</text>
+<rect x="70" y="935" width="1005" height="37" rx="5" fill="#f7f9fc"/>
+<text x="80" y="956" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon-prod-expertopol-bd</text>
+<rect x="662" y="944" width="277" height="15" rx="4" fill="#e8edf4"/>
+<rect x="662" y="944" width="15.045961002785516" height="15" rx="4" fill="#2768db"/>
+<text x="965" y="956" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="700" fill="#15283f">39</text>
+<text x="80" y="997" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon-prod-raw-cetus</text>
+<rect x="662" y="985" width="277" height="15" rx="4" fill="#e8edf4"/>
+<rect x="662" y="985" width="11.573816155988858" height="15" rx="4" fill="#2768db"/>
+<text x="965" y="997" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="700" fill="#15283f">30</text>
+<rect x="70" y="1017" width="1005" height="37" rx="5" fill="#f7f9fc"/>
+<text x="80" y="1038" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon-prod-raw-secad</text>
+<rect x="662" y="1026" width="277" height="15" rx="4" fill="#e8edf4"/>
+<rect x="662" y="1026" width="8.87325905292479" height="15" rx="4" fill="#2768db"/>
+<text x="965" y="1038" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="700" fill="#15283f">23</text>
+<text x="80" y="1079" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon-prod-raw-sivicc-incremental-shadow</text>
+<rect x="662" y="1067" width="277" height="15" rx="4" fill="#e8edf4"/>
+<rect x="662" y="1067" width="7.715877437325905" height="15" rx="4" fill="#2768db"/>
+<text x="965" y="1079" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="700" fill="#15283f">20</text>
+<rect x="70" y="1099" width="1005" height="37" rx="5" fill="#f7f9fc"/>
+<text x="80" y="1120" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pbx_cdr_csv</text>
+<rect x="662" y="1108" width="277" height="15" rx="4" fill="#e8edf4"/>
+<rect x="662" y="1108" width="5.401114206128134" height="15" rx="4" fill="#2768db"/>
+<text x="965" y="1120" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="700" fill="#15283f">14</text>
+<text x="80" y="1161" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon-prod-capas-iapol</text>
+<rect x="662" y="1149" width="277" height="15" rx="4" fill="#e8edf4"/>
+<rect x="662" y="1149" width="4.243732590529248" height="15" rx="4" fill="#2768db"/>
+<text x="965" y="1161" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="700" fill="#15283f">11</text>
+<rect x="70" y="1181" width="1005" height="37" rx="5" fill="#f7f9fc"/>
+<text x="80" y="1202" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon-prod-raw-simep-s3</text>
+<rect x="662" y="1190" width="277" height="15" rx="4" fill="#e8edf4"/>
+<rect x="662" y="1190" width="3.4721448467966574" height="15" rx="4" fill="#2768db"/>
+<text x="965" y="1202" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="700" fill="#15283f">9</text>
+<text x="80" y="1243" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon-prod-events</text>
+<rect x="662" y="1231" width="277" height="15" rx="4" fill="#e8edf4"/>
+<rect x="662" y="1231" width="3.086350974930362" height="15" rx="4" fill="#2768db"/>
+<text x="965" y="1243" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="700" fill="#15283f">8</text>
+<rect x="70" y="1263" width="1005" height="37" rx="5" fill="#f7f9fc"/>
+<text x="80" y="1284" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon_prod_siedco_raw</text>
+<rect x="662" y="1272" width="277" height="15" rx="4" fill="#e8edf4"/>
+<rect x="662" y="1272" width="3.086350974930362" height="15" rx="4" fill="#2768db"/>
+<text x="965" y="1284" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="700" fill="#15283f">8</text>
+<text x="80" y="1325" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">default</text>
+<rect x="662" y="1313" width="277" height="15" rx="4" fill="#e8edf4"/>
+<rect x="662" y="1313" width="2.3147632311977717" height="15" rx="4" fill="#2768db"/>
+<text x="965" y="1325" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="700" fill="#15283f">6</text>
+<rect x="70" y="1345" width="1005" height="37" rx="5" fill="#f7f9fc"/>
+<text x="80" y="1366" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">iapol_raw_users</text>
+<rect x="662" y="1354" width="277" height="15" rx="4" fill="#e8edf4"/>
+<rect x="662" y="1354" width="1.543175487465181" height="15" rx="4" fill="#2768db"/>
+<text x="965" y="1366" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="700" fill="#15283f">4</text>
+<text x="80" y="1407" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">informe_anticipacion</text>
+<rect x="662" y="1395" width="277" height="15" rx="4" fill="#e8edf4"/>
+<rect x="662" y="1395" width="1.543175487465181" height="15" rx="4" fill="#2768db"/>
+<text x="965" y="1407" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="700" fill="#15283f">4</text>
+<rect x="70" y="1427" width="1005" height="37" rx="5" fill="#f7f9fc"/>
+<text x="80" y="1448" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon-prod-permierone-mebog</text>
+<rect x="662" y="1436" width="277" height="15" rx="4" fill="#e8edf4"/>
+<rect x="662" y="1436" width="1.543175487465181" height="15" rx="4" fill="#2768db"/>
+<text x="965" y="1448" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="700" fill="#15283f">4</text>
+<text x="80" y="1489" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon-prod-raw-ali</text>
+<rect x="662" y="1477" width="277" height="15" rx="4" fill="#e8edf4"/>
+<rect x="662" y="1477" width="1.543175487465181" height="15" rx="4" fill="#2768db"/>
+<text x="965" y="1489" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="700" fill="#15283f">4</text>
+<rect x="70" y="1509" width="1005" height="37" rx="5" fill="#f7f9fc"/>
+<text x="80" y="1530" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon_prod_raw_siedco_delitos_temporal</text>
+<rect x="662" y="1518" width="277" height="15" rx="4" fill="#e8edf4"/>
+<rect x="662" y="1518" width="1.543175487465181" height="15" rx="4" fill="#2768db"/>
+<text x="965" y="1530" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="700" fill="#15283f">4</text>
+<text x="80" y="1571" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon_prod_siedco_historico_diagnostico</text>
+<rect x="662" y="1559" width="277" height="15" rx="4" fill="#e8edf4"/>
+<rect x="662" y="1559" width="1.543175487465181" height="15" rx="4" fill="#2768db"/>
+<text x="965" y="1571" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="700" fill="#15283f">4</text>
+<rect x="70" y="1591" width="1005" height="37" rx="5" fill="#f7f9fc"/>
+<text x="80" y="1612" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">disec-plano</text>
+<rect x="662" y="1600" width="277" height="15" rx="4" fill="#e8edf4"/>
+<rect x="662" y="1600" width="1.1573816155988859" height="15" rx="4" fill="#2768db"/>
+<text x="965" y="1612" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="700" fill="#15283f">3</text>
+<text x="80" y="1653" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">raw_mebog</text>
+<rect x="662" y="1641" width="277" height="15" rx="4" fill="#e8edf4"/>
+<rect x="662" y="1641" width="1.1573816155988859" height="15" rx="4" fill="#2768db"/>
+<text x="965" y="1653" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="700" fill="#15283f">3</text>
+<rect x="70" y="1673" width="1005" height="37" rx="5" fill="#f7f9fc"/>
+<text x="80" y="1694" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">alias_db</text>
+<rect x="662" y="1682" width="277" height="15" rx="4" fill="#e8edf4"/>
+<rect x="662" y="1682" width="0.7715877437325905" height="15" rx="4" fill="#2768db"/>
+<text x="965" y="1694" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="700" fill="#15283f">2</text>
+<text x="80" y="1735" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">disec_planes_preventivos</text>
+<rect x="662" y="1723" width="277" height="15" rx="4" fill="#e8edf4"/>
+<rect x="662" y="1723" width="0.7715877437325905" height="15" rx="4" fill="#2768db"/>
+<text x="965" y="1735" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="700" fill="#15283f">2</text>
+<rect x="1115" y="390" width="1025" height="1416" rx="16" fill="white" stroke="#dde5ef"/>
+<text x="1135" y="422" font-family="DejaVu Sans, sans-serif" font-size="16" font-weight="700" fill="#586b80">BASE DE DATOS</text>
+<text x="1980" y="422" font-family="DejaVu Sans, sans-serif" font-size="16" font-weight="700" fill="#586b80">ENTRADAS</text>
+<rect x="1125" y="443" width="1005" height="37" rx="5" fill="#f7f9fc"/>
+<text x="1135" y="464" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">estructura_nacional</text>
+<rect x="1717" y="452" width="277" height="15" rx="4" fill="#e8edf4"/>
+<rect x="1717" y="452" width="0.7715877437325905" height="15" rx="4" fill="#2768db"/>
+<text x="2020" y="464" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="700" fill="#15283f">2</text>
+<text x="1135" y="505" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">fuentes_externas_data</text>
+<rect x="1717" y="493" width="277" height="15" rx="4" fill="#e8edf4"/>
+<rect x="1717" y="493" width="0.7715877437325905" height="15" rx="4" fill="#2768db"/>
+<text x="2020" y="505" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="700" fill="#15283f">2</text>
+<rect x="1125" y="525" width="1005" height="37" rx="5" fill="#f7f9fc"/>
+<text x="1135" y="546" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">panorama_nacional</text>
+<rect x="1717" y="534" width="277" height="15" rx="4" fill="#e8edf4"/>
+<rect x="1717" y="534" width="0.7715877437325905" height="15" rx="4" fill="#2768db"/>
+<text x="2020" y="546" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="700" fill="#15283f">2</text>
+<text x="1135" y="587" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon-prod-irisp1-op-direct</text>
+<rect x="1717" y="575" width="277" height="15" rx="4" fill="#e8edf4"/>
+<rect x="1717" y="575" width="0.7715877437325905" height="15" rx="4" fill="#2768db"/>
+<text x="2020" y="587" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="700" fill="#15283f">2</text>
+<rect x="1125" y="607" width="1005" height="37" rx="5" fill="#f7f9fc"/>
+<text x="1135" y="628" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon_prod_raw_delito</text>
+<rect x="1717" y="616" width="277" height="15" rx="4" fill="#e8edf4"/>
+<rect x="1717" y="616" width="0.7715877437325905" height="15" rx="4" fill="#2768db"/>
+<text x="2020" y="628" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="700" fill="#15283f">2</text>
+<text x="1135" y="669" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon_prod_siedco_raw_test</text>
+<rect x="1717" y="657" width="277" height="15" rx="4" fill="#e8edf4"/>
+<rect x="1717" y="657" width="0.7715877437325905" height="15" rx="4" fill="#2768db"/>
+<text x="2020" y="669" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="700" fill="#15283f">2</text>
+<rect x="1125" y="689" width="1005" height="37" rx="5" fill="#f7f9fc"/>
+<text x="1135" y="710" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">sampledb</text>
+<rect x="1717" y="698" width="277" height="15" rx="4" fill="#e8edf4"/>
+<rect x="1717" y="698" width="0.7715877437325905" height="15" rx="4" fill="#2768db"/>
+<text x="2020" y="710" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="700" fill="#15283f">2</text>
+<text x="1135" y="751" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">tablero_alerta_delitos</text>
+<rect x="1717" y="739" width="277" height="15" rx="4" fill="#e8edf4"/>
+<rect x="1717" y="739" width="0.7715877437325905" height="15" rx="4" fill="#2768db"/>
+<text x="2020" y="751" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="700" fill="#15283f">2</text>
+<rect x="1125" y="771" width="1005" height="37" rx="5" fill="#f7f9fc"/>
+<text x="1135" y="792" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">iapol_training</text>
+<rect x="1717" y="780" width="277" height="15" rx="4" fill="#e8edf4"/>
+<rect x="1717" y="780" width="0.38579387186629527" height="15" rx="4" fill="#2768db"/>
+<text x="2020" y="792" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="700" fill="#15283f">1</text>
+<text x="1135" y="833" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon-prod-ali-label-db</text>
+<rect x="1717" y="821" width="277" height="15" rx="4" fill="#e8edf4"/>
+<rect x="1717" y="821" width="0.38579387186629527" height="15" rx="4" fill="#2768db"/>
+<text x="2020" y="833" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="700" fill="#15283f">1</text>
+<rect x="1125" y="853" width="1005" height="37" rx="5" fill="#f7f9fc"/>
+<text x="1135" y="874" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon-prod-disec-mlt</text>
+<rect x="1717" y="862" width="277" height="15" rx="4" fill="#e8edf4"/>
+<rect x="1717" y="862" width="0.38579387186629527" height="15" rx="4" fill="#2768db"/>
+<text x="2020" y="874" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="700" fill="#15283f">1</text>
+<text x="1135" y="915" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon-prod-disec-plano2oct</text>
+<rect x="1717" y="903" width="277" height="15" rx="4" fill="#e8edf4"/>
+<rect x="1717" y="903" width="0.38579387186629527" height="15" rx="4" fill="#2768db"/>
+<text x="2020" y="915" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="700" fill="#15283f">1</text>
+<rect x="1125" y="935" width="1005" height="37" rx="5" fill="#f7f9fc"/>
+<text x="1135" y="956" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon-prod-disec-pplanespreventivos-op</text>
+<rect x="1717" y="944" width="277" height="15" rx="4" fill="#e8edf4"/>
+<rect x="1717" y="944" width="0.38579387186629527" height="15" rx="4" fill="#2768db"/>
+<text x="2020" y="956" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="700" fill="#15283f">1</text>
+<text x="1135" y="997" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon-prod-disec-simpep-op</text>
+<rect x="1717" y="985" width="277" height="15" rx="4" fill="#e8edf4"/>
+<rect x="1717" y="985" width="0.38579387186629527" height="15" rx="4" fill="#2768db"/>
+<text x="2020" y="997" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="700" fill="#15283f">1</text>
+<rect x="1125" y="1017" width="1005" height="37" rx="5" fill="#f7f9fc"/>
+<text x="1135" y="1038" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon-prod-disec-stp</text>
+<rect x="1717" y="1026" width="277" height="15" rx="4" fill="#e8edf4"/>
+<rect x="1717" y="1026" width="0.38579387186629527" height="15" rx="4" fill="#2768db"/>
+<text x="2020" y="1038" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="700" fill="#15283f">1</text>
+<text x="1135" y="1079" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon-prod-gestionterritorial-op</text>
+<rect x="1717" y="1067" width="277" height="15" rx="4" fill="#e8edf4"/>
+<rect x="1717" y="1067" width="0.38579387186629527" height="15" rx="4" fill="#2768db"/>
+<text x="2020" y="1079" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="700" fill="#15283f">1</text>
+<rect x="1125" y="1099" width="1005" height="37" rx="5" fill="#f7f9fc"/>
+<text x="1135" y="1120" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon-prod-hexagon</text>
+<rect x="1717" y="1108" width="277" height="15" rx="4" fill="#e8edf4"/>
+<rect x="1717" y="1108" width="0.38579387186629527" height="15" rx="4" fill="#2768db"/>
+<text x="2020" y="1120" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="700" fill="#15283f">1</text>
+<text x="1135" y="1161" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon-prod-irisp1</text>
+<rect x="1717" y="1149" width="277" height="15" rx="4" fill="#e8edf4"/>
+<rect x="1717" y="1149" width="0.38579387186629527" height="15" rx="4" fill="#2768db"/>
+<text x="2020" y="1161" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="700" fill="#15283f">1</text>
+<rect x="1125" y="1181" width="1005" height="37" rx="5" fill="#f7f9fc"/>
+<text x="1135" y="1202" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon-prod-mtrs</text>
+<rect x="1717" y="1190" width="277" height="15" rx="4" fill="#e8edf4"/>
+<rect x="1717" y="1190" width="0.38579387186629527" height="15" rx="4" fill="#2768db"/>
+<text x="2020" y="1202" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="700" fill="#15283f">1</text>
+<text x="1135" y="1243" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon-prod-trazas-gps</text>
+<rect x="1717" y="1231" width="277" height="15" rx="4" fill="#e8edf4"/>
+<rect x="1717" y="1231" width="0.38579387186629527" height="15" rx="4" fill="#2768db"/>
+<text x="2020" y="1243" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="700" fill="#15283f">1</text>
+<rect x="1125" y="1263" width="1005" height="37" rx="5" fill="#f7f9fc"/>
+<text x="1135" y="1284" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon_prod_raw_siedco_historico</text>
+<rect x="1717" y="1272" width="277" height="15" rx="4" fill="#e8edf4"/>
+<rect x="1717" y="1272" width="0.38579387186629527" height="15" rx="4" fill="#2768db"/>
+<text x="2020" y="1284" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="700" fill="#15283f">1</text>
+<text x="1135" y="1325" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon_prod_test_alias</text>
+<rect x="1717" y="1313" width="277" height="15" rx="4" fill="#e8edf4"/>
+<rect x="1717" y="1313" width="0.38579387186629527" height="15" rx="4" fill="#2768db"/>
+<text x="2020" y="1325" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="700" fill="#15283f">1</text>
+<rect x="1125" y="1345" width="1005" height="37" rx="5" fill="#f7f9fc"/>
+<text x="1135" y="1366" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">ponprod_bedrockchatstack_usage_analysis</text>
+<rect x="1717" y="1354" width="277" height="15" rx="4" fill="#e8edf4"/>
+<rect x="1717" y="1354" width="0.38579387186629527" height="15" rx="4" fill="#2768db"/>
+<text x="2020" y="1366" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="700" fill="#15283f">1</text>
+<text x="1135" y="1407" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">prueba_delitos</text>
+<rect x="1717" y="1395" width="277" height="15" rx="4" fill="#e8edf4"/>
+<rect x="1717" y="1395" width="0.38579387186629527" height="15" rx="4" fill="#2768db"/>
+<text x="2020" y="1407" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="700" fill="#15283f">1</text>
+<rect x="1125" y="1427" width="1005" height="37" rx="5" fill="#f7f9fc"/>
+<text x="1135" y="1448" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">prueba_sivicc</text>
+<rect x="1717" y="1436" width="277" height="15" rx="4" fill="#e8edf4"/>
+<rect x="1717" y="1436" width="0.38579387186629527" height="15" rx="4" fill="#2768db"/>
+<text x="2020" y="1448" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="700" fill="#15283f">1</text>
+<text x="1135" y="1489" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">sagemaker_sample_db</text>
+<rect x="1717" y="1477" width="277" height="15" rx="4" fill="#e8edf4"/>
+<rect x="1717" y="1477" width="0.38579387186629527" height="15" rx="4" fill="#2768db"/>
+<text x="2020" y="1489" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="700" fill="#15283f">1</text>
+<rect x="1125" y="1509" width="1005" height="37" rx="5" fill="#f7f9fc"/>
+<text x="1135" y="1530" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">vw_consulta_actual_gps</text>
+<rect x="1717" y="1518" width="277" height="15" rx="4" fill="#e8edf4"/>
+<rect x="1717" y="1518" width="0.38579387186629527" height="15" rx="4" fill="#2768db"/>
+<text x="2020" y="1530" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="700" fill="#15283f">1</text>
+<text x="1135" y="1570" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon-poc-raw-test</text>
+<rect x="1717" y="1559" width="277" height="15" rx="4" fill="#e8edf4"/>
+<text x="2020" y="1571" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="700" fill="#586b80">0</text>
+<rect x="1125" y="1591" width="1005" height="37" rx="5" fill="#f7f9fc"/>
+<text x="1135" y="1612" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon-prod-gestion-territorial</text>
+<rect x="1717" y="1600" width="277" height="15" rx="4" fill="#e8edf4"/>
+<text x="2020" y="1612" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="700" fill="#586b80">0</text>
+<text x="1135" y="1653" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon-prod-planesprev</text>
+<rect x="1717" y="1641" width="277" height="15" rx="4" fill="#e8edf4"/>
+<text x="2020" y="1653" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="700" fill="#586b80">0</text>
+<rect x="1125" y="1673" width="1005" height="37" rx="5" fill="#f7f9fc"/>
+<text x="1135" y="1694" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon-prod-siedco-motpol</text>
+<rect x="1717" y="1682" width="277" height="15" rx="4" fill="#e8edf4"/>
+<text x="2020" y="1694" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="700" fill="#586b80">0</text>
+<text x="1135" y="1735" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon-prod-simep</text>
+<rect x="1717" y="1723" width="277" height="15" rx="4" fill="#e8edf4"/>
+<text x="2020" y="1735" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="700" fill="#586b80">0</text>
+<text x="60" y="1853" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="400" fill="#b56b0b">El mínimo total usa 400 para SIVICC y 400 para TELEPOL. Sus cifras exactas siguen pendientes en la fuente.</text>
+<text x="60" y="1885" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="400" fill="#586b80">Incluye entradas técnicas, artefactos temporales y vistas; no equivale al número de conjuntos de negocio únicos.</text>
+<text x="60" y="1917" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#586b80">Fuente: inventario aportado · Sin validación en vivo a AWS · Elaborado: 21 oct 2026 · CSV adjunto con el detalle de cada base.</text>
+</svg>

@@ -1,0 +1,162 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="1800" viewBox="0 0 1800 1800" role="img" aria-labelledby="title desc">
+<title id="title">Inventario AWS · PONAL</title><desc id="desc">Resumen de ocho servicios AWS, desglose de DMS y DynamoDB, catálogo Athena/Glue y observaciones del inventario aportado.</desc>
+<rect width="1800" height="1800" fill="#f2f5fa"/>
+<rect x="0" y="0" width="1800" height="183" rx="0" fill="#15283f"/>
+<text x="60" y="44" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="700" fill="#8fb7de">PONAL  /  INVENTARIO DE RECURSOS AWS</text>
+<text x="60" y="100" font-family="DejaVu Sans, sans-serif" font-size="44" font-weight="700" fill="white">Una vista para leer el inventario</text>
+<text x="60" y="149" font-family="DejaVu Sans, sans-serif" font-size="21" font-weight="400" fill="#d0ddec">Cuenta 926162397524  ·  Región indicada: us-east-1  ·  8 servicios reportados</text>
+<rect x="60" y="211" width="402" height="117" rx="16" fill="white" stroke="#dde5ef"/>
+<rect x="60" y="211" width="6" height="117" rx="0" fill="#087f83"/>
+<text x="84" y="243" font-family="DejaVu Sans, sans-serif" font-size="19" font-weight="700" fill="#586b80">S3</text>
+<text x="84" y="292" font-family="DejaVu Sans, sans-serif" font-size="43" font-weight="700" fill="#087f83">197</text>
+<text x="190" y="294" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#586b80">buckets</text>
+<rect x="486" y="211" width="402" height="117" rx="16" fill="white" stroke="#dde5ef"/>
+<rect x="486" y="211" width="6" height="117" rx="0" fill="#2768db"/>
+<text x="510" y="243" font-family="DejaVu Sans, sans-serif" font-size="19" font-weight="700" fill="#586b80">Athena / Glue</text>
+<text x="510" y="292" font-family="DejaVu Sans, sans-serif" font-size="43" font-weight="700" fill="#2768db">64</text>
+<text x="616" y="294" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#586b80">bases de datos</text>
+<rect x="912" y="211" width="402" height="117" rx="16" fill="white" stroke="#dde5ef"/>
+<rect x="912" y="211" width="6" height="117" rx="0" fill="#2768db"/>
+<text x="936" y="243" font-family="DejaVu Sans, sans-serif" font-size="19" font-weight="700" fill="#586b80">DynamoDB</text>
+<text x="936" y="292" font-family="DejaVu Sans, sans-serif" font-size="43" font-weight="700" fill="#2768db">105</text>
+<text x="1042" y="294" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#586b80">tablas</text>
+<rect x="1338" y="211" width="402" height="117" rx="16" fill="white" stroke="#dde5ef"/>
+<rect x="1338" y="211" width="6" height="117" rx="0" fill="#7753c8"/>
+<text x="1362" y="243" font-family="DejaVu Sans, sans-serif" font-size="19" font-weight="700" fill="#586b80">DMS</text>
+<text x="1362" y="292" font-family="DejaVu Sans, sans-serif" font-size="43" font-weight="700" fill="#7753c8">96</text>
+<text x="1468" y="295" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#586b80">tareas de replicación</text>
+<rect x="60" y="352" width="402" height="117" rx="16" fill="white" stroke="#dde5ef"/>
+<rect x="60" y="352" width="6" height="117" rx="0" fill="#7753c8"/>
+<text x="84" y="384" font-family="DejaVu Sans, sans-serif" font-size="19" font-weight="700" fill="#586b80">ECS</text>
+<text x="84" y="433" font-family="DejaVu Sans, sans-serif" font-size="43" font-weight="700" fill="#7753c8">38*</text>
+<text x="190" y="436" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#586b80">clústeres reportados</text>
+<rect x="486" y="352" width="402" height="117" rx="16" fill="white" stroke="#dde5ef"/>
+<rect x="486" y="352" width="6" height="117" rx="0" fill="#087f83"/>
+<text x="510" y="384" font-family="DejaVu Sans, sans-serif" font-size="19" font-weight="700" fill="#586b80">Aurora</text>
+<text x="510" y="433" font-family="DejaVu Sans, sans-serif" font-size="43" font-weight="700" fill="#087f83">2</text>
+<text x="616" y="436" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#586b80">clústeres</text>
+<rect x="912" y="352" width="402" height="117" rx="16" fill="white" stroke="#dde5ef"/>
+<rect x="912" y="352" width="6" height="117" rx="0" fill="#087f83"/>
+<text x="936" y="384" font-family="DejaVu Sans, sans-serif" font-size="19" font-weight="700" fill="#586b80">RDS · no Aurora</text>
+<text x="936" y="432" font-family="DejaVu Sans, sans-serif" font-size="43" font-weight="700" fill="#087f83">4</text>
+<text x="1042" y="435" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#586b80">instancias</text>
+<rect x="1338" y="352" width="402" height="117" rx="16" fill="white" stroke="#dde5ef"/>
+<rect x="1338" y="352" width="6" height="117" rx="0" fill="#087f83"/>
+<text x="1362" y="384" font-family="DejaVu Sans, sans-serif" font-size="19" font-weight="700" fill="#586b80">ElastiCache</text>
+<text x="1362" y="432" font-family="DejaVu Sans, sans-serif" font-size="43" font-weight="700" fill="#087f83">1</text>
+<text x="1468" y="435" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#586b80">recurso serverless</text>
+<text x="60" y="501" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#586b80">Los conteos usan unidades distintas; no representan volumen de datos, costo ni tráfico.</text>
+<rect x="60" y="526" width="824" height="346" rx="16" fill="white" stroke="#dde5ef"/>
+<text x="88" y="564" font-family="DejaVu Sans, sans-serif" font-size="14" font-weight="700" fill="#087f83">REPLICACIÓN  /  DMS</text>
+<text x="88" y="597" font-family="DejaVu Sans, sans-serif" font-size="26" font-weight="700" fill="#15283f">96 tareas, agrupadas por destino</text>
+<rect x="88" y="631" width="384.0" height="24" rx="0" fill="#7753c8"/>
+<rect x="472.0" y="631" width="352.0" height="24" rx="0" fill="#2768db"/>
+<rect x="824.0" y="631" width="32.0" height="24" rx="0" fill="#adb9c9"/>
+<text x="88" y="699" font-family="DejaVu Sans, sans-serif" font-size="28" font-weight="700" fill="#7753c8">48</text>
+<text x="150" y="693" font-family="DejaVu Sans, sans-serif" font-size="19" font-weight="700" fill="#15283f">CDC Secad → Aurora</text>
+<text x="150" y="717" font-family="DejaVu Sans, sans-serif" font-size="16" font-weight="400" fill="#586b80">Oracle del cliente → Aurora</text>
+<text x="88" y="755" font-family="DejaVu Sans, sans-serif" font-size="28" font-weight="700" fill="#2768db">44</text>
+<text x="150" y="749" font-family="DejaVu Sans, sans-serif" font-size="19" font-weight="700" fill="#15283f">Full-load + CDC Secad → S3</text>
+<text x="150" y="773" font-family="DejaVu Sans, sans-serif" font-size="16" font-weight="400" fill="#586b80">Oracle del cliente → S3</text>
+<text x="88" y="811" font-family="DejaVu Sans, sans-serif" font-size="28" font-weight="700" fill="#586b80">4</text>
+<text x="150" y="805" font-family="DejaVu Sans, sans-serif" font-size="19" font-weight="700" fill="#15283f">Otras tareas</text>
+<text x="150" y="830" font-family="DejaVu Sans, sans-serif" font-size="16" font-weight="400" fill="#586b80">ALI prod: falló · ALI test / RNMC: detenidas</text>
+<text x="150" y="857" font-family="DejaVu Sans, sans-serif" font-size="15" font-weight="400" fill="#586b80">SIVICC histórico: lista (estado reportado).</text>
+<rect x="912" y="526" width="828" height="346" rx="16" fill="white" stroke="#dde5ef"/>
+<text x="940" y="560" font-family="DejaVu Sans, sans-serif" font-size="14" font-weight="700" fill="#087f83">PERSISTENCIA  /  DYNAMODB</text>
+<text x="940" y="598" font-family="DejaVu Sans, sans-serif" font-size="26" font-weight="700" fill="#15283f">105 tablas por función</text>
+<text x="940" y="639" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">Predicción de demanda por sitio</text>
+<rect x="1350" y="627" width="310" height="16" rx="5" fill="#f2f5fa"/>
+<rect x="1350" y="627" width="310.0" height="16" rx="5" fill="#087f83"/>
+<text x="1680" y="638" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="700" fill="#15283f">55</text>
+<text x="940" y="670" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">Backend administrativo prod_*</text>
+<rect x="1350" y="659" width="310" height="16" rx="5" fill="#f2f5fa"/>
+<rect x="1350" y="659" width="135.27272727272728" height="16" rx="5" fill="#2768db"/>
+<text x="1680" y="670" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="700" fill="#15283f">24</text>
+<text x="940" y="702" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">Reportes y usuarios</text>
+<rect x="1350" y="691" width="310" height="16" rx="5" fill="#f2f5fa"/>
+<rect x="1350" y="691" width="45.09090909090909" height="16" rx="5" fill="#2768db"/>
+<text x="1680" y="702" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="700" fill="#15283f">8</text>
+<text x="940" y="734" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">Aplicaciones pon-prod-*</text>
+<rect x="1350" y="723" width="310" height="16" rx="5" fill="#f2f5fa"/>
+<rect x="1350" y="723" width="39.45454545454545" height="16" rx="5" fill="#2768db"/>
+<text x="1680" y="734" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="700" fill="#15283f">7</text>
+<text x="940" y="766" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">Control y referencia pon_prod_*</text>
+<rect x="1350" y="755" width="310" height="16" rx="5" fill="#f2f5fa"/>
+<rect x="1350" y="755" width="39.45454545454545" height="16" rx="5" fill="#2768db"/>
+<text x="1680" y="766" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="700" fill="#15283f">7</text>
+<text x="940" y="798" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">Chatbot Bedrock</text>
+<rect x="1350" y="787" width="310" height="16" rx="5" fill="#f2f5fa"/>
+<rect x="1350" y="787" width="16.90909090909091" height="16" rx="5" fill="#2768db"/>
+<text x="1680" y="798" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="700" fill="#15283f">3</text>
+<text x="940" y="831" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">Entrenamiento / certificación</text>
+<rect x="1350" y="819" width="310" height="16" rx="5" fill="#f2f5fa"/>
+<rect x="1350" y="819" width="5.636363636363637" height="16" rx="5" fill="#2768db"/>
+<text x="1680" y="830" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="700" fill="#15283f">1</text>
+<rect x="60" y="900" width="824" height="470" rx="16" fill="white" stroke="#dde5ef"/>
+<text x="88" y="938" font-family="DejaVu Sans, sans-serif" font-size="14" font-weight="700" fill="#087f83">CATÁLOGO  /  ATHENA + GLUE</text>
+<text x="88" y="971" font-family="DejaVu Sans, sans-serif" font-size="26" font-weight="700" fill="#15283f">64 bases · al menos 3.792 tablas / vistas</text>
+<text x="88" y="1012" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="400" fill="#586b80">59 bases con entradas  ·  5 vacías  ·  2 conteos parciales</text>
+<text x="88" y="1059" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon-prod-mdp</text>
+<rect x="405" y="1048" width="348" height="18" rx="5" fill="#f2f5fa"/>
+<rect x="405" y="1048" width="348.0" height="18" rx="5" fill="#2768db"/>
+<text x="771" y="1059" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="700" fill="#15283f">718</text>
+<text x="88" y="1096" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon-prod-raw-sivicc</text>
+<rect x="405" y="1085" width="348" height="18" rx="5" fill="#f2f5fa"/>
+<rect x="405" y="1085" width="193.87186629526462" height="18" rx="5" fill="#b56b0b"/>
+<text x="771" y="1096" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="700" fill="#b56b0b">≥400</text>
+<text x="88" y="1133" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon-prod-raw-telepol</text>
+<rect x="405" y="1122" width="348" height="18" rx="5" fill="#f2f5fa"/>
+<rect x="405" y="1122" width="193.87186629526462" height="18" rx="5" fill="#b56b0b"/>
+<text x="771" y="1133" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="700" fill="#b56b0b">≥400</text>
+<text x="88" y="1170" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon-prod-raw-cnp</text>
+<rect x="405" y="1159" width="348" height="18" rx="5" fill="#f2f5fa"/>
+<rect x="405" y="1159" width="151.70473537604457" height="18" rx="5" fill="#2768db"/>
+<text x="771" y="1170" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="700" fill="#15283f">313</text>
+<text x="88" y="1207" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon-prod-raw-dboper</text>
+<rect x="405" y="1196" width="348" height="18" rx="5" fill="#f2f5fa"/>
+<rect x="405" y="1196" width="137.16434540389972" height="18" rx="5" fill="#2768db"/>
+<text x="771" y="1207" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="700" fill="#15283f">283</text>
+<text x="88" y="1244" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon-prod-raw-cnp-test</text>
+<rect x="405" y="1233" width="348" height="18" rx="5" fill="#f2f5fa"/>
+<rect x="405" y="1233" width="130.37883008356545" height="18" rx="5" fill="#2768db"/>
+<text x="771" y="1244" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="700" fill="#15283f">269</text>
+<rect x="88" y="1284" width="768" height="61" rx="10" fill="#e9f0ff"/>
+<text x="104" y="1309" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="700" fill="#2768db">MDP: 708 de 718 entradas son artefactos temporales.</text>
+<text x="104" y="1334" font-family="DejaVu Sans, sans-serif" font-size="16" font-weight="400" fill="#586b80">El total del catálogo incluye vistas y tablas automáticas.</text>
+<rect x="912" y="900" width="828" height="470" rx="16" fill="white" stroke="#dde5ef"/>
+<text x="940" y="934" font-family="DejaVu Sans, sans-serif" font-size="14" font-weight="700" fill="#087f83">BASES RELACIONALES  /  AURORA + RDS</text>
+<text x="940" y="972" font-family="DejaVu Sans, sans-serif" font-size="26" font-weight="700" fill="#15283f">2 clústeres Aurora · 4 instancias RDS</text>
+<text x="940" y="1016" font-family="DejaVu Sans, sans-serif" font-size="20" font-weight="700" fill="#15283f">pon-prod-db-postgres</text>
+<text x="940" y="1047" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="400" fill="#586b80">Aurora PostgreSQL 17.7 · Multi-AZ</text>
+<text x="940" y="1076" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="700" fill="#087f83">2 instancias asociadas: writer + reader</text>
+<rect x="940" y="1104" width="772" height="65" rx="10" fill="#fff1dc"/>
+<text x="955" y="1130" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="700" fill="#b56b0b">provicional-prod-mdp-ponal-cluster</text>
+<text x="955" y="1157" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#b56b0b">Aurora PostgreSQL 12.8 · 0 instancias reportadas</text>
+<text x="940" y="1216" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon-prod-keycloak-db</text>
+<text x="1450" y="1215" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#586b80">PostgreSQL 15.17</text>
+<text x="940" y="1250" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon-prod-maps</text>
+<text x="1450" y="1249" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#586b80">PostgreSQL 16.13</text>
+<text x="940" y="1284" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon-test-job-connections</text>
+<text x="1450" y="1283" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#586b80">PostgreSQL 17.9</text>
+<text x="940" y="1318" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">prod-cpsuite</text>
+<text x="1450" y="1318" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#586b80">Oracle SE2 19.0</text>
+<rect x="60" y="1398" width="824" height="242" rx="16" fill="white" stroke="#dde5ef"/>
+<text x="88" y="1436" font-family="DejaVu Sans, sans-serif" font-size="14" font-weight="700" fill="#087f83">CONSULTA Y CÓMPUTO  /  ECS</text>
+<text x="88" y="1470" font-family="DejaVu Sans, sans-serif" font-size="26" font-weight="700" fill="#15283f">3 clústeres identificados de consulta a datos</text>
+<text x="88" y="1514" font-family="DejaVu Sans, sans-serif" font-size="19" font-weight="400" fill="#15283f">dboper-query-bff-cluster</text>
+<text x="88" y="1545" font-family="DejaVu Sans, sans-serif" font-size="19" font-weight="400" fill="#15283f">gescov-query-bff-cluster</text>
+<text x="88" y="1576" font-family="DejaVu Sans, sans-serif" font-size="19" font-weight="400" fill="#15283f">camaras-query-bff-cluster</text>
+<text x="88" y="1616" font-family="DejaVu Sans, sans-serif" font-size="16" font-weight="400" fill="#586b80">Cada uno tiene su servicio query-BFF asociado.</text>
+<rect x="912" y="1398" width="828" height="242" rx="16" fill="white" stroke="#dde5ef"/>
+<text x="940" y="1436" font-family="DejaVu Sans, sans-serif" font-size="14" font-weight="700" fill="#087f83">CACHÉ Y CALIDAD DEL INVENTARIO</text>
+<text x="940" y="1469" font-family="DejaVu Sans, sans-serif" font-size="26" font-weight="700" fill="#15283f">Puntos que conviene tener a la vista</text>
+<text x="940" y="1510" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">Valkey 8.1 · xcrime-map-cache-prod (serverless)</text>
+<text x="940" y="1544" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="700" fill="#b56b0b">* ECS: resumen = 38; nombres listados = 39 (3 + 36).</text>
+<text x="940" y="1577" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#b56b0b">SIVICC y TELEPOL: ≥400 entradas cada una.</text>
+<text x="940" y="1610" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#586b80">S3: se reportan 197 buckets; sus nombres no se adjuntan.</text>
+<line x1="60" y1="1674" x2="1740" y2="1674" stroke="#dde5ef" stroke-width="1"/>
+<text x="60" y="1708" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#586b80">Fuente: texto aportado por el usuario · Sin consulta en vivo a AWS.</text>
+<text x="60" y="1738" font-family="DejaVu Sans, sans-serif" font-size="16" font-weight="400" fill="#586b80">Las relaciones de replicación son las declaradas en el inventario. No se infieren dependencias entre los demás servicios.</text>
+<text x="60" y="1767" font-family="DejaVu Sans, sans-serif" font-size="16" font-weight="400" fill="#586b80">Elaborado: 21 oct 2026 · Fecha de extracción del inventario no informada.</text>
+</svg>

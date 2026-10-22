@@ -1,0 +1,580 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="3600" height="3550" viewBox="0 0 3600 3550" role="img" aria-labelledby="title desc">
+<title id="title">Inventario técnico AWS: servicios y contenido</title><desc id="desc">Jerarquía de cuenta, servicios y recursos. Incluye las 64 bases del catálogo, grupos y nombres de las 105 tablas DynamoDB, tareas DMS, clústeres ECS, Aurora, RDS, S3 y ElastiCache. Las líneas representan pertenencia salvo las flechas de replicación DMS declaradas en la fuente.</desc>
+<rect width="3600" height="3550" fill="#f2f5fa"/>
+<rect x="0" y="0" width="3600" height="160" rx="0" fill="#15283f"/>
+<text x="70" y="44" font-family="DejaVu Sans, sans-serif" font-size="19" font-weight="700" fill="#8fb7de">PONAL / MAPA TÉCNICO DEL INVENTARIO</text>
+<text x="70" y="101" font-family="DejaVu Sans, sans-serif" font-size="46" font-weight="700" fill="white">Servicios AWS → recursos → contenido</text>
+<text x="70" y="140" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="400" fill="#d0ddec">Jerarquía del inventario aportado · Los identificadores se conservan tal como aparecen en la fuente.</text>
+<rect x="1120" y="200" width="1360" height="110" rx="16" fill="#15283f"/>
+<text x="1160" y="244" font-family="DejaVu Sans, sans-serif" font-size="30" font-weight="700" fill="white">CUENTA AWS 926162397524</text>
+<text x="1160" y="287" font-family="DejaVu Sans, sans-serif" font-size="22" font-weight="400" fill="#d0ddec">Región indicada: us-east-1 · 8 servicios</text>
+<line x1="1120" y1="255" x2="32" y2="255" stroke="#8196ac" stroke-width="3"/>
+<line x1="32" y1="255" x2="32" y2="2690" stroke="#8196ac" stroke-width="3"/>
+<line x1="32" y1="350" x2="3120" y2="350" stroke="#8196ac" stroke-width="3"/>
+<line x1="480" y1="350" x2="480" y2="410" stroke="#8196ac" stroke-width="3"/>
+<line x1="1360" y1="350" x2="1360" y2="410" stroke="#8196ac" stroke-width="3"/>
+<line x1="2240" y1="350" x2="2240" y2="410" stroke="#8196ac" stroke-width="3"/>
+<line x1="3120" y1="350" x2="3120" y2="410" stroke="#8196ac" stroke-width="3"/>
+<line x1="32" y1="2690" x2="3120" y2="2690" stroke="#8196ac" stroke-width="3"/>
+<line x1="480" y1="2690" x2="480" y2="2750" stroke="#8196ac" stroke-width="3"/>
+<line x1="1360" y1="2690" x2="1360" y2="2750" stroke="#8196ac" stroke-width="3"/>
+<line x1="2240" y1="2690" x2="2240" y2="2750" stroke="#8196ac" stroke-width="3"/>
+<line x1="3120" y1="2690" x2="3120" y2="2750" stroke="#8196ac" stroke-width="3"/>
+<rect x="70" y="410" width="820" height="2180" rx="18" fill="#f8fafd" stroke="#dde5ef"/>
+<rect x="70" y="410" width="820" height="98" rx="18" fill="#2768db"/>
+<text x="96" y="452" font-family="DejaVu Sans, sans-serif" font-size="29" font-weight="700" fill="white">Amazon Athena / Glue Catalog</text>
+<text x="96" y="487" font-family="DejaVu Sans, sans-serif" font-size="20" font-weight="400" fill="white">64 bases de datos → tablas y vistas</text>
+<line x1="95" y1="508" x2="95" y2="2566" stroke="#2768db" stroke-width="2"/>
+<rect x="950" y="410" width="820" height="2180" rx="18" fill="#f8fafd" stroke="#dde5ef"/>
+<rect x="950" y="410" width="820" height="98" rx="18" fill="#2768db"/>
+<text x="976" y="451" font-family="DejaVu Sans, sans-serif" font-size="29" font-weight="700" fill="white">Amazon DynamoDB</text>
+<text x="976" y="487" font-family="DejaVu Sans, sans-serif" font-size="20" font-weight="400" fill="white">105 tablas → 7 grupos funcionales</text>
+<line x1="975" y1="508" x2="975" y2="2566" stroke="#2768db" stroke-width="2"/>
+<rect x="1830" y="410" width="820" height="2180" rx="18" fill="#f8fafd" stroke="#dde5ef"/>
+<rect x="1830" y="410" width="820" height="98" rx="18" fill="#7753c8"/>
+<text x="1856" y="451" font-family="DejaVu Sans, sans-serif" font-size="29" font-weight="700" fill="white">AWS DMS</text>
+<text x="1856" y="488" font-family="DejaVu Sans, sans-serif" font-size="20" font-weight="400" fill="white">96 tareas → 3 grupos de replicación</text>
+<line x1="1855" y1="508" x2="1855" y2="2566" stroke="#7753c8" stroke-width="2"/>
+<rect x="2710" y="410" width="820" height="2180" rx="18" fill="#f8fafd" stroke="#dde5ef"/>
+<rect x="2710" y="410" width="820" height="98" rx="18" fill="#7753c8"/>
+<text x="2736" y="451" font-family="DejaVu Sans, sans-serif" font-size="29" font-weight="700" fill="white">Amazon ECS</text>
+<text x="2736" y="487" font-family="DejaVu Sans, sans-serif" font-size="20" font-weight="400" fill="white">38 declarados / 39 nombres enumerados</text>
+<line x1="2735" y1="508" x2="2735" y2="2566" stroke="#7753c8" stroke-width="2"/>
+<text x="116" y="544" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="700" fill="#586b80">Base de datos</text>
+<text x="752" y="544" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="700" fill="#586b80">Entradas</text>
+<line x1="95" y1="580" x2="116" y2="580" stroke="#2768db" stroke-width="2"/>
+<rect x="116" y="567" width="752" height="26" rx="4" fill="white"/>
+<text x="126" y="584" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">alias_db</text>
+<text x="774" y="583" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="700" fill="#2768db">2</text>
+<line x1="95" y1="609" x2="116" y2="609" stroke="#2768db" stroke-width="2"/>
+<rect x="116" y="596" width="752" height="26" rx="4" fill="#e9f0ff"/>
+<text x="126" y="613" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">default</text>
+<text x="774" y="612" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="700" fill="#2768db">6</text>
+<line x1="95" y1="638" x2="116" y2="638" stroke="#2768db" stroke-width="2"/>
+<rect x="116" y="625" width="752" height="26" rx="4" fill="white"/>
+<text x="126" y="642" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">disec-plano</text>
+<text x="774" y="641" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="700" fill="#2768db">3</text>
+<line x1="95" y1="667" x2="116" y2="667" stroke="#2768db" stroke-width="2"/>
+<rect x="116" y="654" width="752" height="26" rx="4" fill="#e9f0ff"/>
+<text x="126" y="671" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">disec_planes_preventivos</text>
+<text x="774" y="670" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="700" fill="#2768db">2</text>
+<line x1="95" y1="696" x2="116" y2="696" stroke="#2768db" stroke-width="2"/>
+<rect x="116" y="683" width="752" height="26" rx="4" fill="white"/>
+<text x="126" y="700" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">estructura_nacional</text>
+<text x="774" y="699" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="700" fill="#2768db">2</text>
+<line x1="95" y1="725" x2="116" y2="725" stroke="#2768db" stroke-width="2"/>
+<rect x="116" y="712" width="752" height="26" rx="4" fill="#e9f0ff"/>
+<text x="126" y="729" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">fuentes_externas_data</text>
+<text x="774" y="728" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="700" fill="#2768db">2</text>
+<line x1="95" y1="754" x2="116" y2="754" stroke="#2768db" stroke-width="2"/>
+<rect x="116" y="741" width="752" height="26" rx="4" fill="white"/>
+<text x="126" y="758" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">iapol_raw_users</text>
+<text x="774" y="757" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="700" fill="#2768db">4</text>
+<line x1="95" y1="783" x2="116" y2="783" stroke="#2768db" stroke-width="2"/>
+<rect x="116" y="770" width="752" height="26" rx="4" fill="#e9f0ff"/>
+<text x="126" y="787" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">iapol_training</text>
+<text x="774" y="786" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="700" fill="#2768db">1</text>
+<line x1="95" y1="812" x2="116" y2="812" stroke="#2768db" stroke-width="2"/>
+<rect x="116" y="799" width="752" height="26" rx="4" fill="white"/>
+<text x="126" y="816" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">informe_anticipacion</text>
+<text x="774" y="815" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="700" fill="#2768db">4</text>
+<line x1="95" y1="841" x2="116" y2="841" stroke="#2768db" stroke-width="2"/>
+<rect x="116" y="828" width="752" height="26" rx="4" fill="#e9f0ff"/>
+<text x="126" y="845" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">panorama_nacional</text>
+<text x="774" y="844" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="700" fill="#2768db">2</text>
+<line x1="95" y1="870" x2="116" y2="870" stroke="#2768db" stroke-width="2"/>
+<rect x="116" y="857" width="752" height="26" rx="4" fill="white"/>
+<text x="126" y="874" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pbx_cdr_csv</text>
+<text x="774" y="873" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="700" fill="#2768db">14</text>
+<line x1="95" y1="899" x2="116" y2="899" stroke="#2768db" stroke-width="2"/>
+<rect x="116" y="886" width="752" height="26" rx="4" fill="#e9f0ff"/>
+<text x="126" y="902" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon-poc-raw-test</text>
+<text x="774" y="902" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="700" fill="#2768db">0</text>
+<line x1="95" y1="928" x2="116" y2="928" stroke="#2768db" stroke-width="2"/>
+<rect x="116" y="915" width="752" height="26" rx="4" fill="white"/>
+<text x="126" y="932" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon-prod-ali-label-db</text>
+<text x="774" y="931" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="700" fill="#2768db">1</text>
+<line x1="95" y1="957" x2="116" y2="957" stroke="#2768db" stroke-width="2"/>
+<rect x="116" y="944" width="752" height="26" rx="4" fill="#e9f0ff"/>
+<text x="126" y="961" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon-prod-capas-iapol</text>
+<text x="774" y="960" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="700" fill="#2768db">11</text>
+<line x1="95" y1="986" x2="116" y2="986" stroke="#2768db" stroke-width="2"/>
+<rect x="116" y="973" width="752" height="26" rx="4" fill="white"/>
+<text x="126" y="990" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon-prod-disec-mlt</text>
+<text x="774" y="989" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="700" fill="#2768db">1</text>
+<line x1="95" y1="1015" x2="116" y2="1015" stroke="#2768db" stroke-width="2"/>
+<rect x="116" y="1002" width="752" height="26" rx="4" fill="#e9f0ff"/>
+<text x="126" y="1019" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon-prod-disec-plano2oct</text>
+<text x="774" y="1018" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="700" fill="#2768db">1</text>
+<line x1="95" y1="1044" x2="116" y2="1044" stroke="#2768db" stroke-width="2"/>
+<rect x="116" y="1031" width="752" height="26" rx="4" fill="white"/>
+<text x="126" y="1048" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon-prod-disec-pplanespreventivos-op</text>
+<text x="774" y="1047" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="700" fill="#2768db">1</text>
+<line x1="95" y1="1073" x2="116" y2="1073" stroke="#2768db" stroke-width="2"/>
+<rect x="116" y="1060" width="752" height="26" rx="4" fill="#e9f0ff"/>
+<text x="126" y="1077" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon-prod-disec-simpep-op</text>
+<text x="774" y="1076" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="700" fill="#2768db">1</text>
+<line x1="95" y1="1102" x2="116" y2="1102" stroke="#2768db" stroke-width="2"/>
+<rect x="116" y="1089" width="752" height="26" rx="4" fill="white"/>
+<text x="126" y="1106" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon-prod-disec-stp</text>
+<text x="774" y="1105" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="700" fill="#2768db">1</text>
+<line x1="95" y1="1131" x2="116" y2="1131" stroke="#2768db" stroke-width="2"/>
+<rect x="116" y="1118" width="752" height="26" rx="4" fill="#e9f0ff"/>
+<text x="126" y="1135" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon-prod-events</text>
+<text x="774" y="1134" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="700" fill="#2768db">8</text>
+<line x1="95" y1="1160" x2="116" y2="1160" stroke="#2768db" stroke-width="2"/>
+<rect x="116" y="1147" width="752" height="26" rx="4" fill="white"/>
+<text x="126" y="1164" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon-prod-expertopol-bd</text>
+<text x="774" y="1163" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="700" fill="#2768db">39</text>
+<line x1="95" y1="1189" x2="116" y2="1189" stroke="#2768db" stroke-width="2"/>
+<rect x="116" y="1176" width="752" height="26" rx="4" fill="#e9f0ff"/>
+<text x="126" y="1193" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon-prod-gestion-territorial</text>
+<text x="774" y="1192" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="700" fill="#2768db">0</text>
+<line x1="95" y1="1218" x2="116" y2="1218" stroke="#2768db" stroke-width="2"/>
+<rect x="116" y="1205" width="752" height="26" rx="4" fill="white"/>
+<text x="126" y="1222" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon-prod-gestionterritorial-op</text>
+<text x="774" y="1221" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="700" fill="#2768db">1</text>
+<line x1="95" y1="1247" x2="116" y2="1247" stroke="#2768db" stroke-width="2"/>
+<rect x="116" y="1234" width="752" height="26" rx="4" fill="#e9f0ff"/>
+<text x="126" y="1251" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon-prod-hexagon</text>
+<text x="774" y="1250" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="700" fill="#2768db">1</text>
+<line x1="95" y1="1276" x2="116" y2="1276" stroke="#2768db" stroke-width="2"/>
+<rect x="116" y="1263" width="752" height="26" rx="4" fill="white"/>
+<text x="126" y="1280" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon-prod-irisp1</text>
+<text x="774" y="1279" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="700" fill="#2768db">1</text>
+<line x1="95" y1="1305" x2="116" y2="1305" stroke="#2768db" stroke-width="2"/>
+<rect x="116" y="1292" width="752" height="26" rx="4" fill="#e9f0ff"/>
+<text x="126" y="1309" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon-prod-irisp1-op-direct</text>
+<text x="774" y="1308" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="700" fill="#2768db">2</text>
+<line x1="95" y1="1334" x2="116" y2="1334" stroke="#2768db" stroke-width="2"/>
+<rect x="116" y="1321" width="752" height="26" rx="4" fill="white"/>
+<text x="126" y="1338" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon-prod-mdp</text>
+<text x="774" y="1337" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="700" fill="#2768db">718</text>
+<line x1="95" y1="1363" x2="116" y2="1363" stroke="#2768db" stroke-width="2"/>
+<rect x="116" y="1350" width="752" height="26" rx="4" fill="#e9f0ff"/>
+<text x="126" y="1367" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon-prod-mtrs</text>
+<text x="774" y="1366" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="700" fill="#2768db">1</text>
+<line x1="95" y1="1392" x2="116" y2="1392" stroke="#2768db" stroke-width="2"/>
+<rect x="116" y="1379" width="752" height="26" rx="4" fill="white"/>
+<text x="126" y="1396" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon-prod-permierone-mebog</text>
+<text x="774" y="1395" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="700" fill="#2768db">4</text>
+<line x1="95" y1="1421" x2="116" y2="1421" stroke="#2768db" stroke-width="2"/>
+<rect x="116" y="1408" width="752" height="26" rx="4" fill="#e9f0ff"/>
+<text x="126" y="1425" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon-prod-planesprev</text>
+<text x="774" y="1424" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="700" fill="#2768db">0</text>
+<line x1="95" y1="1450" x2="116" y2="1450" stroke="#2768db" stroke-width="2"/>
+<rect x="116" y="1437" width="752" height="26" rx="4" fill="white"/>
+<text x="126" y="1454" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon-prod-raw-ali</text>
+<text x="774" y="1453" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="700" fill="#2768db">4</text>
+<line x1="95" y1="1479" x2="116" y2="1479" stroke="#2768db" stroke-width="2"/>
+<rect x="116" y="1466" width="752" height="26" rx="4" fill="#e9f0ff"/>
+<text x="126" y="1483" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon-prod-raw-cetus</text>
+<text x="774" y="1482" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="700" fill="#2768db">30</text>
+<line x1="95" y1="1508" x2="116" y2="1508" stroke="#2768db" stroke-width="2"/>
+<rect x="116" y="1495" width="752" height="26" rx="4" fill="white"/>
+<text x="126" y="1512" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon-prod-raw-cnp</text>
+<text x="774" y="1511" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="700" fill="#2768db">313</text>
+<line x1="95" y1="1537" x2="116" y2="1537" stroke="#2768db" stroke-width="2"/>
+<rect x="116" y="1524" width="752" height="26" rx="4" fill="#e9f0ff"/>
+<text x="126" y="1541" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon-prod-raw-cnp-alt</text>
+<text x="774" y="1540" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="700" fill="#2768db">250</text>
+<line x1="95" y1="1566" x2="116" y2="1566" stroke="#2768db" stroke-width="2"/>
+<rect x="116" y="1553" width="752" height="26" rx="4" fill="white"/>
+<text x="126" y="1570" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon-prod-raw-cnp-test</text>
+<text x="774" y="1569" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="700" fill="#2768db">269</text>
+<line x1="95" y1="1595" x2="116" y2="1595" stroke="#2768db" stroke-width="2"/>
+<rect x="116" y="1582" width="752" height="26" rx="4" fill="#e9f0ff"/>
+<text x="126" y="1599" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon-prod-raw-dboper</text>
+<text x="774" y="1598" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="700" fill="#2768db">283</text>
+<line x1="95" y1="1624" x2="116" y2="1624" stroke="#2768db" stroke-width="2"/>
+<rect x="116" y="1611" width="752" height="26" rx="4" fill="white"/>
+<text x="126" y="1628" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon-prod-raw-disec</text>
+<text x="774" y="1627" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="700" fill="#2768db">189</text>
+<line x1="95" y1="1653" x2="116" y2="1653" stroke="#2768db" stroke-width="2"/>
+<rect x="116" y="1640" width="752" height="26" rx="4" fill="#e9f0ff"/>
+<text x="126" y="1657" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon-prod-raw-geopol</text>
+<text x="774" y="1656" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="700" fill="#2768db">222</text>
+<line x1="95" y1="1682" x2="116" y2="1682" stroke="#2768db" stroke-width="2"/>
+<rect x="116" y="1669" width="752" height="26" rx="4" fill="white"/>
+<text x="126" y="1686" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon-prod-raw-secad</text>
+<text x="774" y="1685" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="700" fill="#2768db">23</text>
+<line x1="95" y1="1711" x2="116" y2="1711" stroke="#2768db" stroke-width="2"/>
+<rect x="116" y="1698" width="752" height="26" rx="4" fill="#e9f0ff"/>
+<text x="126" y="1715" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon-prod-raw-simep</text>
+<text x="774" y="1714" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="700" fill="#2768db">101</text>
+<line x1="95" y1="1740" x2="116" y2="1740" stroke="#2768db" stroke-width="2"/>
+<rect x="116" y="1727" width="752" height="26" rx="4" fill="white"/>
+<text x="126" y="1744" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon-prod-raw-simep-s3</text>
+<text x="774" y="1743" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="700" fill="#2768db">9</text>
+<line x1="95" y1="1769" x2="116" y2="1769" stroke="#2768db" stroke-width="2"/>
+<rect x="116" y="1756" width="752" height="26" rx="4" fill="#e9f0ff"/>
+<text x="126" y="1773" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon-prod-raw-sivicc</text>
+<text x="774" y="1772" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="700" fill="#b56b0b">≥400</text>
+<line x1="95" y1="1798" x2="116" y2="1798" stroke="#2768db" stroke-width="2"/>
+<rect x="116" y="1785" width="752" height="26" rx="4" fill="white"/>
+<text x="126" y="1802" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon-prod-raw-sivicc-incremental-shadow</text>
+<text x="774" y="1801" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="700" fill="#2768db">20</text>
+<line x1="95" y1="1827" x2="116" y2="1827" stroke="#2768db" stroke-width="2"/>
+<rect x="116" y="1814" width="752" height="26" rx="4" fill="#e9f0ff"/>
+<text x="126" y="1831" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon-prod-raw-telepol</text>
+<text x="774" y="1830" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="700" fill="#b56b0b">≥400</text>
+<line x1="95" y1="1856" x2="116" y2="1856" stroke="#2768db" stroke-width="2"/>
+<rect x="116" y="1843" width="752" height="26" rx="4" fill="white"/>
+<text x="126" y="1860" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon-prod-siedco-motpol</text>
+<text x="774" y="1859" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="700" fill="#2768db">0</text>
+<line x1="95" y1="1885" x2="116" y2="1885" stroke="#2768db" stroke-width="2"/>
+<rect x="116" y="1872" width="752" height="26" rx="4" fill="#e9f0ff"/>
+<text x="126" y="1889" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon-prod-simep</text>
+<text x="774" y="1888" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="700" fill="#2768db">0</text>
+<line x1="95" y1="1914" x2="116" y2="1914" stroke="#2768db" stroke-width="2"/>
+<rect x="116" y="1901" width="752" height="26" rx="4" fill="white"/>
+<text x="126" y="1918" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon-prod-trazas-gps</text>
+<text x="774" y="1917" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="700" fill="#2768db">1</text>
+<line x1="95" y1="1943" x2="116" y2="1943" stroke="#2768db" stroke-width="2"/>
+<rect x="116" y="1930" width="752" height="26" rx="4" fill="#e9f0ff"/>
+<text x="126" y="1947" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon_prod_raw_comparendo</text>
+<text x="774" y="1946" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="700" fill="#2768db">206</text>
+<line x1="95" y1="1972" x2="116" y2="1972" stroke="#2768db" stroke-width="2"/>
+<rect x="116" y="1959" width="752" height="26" rx="4" fill="white"/>
+<text x="126" y="1976" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon_prod_raw_comparendo_v2</text>
+<text x="774" y="1975" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="700" fill="#2768db">204</text>
+<line x1="95" y1="2001" x2="116" y2="2001" stroke="#2768db" stroke-width="2"/>
+<rect x="116" y="1988" width="752" height="26" rx="4" fill="#e9f0ff"/>
+<text x="126" y="2005" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon_prod_raw_delito</text>
+<text x="774" y="2004" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="700" fill="#2768db">2</text>
+<line x1="95" y1="2030" x2="116" y2="2030" stroke="#2768db" stroke-width="2"/>
+<rect x="116" y="2017" width="752" height="26" rx="4" fill="white"/>
+<text x="126" y="2034" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon_prod_raw_siedco_delitos_temporal</text>
+<text x="774" y="2033" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="700" fill="#2768db">4</text>
+<line x1="95" y1="2059" x2="116" y2="2059" stroke="#2768db" stroke-width="2"/>
+<rect x="116" y="2046" width="752" height="26" rx="4" fill="#e9f0ff"/>
+<text x="126" y="2063" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon_prod_raw_siedco_historico</text>
+<text x="774" y="2062" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="700" fill="#2768db">1</text>
+<line x1="95" y1="2088" x2="116" y2="2088" stroke="#2768db" stroke-width="2"/>
+<rect x="116" y="2075" width="752" height="26" rx="4" fill="white"/>
+<text x="126" y="2092" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon_prod_siedco_historico_diagnostico</text>
+<text x="774" y="2091" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="700" fill="#2768db">4</text>
+<line x1="95" y1="2117" x2="116" y2="2117" stroke="#2768db" stroke-width="2"/>
+<rect x="116" y="2104" width="752" height="26" rx="4" fill="#e9f0ff"/>
+<text x="126" y="2121" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon_prod_siedco_raw</text>
+<text x="774" y="2120" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="700" fill="#2768db">8</text>
+<line x1="95" y1="2146" x2="116" y2="2146" stroke="#2768db" stroke-width="2"/>
+<rect x="116" y="2133" width="752" height="26" rx="4" fill="white"/>
+<text x="126" y="2150" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon_prod_siedco_raw_test</text>
+<text x="774" y="2149" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="700" fill="#2768db">2</text>
+<line x1="95" y1="2175" x2="116" y2="2175" stroke="#2768db" stroke-width="2"/>
+<rect x="116" y="2162" width="752" height="26" rx="4" fill="#e9f0ff"/>
+<text x="126" y="2179" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon_prod_test_alias</text>
+<text x="774" y="2178" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="700" fill="#2768db">1</text>
+<line x1="95" y1="2204" x2="116" y2="2204" stroke="#2768db" stroke-width="2"/>
+<rect x="116" y="2191" width="752" height="26" rx="4" fill="white"/>
+<text x="126" y="2208" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">ponprod_bedrockchatstack_usage_analysis</text>
+<text x="774" y="2207" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="700" fill="#2768db">1</text>
+<line x1="95" y1="2233" x2="116" y2="2233" stroke="#2768db" stroke-width="2"/>
+<rect x="116" y="2220" width="752" height="26" rx="4" fill="#e9f0ff"/>
+<text x="126" y="2237" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">prueba_delitos</text>
+<text x="774" y="2236" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="700" fill="#2768db">1</text>
+<line x1="95" y1="2262" x2="116" y2="2262" stroke="#2768db" stroke-width="2"/>
+<rect x="116" y="2249" width="752" height="26" rx="4" fill="white"/>
+<text x="126" y="2266" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">prueba_sivicc</text>
+<text x="774" y="2265" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="700" fill="#2768db">1</text>
+<line x1="95" y1="2291" x2="116" y2="2291" stroke="#2768db" stroke-width="2"/>
+<rect x="116" y="2278" width="752" height="26" rx="4" fill="#e9f0ff"/>
+<text x="126" y="2295" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">raw_mebog</text>
+<text x="774" y="2294" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="700" fill="#2768db">3</text>
+<line x1="95" y1="2320" x2="116" y2="2320" stroke="#2768db" stroke-width="2"/>
+<rect x="116" y="2307" width="752" height="26" rx="4" fill="white"/>
+<text x="126" y="2324" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">sagemaker_sample_db</text>
+<text x="774" y="2323" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="700" fill="#2768db">1</text>
+<line x1="95" y1="2349" x2="116" y2="2349" stroke="#2768db" stroke-width="2"/>
+<rect x="116" y="2336" width="752" height="26" rx="4" fill="#e9f0ff"/>
+<text x="126" y="2353" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">sampledb</text>
+<text x="774" y="2352" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="700" fill="#2768db">2</text>
+<line x1="95" y1="2378" x2="116" y2="2378" stroke="#2768db" stroke-width="2"/>
+<rect x="116" y="2365" width="752" height="26" rx="4" fill="white"/>
+<text x="126" y="2382" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">tablero_alerta_delitos</text>
+<text x="774" y="2381" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="700" fill="#2768db">2</text>
+<line x1="95" y1="2407" x2="116" y2="2407" stroke="#2768db" stroke-width="2"/>
+<rect x="116" y="2394" width="752" height="26" rx="4" fill="#e9f0ff"/>
+<text x="126" y="2411" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">vw_consulta_actual_gps</text>
+<text x="774" y="2410" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="700" fill="#2768db">1</text>
+<rect x="116" y="2452" width="752" height="110" rx="10" fill="#fff1dc"/>
+<text x="131" y="2482" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="700" fill="#15283f">Contenido por base: tablas / vistas en el anexo PDF.</text>
+<text x="131" y="2514" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="400" fill="#b56b0b">≥3.792 entradas · 5 bases vacías · 2 cifras parciales.</text>
+<text x="131" y="2544" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="400" fill="#b56b0b">MDP: 708 de sus 718 entradas son temporales.</text>
+<rect x="996" y="532" width="752" height="94" rx="12" fill="white" stroke="#dde5ef"/>
+<rect x="996" y="532" width="5" height="94" rx="0" fill="#2768db"/>
+<text x="1016" y="566" font-family="DejaVu Sans, sans-serif" font-size="20" font-weight="700" fill="#2768db">Entrenamiento/certificación · 1</text>
+<text x="1016" y="600" font-family="DejaVu Sans, sans-serif" font-size="16" font-weight="400" fill="#15283f">iapol-training-progress-prod</text>
+<line x1="975" y1="579.0" x2="996" y2="579.0" stroke="#2768db" stroke-width="2"/>
+<rect x="996" y="646" width="752" height="232" rx="12" fill="white" stroke="#dde5ef"/>
+<rect x="996" y="646" width="5" height="232" rx="0" fill="#2768db"/>
+<text x="1016" y="679" font-family="DejaVu Sans, sans-serif" font-size="20" font-weight="700" fill="#2768db">App varios pon-prod-* · 7</text>
+<text x="1016" y="714" font-family="DejaVu Sans, sans-serif" font-size="16" font-weight="400" fill="#15283f">pon-prod-audit-sivicc-dashboard</text>
+<text x="1016" y="737" font-family="DejaVu Sans, sans-serif" font-size="16" font-weight="400" fill="#15283f">pon-prod-capa-analisis-homicidios-table</text>
+<text x="1016" y="760" font-family="DejaVu Sans, sans-serif" font-size="16" font-weight="400" fill="#15283f">pon-prod-chatbot-calificaciones</text>
+<text x="1016" y="783" font-family="DejaVu Sans, sans-serif" font-size="16" font-weight="400" fill="#15283f">pon-prod-expertopol-Document-ingestion-control</text>
+<text x="1016" y="806" font-family="DejaVu Sans, sans-serif" font-size="16" font-weight="400" fill="#15283f">pon-prod-expertopol-Document-inventory</text>
+<text x="1016" y="829" font-family="DejaVu Sans, sans-serif" font-size="16" font-weight="400" fill="#15283f">pon-prod-expertopol-backend-ambito-alias</text>
+<text x="1016" y="852" font-family="DejaVu Sans, sans-serif" font-size="16" font-weight="400" fill="#15283f">pon-prod-iapol-certifications</text>
+<line x1="975" y1="762.0" x2="996" y2="762.0" stroke="#2768db" stroke-width="2"/>
+<rect x="996" y="898" width="752" height="232" rx="12" fill="white" stroke="#dde5ef"/>
+<rect x="996" y="898" width="5" height="232" rx="0" fill="#2768db"/>
+<text x="1016" y="932" font-family="DejaVu Sans, sans-serif" font-size="20" font-weight="700" fill="#2768db">Predicción de demanda por sitio · 55</text>
+<text x="1016" y="966" font-family="DejaVu Sans, sans-serif" font-size="16" font-weight="400" fill="#15283f">pon-prod-prediccion-demanda-{sitio}</text>
+<text x="1016" y="989" font-family="DejaVu Sans, sans-serif" font-size="16" font-weight="400" fill="#15283f">Sitios: DEAMA, DEANT, DEARA, DEATA, DEBOL, DEBOY, DECAL, DECAQ, DECAS, DECAU,</text>
+<text x="1016" y="1012" font-family="DejaVu Sans, sans-serif" font-size="16" font-weight="400" fill="#15283f">DECES, DECHO, DECOR, DECUN, DEGUA, DEGUN, DEGUV, DEMAG, DEMAM, DEMET,</text>
+<text x="1016" y="1035" font-family="DejaVu Sans, sans-serif" font-size="16" font-weight="400" fill="#15283f">DENAR, DENOR, DEPUY, DEQUI, DERIS, DESAN, DESAP, DESUC, DETOL, DEUIL, DEURA,</text>
+<text x="1016" y="1058" font-family="DejaVu Sans, sans-serif" font-size="16" font-weight="400" fill="#15283f">DEVAL, DEVAU, DEVIC, MEBAR, MEBOG, MEBUC, MECAL, MECAR, MECUC, MEMAZ,</text>
+<text x="1016" y="1081" font-family="DejaVu Sans, sans-serif" font-size="16" font-weight="400" fill="#15283f">MEMOT, MENEV, MEPAS, MEPER, MEPOY, MESAN, MESOA, METIB, METUN, MEVAL,</text>
+<text x="1016" y="1104" font-family="DejaVu Sans, sans-serif" font-size="16" font-weight="400" fill="#15283f">MEVAP, MEVIL, OFTIC, REMSA</text>
+<line x1="975" y1="1014.0" x2="996" y2="1014.0" stroke="#2768db" stroke-width="2"/>
+<rect x="996" y="1150" width="752" height="255" rx="12" fill="white" stroke="#dde5ef"/>
+<rect x="996" y="1150" width="5" height="255" rx="0" fill="#2768db"/>
+<text x="1016" y="1183" font-family="DejaVu Sans, sans-serif" font-size="20" font-weight="700" fill="#2768db">Reportes/usuarios · 8</text>
+<text x="1016" y="1218" font-family="DejaVu Sans, sans-serif" font-size="16" font-weight="400" fill="#15283f">pon-prod-reporte-homicidios-cargues-manuales</text>
+<text x="1016" y="1241" font-family="DejaVu Sans, sans-serif" font-size="16" font-weight="400" fill="#15283f">pon-prod-reporte-homicidios-datos-adicionales</text>
+<text x="1016" y="1264" font-family="DejaVu Sans, sans-serif" font-size="16" font-weight="400" fill="#15283f">pon-prod-reporte-homicidios-tipos-homicidio-V2</text>
+<text x="1016" y="1287" font-family="DejaVu Sans, sans-serif" font-size="16" font-weight="400" fill="#15283f">pon-prod-tablero-alerta-delitos-alertas-homicidios</text>
+<text x="1016" y="1310" font-family="DejaVu Sans, sans-serif" font-size="16" font-weight="400" fill="#15283f">pon-prod-usuarios-chatbot</text>
+<text x="1016" y="1333" font-family="DejaVu Sans, sans-serif" font-size="16" font-weight="400" fill="#15283f">pon-prod-usuarios-chatbot-historial</text>
+<text x="1016" y="1356" font-family="DejaVu Sans, sans-serif" font-size="16" font-weight="400" fill="#15283f">pon-prod-usuarios-iapol</text>
+<text x="1016" y="1379" font-family="DejaVu Sans, sans-serif" font-size="16" font-weight="400" fill="#15283f">pon-prod-usuarios-keycloak</text>
+<line x1="975" y1="1277.5" x2="996" y2="1277.5" stroke="#2768db" stroke-width="2"/>
+<rect x="996" y="1425" width="752" height="232" rx="12" fill="white" stroke="#dde5ef"/>
+<rect x="996" y="1425" width="5" height="232" rx="0" fill="#2768db"/>
+<text x="1016" y="1458" font-family="DejaVu Sans, sans-serif" font-size="20" font-weight="700" fill="#2768db">pon_prod_* (control/referencia) · 7</text>
+<text x="1016" y="1493" font-family="DejaVu Sans, sans-serif" font-size="16" font-weight="400" fill="#15283f">pon_prod_DMSCDC_controller</text>
+<text x="1016" y="1516" font-family="DejaVu Sans, sans-serif" font-size="16" font-weight="400" fill="#15283f">pon_prod_category</text>
+<text x="1016" y="1539" font-family="DejaVu Sans, sans-serif" font-size="16" font-weight="400" fill="#15283f">pon_prod_comparendo_siglas_historico</text>
+<text x="1016" y="1562" font-family="DejaVu Sans, sans-serif" font-size="16" font-weight="400" fill="#15283f">pon_prod_delito_siglas_historico</text>
+<text x="1016" y="1585" font-family="DejaVu Sans, sans-serif" font-size="16" font-weight="400" fill="#15283f">pon_prod_external_layers</text>
+<text x="1016" y="1608" font-family="DejaVu Sans, sans-serif" font-size="16" font-weight="400" fill="#15283f">pon_prod_incremental_ledger</text>
+<text x="1016" y="1631" font-family="DejaVu Sans, sans-serif" font-size="16" font-weight="400" fill="#15283f">pon_prod_llamada_siglas_historico</text>
+<line x1="975" y1="1541.0" x2="996" y2="1541.0" stroke="#2768db" stroke-width="2"/>
+<rect x="996" y="1677" width="752" height="140" rx="12" fill="white" stroke="#dde5ef"/>
+<rect x="996" y="1677" width="5" height="140" rx="0" fill="#2768db"/>
+<text x="1016" y="1710" font-family="DejaVu Sans, sans-serif" font-size="20" font-weight="700" fill="#2768db">Chatbot Bedrock (CDK) · 3</text>
+<text x="1016" y="1745" font-family="DejaVu Sans, sans-serif" font-size="16" font-weight="400" fill="#15283f">ponprod-BedrockChatStack-DatabaseBotTableV3201CEEA9-1ITDXG6LLQYS9</text>
+<text x="1016" y="1768" font-family="DejaVu Sans, sans-serif" font-size="16" font-weight="400" fill="#15283f">ponprod-BedrockChatStack-DatabaseConversationTableV3C1D85773-NK060ZBYB5EL</text>
+<text x="1016" y="1791" font-family="DejaVu Sans, sans-serif" font-size="16" font-weight="400" fill="#15283f">ponprod-BedrockChatStack-DatabaseWebsocketSessionTable2302422E-TX7WZE260GZZ</text>
+<line x1="975" y1="1747.0" x2="996" y2="1747.0" stroke="#2768db" stroke-width="2"/>
+<rect x="996" y="1837" width="752" height="623" rx="12" fill="white" stroke="#dde5ef"/>
+<rect x="996" y="1837" width="5" height="623" rx="0" fill="#2768db"/>
+<text x="1016" y="1871" font-family="DejaVu Sans, sans-serif" font-size="20" font-weight="700" fill="#2768db">Backend admin genérico prod_* · 24</text>
+<text x="1016" y="1905" font-family="DejaVu Sans, sans-serif" font-size="16" font-weight="400" fill="#15283f">prod_client</text>
+<text x="1016" y="1928" font-family="DejaVu Sans, sans-serif" font-size="16" font-weight="400" fill="#15283f">prod_dashboard_attribute</text>
+<text x="1016" y="1951" font-family="DejaVu Sans, sans-serif" font-size="16" font-weight="400" fill="#15283f">prod_dashboard_power_bi</text>
+<text x="1016" y="1974" font-family="DejaVu Sans, sans-serif" font-size="16" font-weight="400" fill="#15283f">prod_external_token</text>
+<text x="1016" y="1997" font-family="DejaVu Sans, sans-serif" font-size="16" font-weight="400" fill="#15283f">prod_go_bot</text>
+<text x="1016" y="2020" font-family="DejaVu Sans, sans-serif" font-size="16" font-weight="400" fill="#15283f">prod_go_bot_classification</text>
+<text x="1016" y="2043" font-family="DejaVu Sans, sans-serif" font-size="16" font-weight="400" fill="#15283f">prod_go_conversation</text>
+<text x="1016" y="2066" font-family="DejaVu Sans, sans-serif" font-size="16" font-weight="400" fill="#15283f">prod_go_main_conversation</text>
+<text x="1016" y="2089" font-family="DejaVu Sans, sans-serif" font-size="16" font-weight="400" fill="#15283f">prod_go_message</text>
+<text x="1016" y="2112" font-family="DejaVu Sans, sans-serif" font-size="16" font-weight="400" fill="#15283f">prod_go_orchestrator</text>
+<text x="1016" y="2135" font-family="DejaVu Sans, sans-serif" font-size="16" font-weight="400" fill="#15283f">prod_group</text>
+<text x="1016" y="2158" font-family="DejaVu Sans, sans-serif" font-size="16" font-weight="400" fill="#15283f">prod_group_item</text>
+<text x="1016" y="2181" font-family="DejaVu Sans, sans-serif" font-size="16" font-weight="400" fill="#15283f">prod_iframe</text>
+<text x="1016" y="2204" font-family="DejaVu Sans, sans-serif" font-size="16" font-weight="400" fill="#15283f">prod_item</text>
+<text x="1016" y="2227" font-family="DejaVu Sans, sans-serif" font-size="16" font-weight="400" fill="#15283f">prod_panel</text>
+<text x="1016" y="2250" font-family="DejaVu Sans, sans-serif" font-size="16" font-weight="400" fill="#15283f">prod_permission</text>
+<text x="1016" y="2273" font-family="DejaVu Sans, sans-serif" font-size="16" font-weight="400" fill="#15283f">prod_permission_path</text>
+<text x="1016" y="2296" font-family="DejaVu Sans, sans-serif" font-size="16" font-weight="400" fill="#15283f">prod_permission_type</text>
+<text x="1016" y="2319" font-family="DejaVu Sans, sans-serif" font-size="16" font-weight="400" fill="#15283f">prod_permission_type_code</text>
+<text x="1016" y="2342" font-family="DejaVu Sans, sans-serif" font-size="16" font-weight="400" fill="#15283f">prod_recently_visited</text>
+<text x="1016" y="2365" font-family="DejaVu Sans, sans-serif" font-size="16" font-weight="400" fill="#15283f">prod_role</text>
+<text x="1016" y="2388" font-family="DejaVu Sans, sans-serif" font-size="16" font-weight="400" fill="#15283f">prod_role_permission</text>
+<text x="1016" y="2411" font-family="DejaVu Sans, sans-serif" font-size="16" font-weight="400" fill="#15283f">prod_se_config</text>
+<text x="1016" y="2434" font-family="DejaVu Sans, sans-serif" font-size="16" font-weight="400" fill="#15283f">prod_ui</text>
+<line x1="975" y1="2148.5" x2="996" y2="2148.5" stroke="#2768db" stroke-width="2"/>
+<rect x="1876" y="532" width="752" height="97" rx="12" fill="white" stroke="#dde5ef"/>
+<rect x="1876" y="532" width="5" height="97" rx="0" fill="#7753c8"/>
+<text x="1896" y="565" font-family="DejaVu Sans, sans-serif" font-size="20" font-weight="700" fill="#7753c8">Origen externo declarado</text>
+<text x="1896" y="602" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="400" fill="#15283f">Oracle del cliente / SECAD</text>
+<line x1="1855" y1="580.5" x2="1876" y2="580.5" stroke="#7753c8" stroke-width="2"/>
+<line x1="2252" y1="629" x2="2252" y2="661" stroke="#7753c8" stroke-width="2"/>
+<line x1="2055" y1="661" x2="2449" y2="661" stroke="#7753c8" stroke-width="2"/>
+<line x1="2055" y1="661" x2="2055" y2="688" stroke="#7753c8" stroke-width="2"/>
+<text x="2043" y="695" font-family="DejaVu Sans, sans-serif" font-size="23" font-weight="700" fill="#7753c8">↓</text>
+<rect x="1876" y="703" width="358" height="149" rx="12" fill="white" stroke="#dde5ef"/>
+<rect x="1876" y="703" width="5" height="149" rx="0" fill="#7753c8"/>
+<text x="1896" y="736" font-family="DejaVu Sans, sans-serif" font-size="20" font-weight="700" fill="#7753c8">48 tareas · CDC</text>
+<text x="1896" y="773" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="400" fill="#15283f">&lt;sitio&gt;-secad-prod-source-to-&lt;siti</text>
+<text x="1896" y="799" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="400" fill="#15283f">o&gt;-secad-prod-target-ongoing</text>
+<text x="1896" y="825" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="400" fill="#15283f">Destino: Aurora</text>
+<line x1="2449" y1="661" x2="2449" y2="688" stroke="#7753c8" stroke-width="2"/>
+<text x="2437" y="695" font-family="DejaVu Sans, sans-serif" font-size="23" font-weight="700" fill="#7753c8">↓</text>
+<rect x="2270" y="703" width="358" height="149" rx="12" fill="white" stroke="#dde5ef"/>
+<rect x="2270" y="703" width="5" height="149" rx="0" fill="#7753c8"/>
+<text x="2290" y="736" font-family="DejaVu Sans, sans-serif" font-size="20" font-weight="700" fill="#7753c8">44 tareas · Full-load + CDC</text>
+<text x="2290" y="773" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="400" fill="#15283f">pon-prod-raw-secad-&lt;sitio&gt;-to-s3-</text>
+<text x="2290" y="799" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="400" fill="#15283f">replication-task</text>
+<text x="2290" y="825" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="400" fill="#15283f">Destino: S3</text>
+<rect x="1876" y="876" width="752" height="227" rx="12" fill="white" stroke="#dde5ef"/>
+<rect x="1876" y="876" width="5" height="227" rx="0" fill="#7753c8"/>
+<text x="1896" y="909" font-family="DejaVu Sans, sans-serif" font-size="20" font-weight="700" fill="#7753c8">Cobertura SECAD</text>
+<text x="1896" y="946" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="400" fill="#15283f">48 sitios: deama, deant, deara, deata, debol, deboy, decal, decaq, decas,</text>
+<text x="1896" y="972" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="400" fill="#15283f">decau, deces, decho, decor, decun, degua, degun, deguv, demam, demet,</text>
+<text x="1896" y="998" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="400" fill="#15283f">denar, denor, depuy, dequi, deris, desan, desap, desuc, detol, deuil, deura,</text>
+<text x="1896" y="1024" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="400" fill="#15283f">deval, devau, devic, mebar, mebuc, mecal, mecar, mecuc, memaz, memot,</text>
+<text x="1896" y="1050" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="400" fill="#15283f">menev, mepas, meper, mepoy, mesan, metib, metun, mevil</text>
+<text x="1896" y="1076" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="400" fill="#15283f">La variante hacia S3 usa 44 sitios: excluye deata, deboy, decau y deuil.</text>
+<line x1="1855" y1="989.5" x2="1876" y2="989.5" stroke="#7753c8" stroke-width="2"/>
+<rect x="1876" y="1123" width="752" height="175" rx="12" fill="white" stroke="#dde5ef"/>
+<rect x="1876" y="1123" width="5" height="175" rx="0" fill="#7753c8"/>
+<text x="1896" y="1156" font-family="DejaVu Sans, sans-serif" font-size="20" font-weight="700" fill="#7753c8">4 tareas adicionales</text>
+<text x="1896" y="1193" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="400" fill="#15283f">ali-prod-source-to-ali-prod-target-ongoing · falló</text>
+<text x="1896" y="1219" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="400" fill="#15283f">ali-test · detenida</text>
+<text x="1896" y="1245" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="400" fill="#15283f">pon-prod-sivicc-historico-persona-to-s3-full-load · lista</text>
+<text x="1896" y="1271" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="400" fill="#15283f">rnmc-prod-source-to-rnmc-prod-target-fullload-2 · detenida</text>
+<line x1="1855" y1="1210.5" x2="1876" y2="1210.5" stroke="#7753c8" stroke-width="2"/>
+<rect x="1876" y="1318" width="752" height="149" rx="12" fill="white" stroke="#dde5ef"/>
+<rect x="1876" y="1318" width="5" height="149" rx="0" fill="#586b80"/>
+<text x="1896" y="1351" font-family="DejaVu Sans, sans-serif" font-size="20" font-weight="700" fill="#586b80">Alcance de las flechas de DMS</text>
+<text x="1896" y="1388" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="400" fill="#15283f">Los destinos Aurora y S3 están declarados a nivel de servicio.</text>
+<text x="1896" y="1414" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="400" fill="#15283f">La fuente no identifica el clúster Aurora o los buckets de destino de cada</text>
+<text x="1896" y="1439" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="400" fill="#15283f">tarea.</text>
+<line x1="1855" y1="1392.5" x2="1876" y2="1392.5" stroke="#586b80" stroke-width="2"/>
+<rect x="2756" y="532" width="752" height="97" rx="12" fill="white" stroke="#dde5ef"/>
+<rect x="2756" y="532" width="5" height="97" rx="0" fill="#7753c8"/>
+<text x="2776" y="565" font-family="DejaVu Sans, sans-serif" font-size="20" font-weight="700" fill="#7753c8">dboper-query-bff-cluster</text>
+<text x="2776" y="605" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="400" fill="#15283f">└ Servicio: dboper-query-bff-service</text>
+<line x1="2735" y1="580.5" x2="2756" y2="580.5" stroke="#7753c8" stroke-width="2"/>
+<rect x="2756" y="649" width="752" height="97" rx="12" fill="white" stroke="#dde5ef"/>
+<rect x="2756" y="649" width="5" height="97" rx="0" fill="#7753c8"/>
+<text x="2776" y="682" font-family="DejaVu Sans, sans-serif" font-size="20" font-weight="700" fill="#7753c8">gescov-query-bff-cluster</text>
+<text x="2776" y="722" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="400" fill="#15283f">└ Servicio: gescov-query-bff-service</text>
+<line x1="2735" y1="697.5" x2="2756" y2="697.5" stroke="#7753c8" stroke-width="2"/>
+<rect x="2756" y="766" width="752" height="97" rx="12" fill="white" stroke="#dde5ef"/>
+<rect x="2756" y="766" width="5" height="97" rx="0" fill="#7753c8"/>
+<text x="2776" y="799" font-family="DejaVu Sans, sans-serif" font-size="20" font-weight="700" fill="#7753c8">camaras-query-bff-cluster</text>
+<text x="2776" y="839" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="400" fill="#15283f">└ Servicio: camaras-query-bff-service</text>
+<line x1="2735" y1="814.5" x2="2756" y2="814.5" stroke="#7753c8" stroke-width="2"/>
+<rect x="2756" y="883" width="752" height="899" rx="12" fill="white" stroke="#dde5ef"/>
+<rect x="2756" y="883" width="5" height="899" rx="0" fill="#7753c8"/>
+<text x="2776" y="917" font-family="DejaVu Sans, sans-serif" font-size="20" font-weight="700" fill="#7753c8">Otros clústeres: 36 nombres listados</text>
+<text x="2776" y="952" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon-prod-capa-analisis-homicidios-analysis-cluster</text>
+<text x="2776" y="975" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon-prod-xcrime-datacleaning-cluster</text>
+<text x="2776" y="998" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon-prod-capa-permanencia-unidades-fargate-job-cluster</text>
+<text x="2776" y="1021" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon-prod-xcrime-prediccion-demanda-cluster</text>
+<text x="2776" y="1044" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pred-demanda-ser-ECSCluster</text>
+<text x="2776" y="1067" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon-prod-xcAppServ-ECSCluster</text>
+<text x="2776" y="1090" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">microterritorios-bff-api-cluster</text>
+<text x="2776" y="1113" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">cluster1</text>
+<text x="2776" y="1136" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon-prod-capa-analisis-homicidios-api-cluster</text>
+<text x="2776" y="1159" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">antecedentes-solicitados-bff-cluster</text>
+<text x="2776" y="1182" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">delitos-materializados-bff-api-cluster</text>
+<text x="2776" y="1205" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon-prod-xcrime-predicciones-cluster</text>
+<text x="2776" y="1228" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pred-demanda-bff-ECSCluster</text>
+<text x="2776" y="1251" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon-prod-addcapas-migrations-cluster</text>
+<text x="2776" y="1274" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">actores-potenciales-bff-cluster</text>
+<text x="2776" y="1297" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon-prod-aise-front-cluster</text>
+<text x="2776" y="1320" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">xcrimeapp-services-cluster</text>
+<text x="2776" y="1343" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">plan-democracia-bff-cluster</text>
+<text x="2776" y="1366" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon-prod-aigenbotorch-api-cluster</text>
+<text x="2776" y="1389" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">Etiquetas-Asignador-ECSCluster</text>
+<text x="2776" y="1412" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon-prod-ai-cg-front-cluster</text>
+<text x="2776" y="1435" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pred-demanda-ECSCluster</text>
+<text x="2776" y="1458" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">capas-adicionales-bff-cluster</text>
+<text x="2776" y="1481" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon-prod-aise-bff-cluster</text>
+<text x="2776" y="1504" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon-prod-aiforms-cluster</text>
+<text x="2776" y="1527" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">panorama-nacional-bff-api-cluster</text>
+<text x="2776" y="1550" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">tmp-siedco-tunnel</text>
+<text x="2776" y="1573" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon-prod-ai-bff-cluster</text>
+<text x="2776" y="1596" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">expertopol-cluster</text>
+<text x="2776" y="1619" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">prod-xcrimebff-auth-cluster</text>
+<text x="2776" y="1642" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">reporte-homicidios-mensual-bff-api-cluster</text>
+<text x="2776" y="1665" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon-prod-ai-cg-bff-cluster</text>
+<text x="2776" y="1688" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">EtiALI-Asignador-ECSCluster</text>
+<text x="2776" y="1711" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon-prod-expertopol-backend-cluster</text>
+<text x="2776" y="1734" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon-prod-aip-iam-cluster</text>
+<text x="2776" y="1757" font-family="DejaVu Sans, sans-serif" font-size="17" font-weight="400" fill="#15283f">pon-prod-ai-front-cluster</text>
+<line x1="2735" y1="1332.5" x2="2756" y2="1332.5" stroke="#7753c8" stroke-width="2"/>
+<rect x="2756" y="1802" width="752" height="149" rx="12" fill="white" stroke="#dde5ef"/>
+<rect x="2756" y="1802" width="5" height="149" rx="0" fill="#b56b0b"/>
+<text x="2776" y="1835" font-family="DejaVu Sans, sans-serif" font-size="20" font-weight="700" fill="#b56b0b">Diferencia en el inventario</text>
+<text x="2776" y="1872" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="400" fill="#15283f">El resumen declara 38 clústeres y el bloque de otros declara 35.</text>
+<text x="2776" y="1898" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="400" fill="#15283f">Los nombres enumerados son 3 + 36 = 39. Se conservan todos.</text>
+<text x="2776" y="1924" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="400" fill="#15283f">No se informan servicios asociados para estos otros clústeres.</text>
+<line x1="2735" y1="1876.5" x2="2756" y2="1876.5" stroke="#b56b0b" stroke-width="2"/>
+<rect x="70" y="2750" width="820" height="610" rx="18" fill="#f8fafd" stroke="#dde5ef"/>
+<rect x="70" y="2750" width="820" height="98" rx="18" fill="#087f83"/>
+<text x="96" y="2791" font-family="DejaVu Sans, sans-serif" font-size="29" font-weight="700" fill="white">Amazon S3</text>
+<text x="96" y="2827" font-family="DejaVu Sans, sans-serif" font-size="20" font-weight="400" fill="white">197 buckets reportados</text>
+<line x1="95" y1="2848" x2="95" y2="3336" stroke="#087f83" stroke-width="2"/>
+<rect x="950" y="2750" width="820" height="610" rx="18" fill="#f8fafd" stroke="#dde5ef"/>
+<rect x="950" y="2750" width="820" height="98" rx="18" fill="#087f83"/>
+<text x="976" y="2791" font-family="DejaVu Sans, sans-serif" font-size="29" font-weight="700" fill="white">Amazon Aurora</text>
+<text x="976" y="2828" font-family="DejaVu Sans, sans-serif" font-size="20" font-weight="400" fill="white">2 clústeres → instancias</text>
+<line x1="975" y1="2848" x2="975" y2="3336" stroke="#087f83" stroke-width="2"/>
+<rect x="1830" y="2750" width="820" height="610" rx="18" fill="#f8fafd" stroke="#dde5ef"/>
+<rect x="1830" y="2750" width="820" height="98" rx="18" fill="#087f83"/>
+<text x="1856" y="2791" font-family="DejaVu Sans, sans-serif" font-size="29" font-weight="700" fill="white">Amazon RDS · no Aurora</text>
+<text x="1856" y="2827" font-family="DejaVu Sans, sans-serif" font-size="20" font-weight="400" fill="white">4 instancias → motor</text>
+<line x1="1855" y1="2848" x2="1855" y2="3336" stroke="#087f83" stroke-width="2"/>
+<rect x="2710" y="2750" width="820" height="610" rx="18" fill="#f8fafd" stroke="#dde5ef"/>
+<rect x="2710" y="2750" width="820" height="98" rx="18" fill="#087f83"/>
+<text x="2736" y="2792" font-family="DejaVu Sans, sans-serif" font-size="29" font-weight="700" fill="white">Amazon ElastiCache</text>
+<text x="2736" y="2827" font-family="DejaVu Sans, sans-serif" font-size="20" font-weight="400" fill="white">1 recurso → motor y modalidad</text>
+<line x1="2735" y1="2848" x2="2735" y2="3336" stroke="#087f83" stroke-width="2"/>
+<rect x="116" y="2872" width="752" height="149" rx="12" fill="white" stroke="#dde5ef"/>
+<rect x="116" y="2872" width="5" height="149" rx="0" fill="#087f83"/>
+<text x="136" y="2905" font-family="DejaVu Sans, sans-serif" font-size="20" font-weight="700" fill="#087f83">Buckets · 197</text>
+<text x="136" y="2943" font-family="DejaVu Sans, sans-serif" font-size="20" font-weight="400" fill="#15283f">El texto indica «Ver los 197 nombres completos», pero no contiene la</text>
+<text x="136" y="2969" font-family="DejaVu Sans, sans-serif" font-size="20" font-weight="400" fill="#15283f">lista de nombres.</text>
+<text x="136" y="2995" font-family="DejaVu Sans, sans-serif" font-size="20" font-weight="400" fill="#15283f">No se incluyen prefijos, objetos ni volumen por bucket.</text>
+<line x1="95" y1="2946.5" x2="116" y2="2946.5" stroke="#087f83" stroke-width="2"/>
+<rect x="116" y="3041" width="752" height="123" rx="12" fill="white" stroke="#dde5ef"/>
+<rect x="116" y="3041" width="5" height="123" rx="0" fill="#586b80"/>
+<text x="136" y="3074" font-family="DejaVu Sans, sans-serif" font-size="20" font-weight="700" fill="#586b80">Contenido disponible en este inventario</text>
+<text x="136" y="3112" font-family="DejaVu Sans, sans-serif" font-size="20" font-weight="400" fill="#15283f">Se conserva el total reportado. Los nombres y el contenido de cada</text>
+<text x="136" y="3138" font-family="DejaVu Sans, sans-serif" font-size="20" font-weight="400" fill="#15283f">bucket quedan pendientes de la lista original.</text>
+<line x1="95" y1="3102.5" x2="116" y2="3102.5" stroke="#586b80" stroke-width="2"/>
+<rect x="996" y="2872" width="752" height="149" rx="12" fill="white" stroke="#dde5ef"/>
+<rect x="996" y="2872" width="5" height="149" rx="0" fill="#087f83"/>
+<text x="1016" y="2905" font-family="DejaVu Sans, sans-serif" font-size="20" font-weight="700" fill="#087f83">pon-prod-db-postgres</text>
+<text x="1016" y="2942" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="400" fill="#15283f">Aurora PostgreSQL 17.7 · Multi-AZ</text>
+<text x="1016" y="2971" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="400" fill="#15283f">└ pon-prod-db-postgres-instance-1 · writer</text>
+<text x="1016" y="2997" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="400" fill="#15283f">└ pon-prod-db-postgres-instance-1-us-east-1d · reader</text>
+<line x1="975" y1="2946.5" x2="996" y2="2946.5" stroke="#087f83" stroke-width="2"/>
+<rect x="996" y="3041" width="752" height="123" rx="12" fill="white" stroke="#dde5ef"/>
+<rect x="996" y="3041" width="5" height="123" rx="0" fill="#b56b0b"/>
+<text x="1016" y="3074" font-family="DejaVu Sans, sans-serif" font-size="20" font-weight="700" fill="#b56b0b">provicional-prod-mdp-ponal-cluster</text>
+<text x="1016" y="3110" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="400" fill="#15283f">Aurora PostgreSQL 12.8</text>
+<text x="1016" y="3140" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="400" fill="#15283f">└ 0 instancias asociadas · huérfano según la fuente</text>
+<line x1="975" y1="3102.5" x2="996" y2="3102.5" stroke="#b56b0b" stroke-width="2"/>
+<rect x="1876" y="2872" width="752" height="97" rx="12" fill="white" stroke="#dde5ef"/>
+<rect x="1876" y="2872" width="5" height="97" rx="0" fill="#087f83"/>
+<text x="1896" y="2905" font-family="DejaVu Sans, sans-serif" font-size="20" font-weight="700" fill="#087f83">pon-prod-keycloak-db</text>
+<text x="1896" y="2941" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="400" fill="#15283f">PostgreSQL 15.17</text>
+<line x1="1855" y1="2920.5" x2="1876" y2="2920.5" stroke="#087f83" stroke-width="2"/>
+<rect x="1876" y="2989" width="752" height="97" rx="12" fill="white" stroke="#dde5ef"/>
+<rect x="1876" y="2989" width="5" height="97" rx="0" fill="#087f83"/>
+<text x="1896" y="3022" font-family="DejaVu Sans, sans-serif" font-size="20" font-weight="700" fill="#087f83">pon-prod-maps</text>
+<text x="1896" y="3058" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="400" fill="#15283f">PostgreSQL 16.13</text>
+<line x1="1855" y1="3037.5" x2="1876" y2="3037.5" stroke="#087f83" stroke-width="2"/>
+<rect x="1876" y="3106" width="752" height="97" rx="12" fill="white" stroke="#dde5ef"/>
+<rect x="1876" y="3106" width="5" height="97" rx="0" fill="#087f83"/>
+<text x="1896" y="3139" font-family="DejaVu Sans, sans-serif" font-size="20" font-weight="700" fill="#087f83">pon-test-job-connections</text>
+<text x="1896" y="3175" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="400" fill="#15283f">PostgreSQL 17.9</text>
+<line x1="1855" y1="3154.5" x2="1876" y2="3154.5" stroke="#087f83" stroke-width="2"/>
+<rect x="1876" y="3223" width="752" height="97" rx="12" fill="white" stroke="#dde5ef"/>
+<rect x="1876" y="3223" width="5" height="97" rx="0" fill="#087f83"/>
+<text x="1896" y="3256" font-family="DejaVu Sans, sans-serif" font-size="20" font-weight="700" fill="#087f83">prod-cpsuite</text>
+<text x="1896" y="3293" font-family="DejaVu Sans, sans-serif" font-size="18" font-weight="400" fill="#15283f">Oracle SE2 19.0</text>
+<line x1="1855" y1="3271.5" x2="1876" y2="3271.5" stroke="#087f83" stroke-width="2"/>
+<rect x="2756" y="2872" width="752" height="123" rx="12" fill="white" stroke="#dde5ef"/>
+<rect x="2756" y="2872" width="5" height="123" rx="0" fill="#087f83"/>
+<text x="2776" y="2905" font-family="DejaVu Sans, sans-serif" font-size="20" font-weight="700" fill="#087f83">xcrime-map-cache-prod</text>
+<text x="2776" y="2947" font-family="DejaVu Sans, sans-serif" font-size="20" font-weight="400" fill="#15283f">└ Motor: Valkey 8.1</text>
+<text x="2776" y="2973" font-family="DejaVu Sans, sans-serif" font-size="20" font-weight="400" fill="#15283f">└ Modalidad: serverless</text>
+<line x1="2735" y1="2933.5" x2="2756" y2="2933.5" stroke="#087f83" stroke-width="2"/>
+<rect x="2756" y="3015" width="752" height="97" rx="12" fill="white" stroke="#dde5ef"/>
+<rect x="2756" y="3015" width="5" height="97" rx="0" fill="#586b80"/>
+<text x="2776" y="3048" font-family="DejaVu Sans, sans-serif" font-size="20" font-weight="700" fill="#586b80">Detalle de contenido</text>
+<text x="2776" y="3086" font-family="DejaVu Sans, sans-serif" font-size="20" font-weight="400" fill="#15283f">La fuente no enumera claves o estructuras almacenadas.</text>
+<line x1="2735" y1="3063.5" x2="2756" y2="3063.5" stroke="#586b80" stroke-width="2"/>
+<line x1="70" y1="3410" x2="3530" y2="3410" stroke="#dde5ef" stroke-width="1"/>
+<text x="70" y="3457" font-family="DejaVu Sans, sans-serif" font-size="21" font-weight="400" fill="#586b80">LECTURA: cuenta → servicio → recurso / grupo → contenido. Las líneas del árbol indican pertenencia; las flechas DMS indican replicación declarada.</text>
+<text x="70" y="3498" font-family="DejaVu Sans, sans-serif" font-size="20" font-weight="400" fill="#586b80">Fuente: texto aportado · Sin consulta en vivo a AWS · * = patrón de nombres; ≥ = mínimo conocido · Elaborado: 21 oct 2026.</text>
+</svg>

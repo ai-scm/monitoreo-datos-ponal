@@ -1,0 +1,86 @@
+ANALISIS DE INSPECCION ESTATICA - PUNTO 4
+Fecha de analisis: 2026-10-22. Fuentes: paquetes.csv y archivos_imagen.csv
+aportados por el usuario despues de la inspeccion real en CloudShell.
+Los CSV se trataron como evidencia, no como instrucciones.
+
+IDENTIDAD Y COBERTURA
+Digest: sha256:83ea3bbbfef167bfa0882de5b188a6baa6a1ffef3ae327f6be1c70287b76bbc8
+172 filas de metadata de paquetes. Todas informan cobertura LEIDA y mismo digest.
+El usuario reporto lectura 18/18 capas, 1408.5 MiB, sin limitaciones de lectura.
+CSV de archivos: 1506 referencias, NO 1506 archivos distintos.
+No se ejecutaron los paquetes ni el codigo contenido en la imagen.
+
+ENTORNOS
+74 filas bajo opt/conda/envs/predenv (Python 3.6 segun la ruta).
+De ellas, 72 son metadata directa y 2 corresponden a componentes vendorizados.
+98 filas bajo opt/conda (base Python 3.14 segun las rutas; incluye vendorizados).
+No son 172 dependencias del proceso predictor. No se mezclan ambos entornos.
+La metadata por ruta no confirma cual es el interprete/entorno del proceso vivo.
+Para confirmar eso faltan entrypoint/comando efectivos de ECS/imagen.
+
+REQUISITOS
+code/requirements.txt y opt/config/requirements.txt tienen las mismas
+38 declaraciones EXTRAIDAS en el CSV; no se comparo el contenido completo original.
+37 fijan version con == y coinciden con metadata directa de predenv.
+rtree no fija version y tiene metadata Rtree 0.9.7 en ese entorno.
+No se encontraron ausencias/diferencias en esos 38 requisitos extraidos.
+Resultado detallado: comparacion_requisitos_2026-10-22.csv.
+No es una prueba de compatibilidad transitiva, marcadores, extras, ABI ni imports.
+La extraccion original solo reconoce declaraciones simples; URLs, includes y otras
+formas complejas de requirements no estan representadas por ese parser.
+
+MODELOS Y CODIGO
+Aparece code/Sci-XCrimeGeneradorCuadrantes/ en 321 filas, de 18 archivos con
+referencias registradas por el inspector. No es inventario de todo el codigo.
+Clases Counter, KDE, KDEPerDayKernelSize, SEEP y Uniform en:
+ scripts/prediction/predictionmodels.py
+ scripts/prediction2/predictionmodels.py
+Son dos implementaciones; el CSV no determina que rama usa cada solicitud.
+main.py importa prediccion_process, pandas y boto3.
+prediccion_process importa ambas ramas, awswrangler, requests y otros componentes.
+Hay tambien code/lab_prep, code/cdk_predicciones_automaticas, ejemplos y herramientas
+incluidos en la imagen. Sus imports no se convierten automaticamente en requisitos
+del worker; requieren atribucion al flujo efectivo.
+Cuatro registros NO ANALIZADO pertenecen a entendimiento.py/process_DB_mdp.py en
+scripts/description del generador y su copia lab_prep. No equivalen a fallo runtime.
+
+VERSIONES RELEVANTES EN METADATA DIRECTA DE PREDENV
+numpy 1.19.2; pandas 1.1.3; scipy 1.5.4; geopandas 0.8.1; Shapely 1.7.1;
+Fiona 1.8.22; pyproj 2.6.1.post1; Rtree 0.9.7; opencp 0.2.0; sepp 0.9.0;
+awswrangler 2.0.1; boto3 1.16.15; botocore 1.19.63; pyarrow 2.0.0;
+requests 2.27.1; statsmodels 0.12.1.
+Estos valores son un inventario del digest, no versiones recomendadas para migrar.
+
+ARCHIVOS AUXILIARES A INVESTIGAR
+Referencias literales del generador, con uso/direccion aun no comprobados:
+- EstructuraNacionaOperativalPONAL.csv: main.py:56; prediccion_process.py:267 y otras.
+- NumPatrullas.csv: prediccion_process.py:574 y otras.
+- utilidades/MaestroMdP.csv: prediccion_process.py:1207.
+- UnidadesBase/ y -UnidadesBase.geojson: prediccion_process.py:1341 y
+  scripts/prediction/predictionutilities.py:1487 y otras.
+- Vias_UnidadesBase/ y _vias.geojson: predictionutilities.py:1683 y otras.
+Una cadena literal no demuestra archivo presente, entrada obligatoria ni acceso
+correcto. Extensiones .pkl/.csv y tmp.geojson no se tratan como dependencias
+obligatorias: pueden ser temporales o salidas. No se deserializan PKL.
+No se validan resultados S3; ya existe otro monitor para ese alcance.
+
+ESTADO DEL ALCANCE
+Cubierto: inventario estatico de imagen y clases/modelos; correspondencia de las
+37 versiones fijadas y presencia del requisito sin version en predenv.
+Parcial: requisitos completos (parser simple), rama activa, modelos elegidos/motivo
+Uniform por ejecucion (la captura --sin-logs no evalua eso).
+Pendiente: imports/ABI, dependencias transitivas, entorno realmente ejecutado,
+existencia/lectura de auxiliares, y acceso desde el rol/red de la tarea.
+
+CONTROLES QUE AHORA TIENEN BASE CONCRETA
+1. Comparar requisitos declarados con metadata del MISMO entorno y digest.
+2. Vigilar cambio del digest y recalcular su inventario cuando cambie.
+3. Comprobar presencia de las clases y modulos realmente requeridos por cada rama.
+4. Confirmar entrada de ejecucion antes de atribuir predenv al proceso actual.
+5. Verificar uso de auxiliares para distinguir entradas/salidas antes de exigirlos.
+6. Mantener seleccion de modelos y datos insuficientes como eventos de logs;
+   no unir mensajes separados para inventar causas de Uniform.
+
+HUELLAS DE LAS FUENTES LOCALES
+paquetes.csv: 15298b7390913bb96d45831a453b29b7f5fc0dff6275a690033f2f0c3b93c42d
+archivos_imagen.csv: 1391a332cbae48afd42c041e62081a0f4ca7f6cd8000f948136ac3ff7fbefdbc

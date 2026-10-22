@@ -1,0 +1,319 @@
+{
+  "referencias": [
+    {
+      "digest": "sha256:83ea3bbbfef167bfa0882de5b188a6baa6a1ffef3ae327f6be1c70287b76bbc8",
+      "cobertura_archivos": "LEIDA",
+      "recurso": "s3://pon-prod-ml-iapol/EstructuraNacionaOperativalPONAL.csv",
+      "columna": "SIGLA_PAPA",
+      "archivo_codigo": "code/Sci-XCrimeGeneradorCuadrantes/main.py",
+      "linea": 32,
+      "funcion": "extract_unidad_csv",
+      "condicional": "SI",
+      "llamada_desde": "<modulo>:56",
+      "acceso": "LECTURA POR NOMBRE",
+      "asociacion": "TRAZADA EN AST",
+      "obligatoria": "NO CONFIRMADA",
+      "ejecucion": "NO CONFIRMADA"
+    },
+    {
+      "digest": "sha256:83ea3bbbfef167bfa0882de5b188a6baa6a1ffef3ae327f6be1c70287b76bbc8",
+      "cobertura_archivos": "LEIDA",
+      "recurso": "s3://pon-prod-ml-iapol/EstructuraNacionaOperativalPONAL.csv",
+      "columna": "UNIDAD_ID",
+      "archivo_codigo": "code/Sci-XCrimeGeneradorCuadrantes/main.py",
+      "linea": 33,
+      "funcion": "extract_unidad_csv",
+      "condicional": "SI",
+      "llamada_desde": "<modulo>:56",
+      "acceso": "LECTURA POR NOMBRE",
+      "asociacion": "TRAZADA EN AST",
+      "obligatoria": "NO CONFIRMADA",
+      "ejecucion": "NO CONFIRMADA"
+    },
+    {
+      "digest": "sha256:83ea3bbbfef167bfa0882de5b188a6baa6a1ffef3ae327f6be1c70287b76bbc8",
+      "cobertura_archivos": "LEIDA",
+      "recurso": "s3://pon-prod-ml-iapol/EstructuraNacionaOperativalPONAL.csv",
+      "columna": "UNIDAD_ID",
+      "archivo_codigo": "code/Sci-XCrimeGeneradorCuadrantes/main.py",
+      "linea": 35,
+      "funcion": "extract_unidad_csv",
+      "condicional": "SI",
+      "llamada_desde": "<modulo>:56",
+      "acceso": "LECTURA POR NOMBRE",
+      "asociacion": "TRAZADA EN AST",
+      "obligatoria": "NO CONFIRMADA",
+      "ejecucion": "NO CONFIRMADA"
+    },
+    {
+      "digest": "sha256:83ea3bbbfef167bfa0882de5b188a6baa6a1ffef3ae327f6be1c70287b76bbc8",
+      "cobertura_archivos": "LEIDA",
+      "recurso": "s3://pon-prod-ml-iapol/EstructuraNacionaOperativalPONAL.csv",
+      "columna": "SIGLA_PAPA",
+      "archivo_codigo": "code/Sci-XCrimeGeneradorCuadrantes/prediccion_process.py",
+      "linea": 204,
+      "funcion": "Prediccion.extract_unidad_csv",
+      "condicional": "SI",
+      "llamada_desde": "Prediccion.run_query_or_csv:217",
+      "acceso": "LECTURA POR NOMBRE",
+      "asociacion": "TRAZADA EN AST",
+      "obligatoria": "NO CONFIRMADA",
+      "ejecucion": "NO CONFIRMADA"
+    },
+    {
+      "digest": "sha256:83ea3bbbfef167bfa0882de5b188a6baa6a1ffef3ae327f6be1c70287b76bbc8",
+      "cobertura_archivos": "LEIDA",
+      "recurso": "s3://pon-prod-ml-iapol/EstructuraNacionaOperativalPONAL.csv",
+      "columna": "UNIDAD_ID",
+      "archivo_codigo": "code/Sci-XCrimeGeneradorCuadrantes/prediccion_process.py",
+      "linea": 205,
+      "funcion": "Prediccion.extract_unidad_csv",
+      "condicional": "SI",
+      "llamada_desde": "Prediccion.run_query_or_csv:217",
+      "acceso": "LECTURA POR NOMBRE",
+      "asociacion": "TRAZADA EN AST",
+      "obligatoria": "NO CONFIRMADA",
+      "ejecucion": "NO CONFIRMADA"
+    },
+    {
+      "digest": "sha256:83ea3bbbfef167bfa0882de5b188a6baa6a1ffef3ae327f6be1c70287b76bbc8",
+      "cobertura_archivos": "LEIDA",
+      "recurso": "s3://pon-prod-ml-iapol/EstructuraNacionaOperativalPONAL.csv",
+      "columna": "UNIDAD_ID",
+      "archivo_codigo": "code/Sci-XCrimeGeneradorCuadrantes/prediccion_process.py",
+      "linea": 207,
+      "funcion": "Prediccion.extract_unidad_csv",
+      "condicional": "SI",
+      "llamada_desde": "Prediccion.run_query_or_csv:217",
+      "acceso": "LECTURA POR NOMBRE",
+      "asociacion": "TRAZADA EN AST",
+      "obligatoria": "NO CONFIRMADA",
+      "ejecucion": "NO CONFIRMADA"
+    },
+    {
+      "digest": "sha256:83ea3bbbfef167bfa0882de5b188a6baa6a1ffef3ae327f6be1c70287b76bbc8",
+      "cobertura_archivos": "LEIDA",
+      "recurso": "s3://pon-prod-ml-iapol/EstructuraNacionaOperativalPONAL.csv",
+      "columna": "SIGLA_FISICA",
+      "archivo_codigo": "code/Sci-XCrimeGeneradorCuadrantes/prediccion_process.py",
+      "linea": 268,
+      "funcion": "Prediccion.make_temporal_queries",
+      "condicional": "SI",
+      "llamada_desde": "Prediccion.run_query_or_csv:219",
+      "acceso": "LECTURA POR NOMBRE",
+      "asociacion": "TRAZADA EN AST",
+      "obligatoria": "NO CONFIRMADA",
+      "ejecucion": "NO CONFIRMADA"
+    },
+    {
+      "digest": "sha256:83ea3bbbfef167bfa0882de5b188a6baa6a1ffef3ae327f6be1c70287b76bbc8",
+      "cobertura_archivos": "LEIDA",
+      "recurso": "s3://pon-prod-ml-iapol/EstructuraNacionaOperativalPONAL.csv",
+      "columna": "SIGLA_FISICA",
+      "archivo_codigo": "code/Sci-XCrimeGeneradorCuadrantes/prediccion_process.py",
+      "linea": 268,
+      "funcion": "Prediccion.make_temporal_queries",
+      "condicional": "NO DETECTADA",
+      "llamada_desde": "DEFINICION; USO NO CONFIRMADO",
+      "acceso": "LECTURA POR NOMBRE",
+      "asociacion": "TRAZADA EN AST",
+      "obligatoria": "NO CONFIRMADA",
+      "ejecucion": "NO CONFIRMADA"
+    },
+    {
+      "digest": "sha256:83ea3bbbfef167bfa0882de5b188a6baa6a1ffef3ae327f6be1c70287b76bbc8",
+      "cobertura_archivos": "LEIDA",
+      "recurso": "s3://pon-prod-ml-iapol/utilidades/MaestroMdP.csv",
+      "columna": "Categoría",
+      "archivo_codigo": "code/Sci-XCrimeGeneradorCuadrantes/prediccion_process.py",
+      "linea": 1208,
+      "funcion": "Prediccion.runOneRegionInACADPerDayAndShift",
+      "condicional": "SI",
+      "llamada_desde": "DEFINICION; USO NO CONFIRMADO",
+      "acceso": "LECTURA POR NOMBRE",
+      "asociacion": "TRAZADA EN AST",
+      "obligatoria": "NO CONFIRMADA",
+      "ejecucion": "NO CONFIRMADA"
+    },
+    {
+      "digest": "sha256:83ea3bbbfef167bfa0882de5b188a6baa6a1ffef3ae327f6be1c70287b76bbc8",
+      "cobertura_archivos": "LEIDA",
+      "recurso": "s3://pon-prod-ml-iapol/utilidades/MaestroMdP.csv",
+      "columna": "Descripción",
+      "archivo_codigo": "code/Sci-XCrimeGeneradorCuadrantes/prediccion_process.py",
+      "linea": 1208,
+      "funcion": "Prediccion.runOneRegionInACADPerDayAndShift",
+      "condicional": "SI",
+      "llamada_desde": "DEFINICION; USO NO CONFIRMADO",
+      "acceso": "LECTURA POR NOMBRE",
+      "asociacion": "TRAZADA EN AST",
+      "obligatoria": "NO CONFIRMADA",
+      "ejecucion": "NO CONFIRMADA"
+    },
+    {
+      "digest": "sha256:83ea3bbbfef167bfa0882de5b188a6baa6a1ffef3ae327f6be1c70287b76bbc8",
+      "cobertura_archivos": "LEIDA",
+      "recurso": "s3://pon-prod-ml-iapol/EstructuraNacionaOperativalPONAL.csv",
+      "columna": "CONSECUTIVO",
+      "archivo_codigo": "code/Sci-XCrimeGeneradorCuadrantes/prediccion_process.py",
+      "linea": 1485,
+      "funcion": "Prediccion.get_unidad_padre",
+      "condicional": "NO DETECTADA",
+      "llamada_desde": "DEFINICION; USO NO CONFIRMADO",
+      "acceso": "LECTURA POR NOMBRE",
+      "asociacion": "TRAZADA EN AST",
+      "obligatoria": "NO CONFIRMADA",
+      "ejecucion": "NO CONFIRMADA"
+    },
+    {
+      "digest": "sha256:83ea3bbbfef167bfa0882de5b188a6baa6a1ffef3ae327f6be1c70287b76bbc8",
+      "cobertura_archivos": "LEIDA",
+      "recurso": "s3://pon-prod-ml-iapol/EstructuraNacionaOperativalPONAL.csv",
+      "columna": "UNDE_CONSECUTIVO",
+      "archivo_codigo": "code/Sci-XCrimeGeneradorCuadrantes/prediccion_process.py",
+      "linea": 1486,
+      "funcion": "Prediccion.get_unidad_padre",
+      "condicional": "NO DETECTADA",
+      "llamada_desde": "DEFINICION; USO NO CONFIRMADO",
+      "acceso": "LECTURA POR NOMBRE",
+      "asociacion": "TRAZADA EN AST",
+      "obligatoria": "NO CONFIRMADA",
+      "ejecucion": "NO CONFIRMADA"
+    },
+    {
+      "digest": "sha256:83ea3bbbfef167bfa0882de5b188a6baa6a1ffef3ae327f6be1c70287b76bbc8",
+      "cobertura_archivos": "LEIDA",
+      "recurso": "s3://pon-prod-ml-iapol/EstructuraNacionaOperativalPONAL.csv",
+      "columna": "CONSECUTIVO",
+      "archivo_codigo": "code/Sci-XCrimeGeneradorCuadrantes/prediccion_process.py",
+      "linea": 1485,
+      "funcion": "Prediccion.get_unidad_padre",
+      "condicional": "SI",
+      "llamada_desde": "Prediccion.get_info_turnos:1499",
+      "acceso": "LECTURA POR NOMBRE",
+      "asociacion": "TRAZADA EN AST",
+      "obligatoria": "NO CONFIRMADA",
+      "ejecucion": "NO CONFIRMADA"
+    },
+    {
+      "digest": "sha256:83ea3bbbfef167bfa0882de5b188a6baa6a1ffef3ae327f6be1c70287b76bbc8",
+      "cobertura_archivos": "LEIDA",
+      "recurso": "s3://pon-prod-ml-iapol/EstructuraNacionaOperativalPONAL.csv",
+      "columna": "UNDE_CONSECUTIVO",
+      "archivo_codigo": "code/Sci-XCrimeGeneradorCuadrantes/prediccion_process.py",
+      "linea": 1486,
+      "funcion": "Prediccion.get_unidad_padre",
+      "condicional": "SI",
+      "llamada_desde": "Prediccion.get_info_turnos:1499",
+      "acceso": "LECTURA POR NOMBRE",
+      "asociacion": "TRAZADA EN AST",
+      "obligatoria": "NO CONFIRMADA",
+      "ejecucion": "NO CONFIRMADA"
+    },
+    {
+      "digest": "sha256:83ea3bbbfef167bfa0882de5b188a6baa6a1ffef3ae327f6be1c70287b76bbc8",
+      "cobertura_archivos": "LEIDA",
+      "recurso": "s3://pon-prod-ml-iapol/EstructuraNacionaOperativalPONAL.csv",
+      "columna": "CONSECUTIVO",
+      "archivo_codigo": "code/Sci-XCrimeGeneradorCuadrantes/prediccion_process.py",
+      "linea": 1485,
+      "funcion": "Prediccion.get_unidad_padre",
+      "condicional": "SI",
+      "llamada_desde": "Prediccion.run_process:1568 -> Prediccion.get_info_turnos:1499",
+      "acceso": "LECTURA POR NOMBRE",
+      "asociacion": "TRAZADA EN AST",
+      "obligatoria": "NO CONFIRMADA",
+      "ejecucion": "NO CONFIRMADA"
+    },
+    {
+      "digest": "sha256:83ea3bbbfef167bfa0882de5b188a6baa6a1ffef3ae327f6be1c70287b76bbc8",
+      "cobertura_archivos": "LEIDA",
+      "recurso": "s3://pon-prod-ml-iapol/EstructuraNacionaOperativalPONAL.csv",
+      "columna": "UNDE_CONSECUTIVO",
+      "archivo_codigo": "code/Sci-XCrimeGeneradorCuadrantes/prediccion_process.py",
+      "linea": 1486,
+      "funcion": "Prediccion.get_unidad_padre",
+      "condicional": "SI",
+      "llamada_desde": "Prediccion.run_process:1568 -> Prediccion.get_info_turnos:1499",
+      "acceso": "LECTURA POR NOMBRE",
+      "asociacion": "TRAZADA EN AST",
+      "obligatoria": "NO CONFIRMADA",
+      "ejecucion": "NO CONFIRMADA"
+    },
+    {
+      "digest": "sha256:83ea3bbbfef167bfa0882de5b188a6baa6a1ffef3ae327f6be1c70287b76bbc8",
+      "cobertura_archivos": "LEIDA",
+      "recurso": "s3://pon-prod-ml-iapol/utilidades/MaestroMdP.csv",
+      "columna": "Categoría",
+      "archivo_codigo": "code/Sci-XCrimeGeneradorCuadrantes/prediccion_process.py",
+      "linea": 1208,
+      "funcion": "Prediccion.runOneRegionInACADPerDayAndShift",
+      "condicional": "SI",
+      "llamada_desde": "Prediccion.run_process:1569",
+      "acceso": "LECTURA POR NOMBRE",
+      "asociacion": "TRAZADA EN AST",
+      "obligatoria": "NO CONFIRMADA",
+      "ejecucion": "NO CONFIRMADA"
+    },
+    {
+      "digest": "sha256:83ea3bbbfef167bfa0882de5b188a6baa6a1ffef3ae327f6be1c70287b76bbc8",
+      "cobertura_archivos": "LEIDA",
+      "recurso": "s3://pon-prod-ml-iapol/utilidades/MaestroMdP.csv",
+      "columna": "Descripción",
+      "archivo_codigo": "code/Sci-XCrimeGeneradorCuadrantes/prediccion_process.py",
+      "linea": 1208,
+      "funcion": "Prediccion.runOneRegionInACADPerDayAndShift",
+      "condicional": "SI",
+      "llamada_desde": "Prediccion.run_process:1569",
+      "acceso": "LECTURA POR NOMBRE",
+      "asociacion": "TRAZADA EN AST",
+      "obligatoria": "NO CONFIRMADA",
+      "ejecucion": "NO CONFIRMADA"
+    }
+  ],
+  "limitaciones": [
+    {
+      "archivo_codigo": "code/Sci-XCrimeGeneradorCuadrantes/prediccion_process.py",
+      "motivo": "Funcion externa/despacho no resuelto"
+    },
+    {
+      "archivo_codigo": "code/Sci-XCrimeGeneradorCuadrantes/prediccion_process.py",
+      "motivo": "Recursion/limite de 4 funciones o 200 llamadas por modulo"
+    },
+    {
+      "archivo_codigo": "code/Sci-XCrimeGeneradorCuadrantes/prediccion_process.py",
+      "motivo": "Seleccion por posicion o indice no resuelta"
+    },
+    {
+      "archivo_codigo": "code/Sci-XCrimeGeneradorCuadrantes/prediccion_process.py",
+      "motivo": "Transformacion de DataFrame no resuelta: drop"
+    },
+    {
+      "archivo_codigo": "code/Sci-XCrimeGeneradorCuadrantes/scripts/optimization/optimizacion.py",
+      "motivo": "Argumentos expandidos no resueltos"
+    },
+    {
+      "archivo_codigo": "code/Sci-XCrimeGeneradorCuadrantes/scripts/prediction/prediccion.py",
+      "motivo": "Origen de read_csv no resuelto"
+    },
+    {
+      "archivo_codigo": "code/Sci-XCrimeGeneradorCuadrantes/scripts/prediction2/prediccion.py",
+      "motivo": "Origen de read_csv no resuelto"
+    },
+    {
+      "archivo_codigo": "code/Sci-XCrimeGeneradorCuadrantes/scripts/description/entendimiento.py",
+      "motivo": "Sintaxis no compatible con el analizador local"
+    },
+    {
+      "archivo_codigo": "code/Sci-XCrimeGeneradorCuadrantes/scripts/description/process_DB_mdp.py",
+      "motivo": "Sintaxis no compatible con el analizador local"
+    }
+  ],
+  "alcance": "Accesos a columnas con origen CSV trazado en AST del mismo modulo. No ejecuta codigo, no lee S3 de negocio ni configura contratos automaticamente.",
+  "pendientes": [
+    "Imports entre modulos",
+    "Transformaciones no reconocidas y efectos laterales/alias",
+    "Necesidad por modalidad",
+    "Ejecucion y acceso ECS"
+  ]
+}
