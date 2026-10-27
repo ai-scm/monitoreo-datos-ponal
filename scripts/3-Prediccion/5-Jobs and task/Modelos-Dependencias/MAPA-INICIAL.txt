@@ -707,3 +707,174 @@ como ramas activas. No encontrar un filtro tampoco prueba su ausencia global.
 regla_activada=NO en todas las evidencias: no se declaran vacios esperados por
 observarlos repetidos, ni se transforman esos tipos automaticamente en FALLA.
 Formatos de mensajes no prueban correlacion runtime ni motivo real del respaldo.
+
+REGLA OBSERVADA DEL SELECTOR (evidencia aportada 2026-10-26)
+---------------------------------------------------------
+reglas_unidad.csv del digest 83ea3bbbfef1... confirma en main.py 32-35 y
+prediccion_process.py 204-207, ambas funciones extract_unidad_csv:
+  df[df['SIGLA_PAPA'] == cad]
+  df[['UNIDAD_ID']]
+  df.dropna(subset=['UNIDAD_ID'])
+  df['UNIDAD_ID'].tolist()
+Ese selector descarta IDs nulos. No se deduce de los 453 vacios una regla por
+TIUN_CODIGO ni se asegura que todas las modalidades invoquen esa funcion.
+get_cuadrante_estructura tiene otras ramas; no aplicar el selector universalmente.
+
+Modo de conteo del perfil de referencia, sin nueva inspeccion ECR:
+  python3 ~/mapear_modelos_dependencias.py --selector-unidades
+Implica --validar-filas/--validar-entradas. Se pueden conservar las siete
+--columnas-estructura/--columnas-maestro del comando anterior. No cambia los
+controles de calidad del catalogo ni oculta sus vacios: agrega un conteo separado.
+Solo se reutiliza el mismo GET S3 ya realizado; no consulta ECS ni ECR.
+
+selector_unidades.csv agrega por SIGLA_PAPA exacta: registros, id_nulos,
+candidatos e id_solo_espacios. No guarda los identificadores. No quita espacios
+ni convierte siglas a mayusculas, pues el consumidor hace igualdad directa.
+Los nulos usan el conjunto por defecto documentado de pandas 1.1.3. Es un perfil
+explicito, no una replica completa de read_csv/inferencia de tipos. Supone
+na_filter=True, keep_default_na=True, sin conversiones personalizadas; si el
+lector cambia esas opciones o cambia el codigo consumidor, hay que revisar el
+perfil. Se conserva digest_referencia en el CSV y perfil_selector en el JSON.
+No se afirma que ese digest sea la imagen activa al validar solo los CSV.
+
+IDs con espacios no se convierten automaticamente en nulos: se cuentan como
+no nulos y se senalan para revision. El perfil no valida el valor del ID, no
+exige que todas las siglas deban predecir, no garantiza ejecucion de predicciones
+ni implica que existan todos los registros esperados. Siglas vacias/no proyectables
+y exceso de 10000 grupos quedan en [SIGLA NO PROYECTADA] con cobertura PARCIAL;
+se preserva el total de registros. Columnas del selector ausentes/ambiguas dejan
+NO EVALUADO. Sintaxis/encoding, filas de estructura inconsistente y limite de
+registros dejan selector PARCIAL. No se convierten en un cero confirmado.
+Fuentes NA de referencia:
+https://pandas.pydata.org/pandas-docs/version/1.1.3/reference/api/pandas.read_csv.html
+
+La evidencia de formatos de modelos identifica print(getName()) en
+runPredictionPerDayShift (705) y runPredictionPerDayPerHour (933). Esas lineas no
+incluyen id_process ni unidad explicitos, por lo que no confirman por si solas
+correlacion por proceso. Los numeros dentro de getName() no se etiquetan como
+unidad, fecha ni turno sin evidencia de su definicion. Correlacion temporal entre
+mensajes independientes tampoco se presenta como prueba. El acceso ECS permanece
+fuera de alcance y las pruebas de imports siguen como siguiente fase posterior.
+
+TRAZABILIDAD DE DECLARACIONES EN LOGS
+-----------------------------------
+  python3 ~/mapear_modelos_dependencias.py --correlacionar-modelos --sin-ecr \
+    --ventana-minutos 60 --max-eventos 10000 --region us-east-1 --salida "$HOME/salida"
+
+Solo STS/ECS/Logs en este comando: no descarga capas ni consulta entradas S3.
+Conserva mapa.csv/evidencias.csv/contexto.json y agrega:
+  eventos_modelos.csv: hallazgos por evento, tarea, sigla y contenedor.
+  resumen_modelos.csv: conteos por modelo/tipo y contexto observado.
+La consola muestra declaraciones de seleccion, Uniform, respaldo explicito y
+fraccion de declaraciones con proceso. Los conteos no son predicciones unicas.
+Uniform seleccionado no demuestra respaldo ni fallo. Datos insuficientes y
+errores mencionados se conservan como categorias separadas en los CSV.
+
+El proceso/unidad solo se asocia cuando el MISMO evento contiene etiquetas
+explicitas: id_process/process_id/id_proceso, unidad_base/unidad_id/unit_id.
+Se aceptan campos JSON de raiz o context/contexto/metadata/data, o etiquetas
+texto clave=valor/clave:valor acotadas. Identificadores contradictorios se omiten
+y se marcan contexto_ambiguo. El proceso se guarda como huella SHA256 de 16
+caracteres; no se copia el ID original a estos dos CSV. Fecha objetivo solo
+desde fecha_objetivo/prediction_date explicitas. Numeros sin etiqueta se ignoran.
+No se enlazan mensajes por cercania temporal; sin contexto queda TAREA/SIGLA.
+
+Lectura acotada a la ventana y al filtro de modelos/errores/campos de respaldo.
+Si supera max-eventos, conserva los primeros eventos y marca PARCIAL; reducir
+ventana o aumentar limite (maximo 10000). Identicos eventId se deduplican dentro
+del mismo stream; textos repetidos con diferentes eventId siguen siendo eventos
+distintos. La cobertura por contenedor y global queda en contexto.json; no hallar
+declaraciones no prueba ausencia de uso de modelos. No usa ECS Exec, DynamoDB
+ni modifica la aplicacion. Imports en el entorno objetivo sigue pendiente.
+
+PRUEBA DE IMPORTS EN COPIA LOCAL DE LA IMAGEN
+--------------------------------------------
+  python3 ~/mapear_modelos_dependencias.py --probar-imports --max-mib 2048 \
+    --region us-east-1 --salida "$HOME/salida"
+
+Modo independiente: STS valida cuenta, ECS descubre digests realmente observados
+y siglas, ECR verifica metadata y permite la descarga Docker. No consulta Logs,
+DynamoDB ni S3 de negocio. No registra tareas, no usa ECS Exec ni RunTask.
+No cambia servicios o contenedores de produccion. El modo habitual sigue siendo
+solo mapeo; unicamente --probar-imports ejecuta imports en una copia local.
+
+Requiere Docker accesible en la sesion. No instala ni inicia Docker. Si falta,
+no hay tareas visibles, falta digest, la arquitectura no coincide, no alcanza
+el presupuesto comprimido --max-mib o falla la preparacion, queda NO EVALUADO.
+No elige un tag mas reciente ni activa emulacion. Reutiliza imagen local por
+digest si existe; de lo contrario la descarga (puede tardar y necesitar espacio
+adicional para descomprimir). No elimina imagenes ni ejecuta docker prune.
+Las tareas/siglas que comparten la misma referencia por digest se prueban una
+vez. No se reenvian credenciales/variables/volumenes de la sesion o de ECS al
+contenedor. Login Docker con token por stdin y config temporal; no cambia ~/.docker.
+
+Entorno default: /opt/conda/envs/predenv; ejecutable /bin/python bajo esa ruta.
+--entorno permite seleccionar otro entorno explicitamente. No se asume que ese
+Python este activo en ECS: cada resultado debe confirmar sys.executable y
+sys.prefix del probe. El informe guarda Python observado, version de la libreria
+si la publica y entorno_real. La version vacia no se interpreta como fallo.
+
+Cada modulo se importa en un contenedor independiente. Defaults: numpy, pandas,
+scipy, geopandas, shapely, fiona, pyproj, rtree, statsmodels.api, joblib, boto3,
+awswrangler, open_cp, open_cp.naive, open_cp.sepp y open_cp.sources.sepp.
+Son librerias candidatas relevantes, no todos los imports transitivos del
+generador. --modulo-import MODULO repetido sustituye esa lista (maximo 50).
+No se importa main.py ni prediccion_process, no se instala ningun paquete y no
+se usan datos de negocio. Python -I -B evita directorio de trabajo/PYTHONPATH y
+bytecode. El entrypoint se reemplaza por Python y se desactiva HEALTHCHECK.
+
+Contenedores sin red, sin montajes del host, rootfs de solo lectura, usuario
+65534, sin capabilities, no-new-privileges, 1 CPU/1 GiB, limite de procesos y
+/tmp temporal de 64 MiB. No reproduce permisos, red o carga de produccion.
+Errores por estas condiciones se conservan en el reporte: no prueban por si
+solos que el proceso activo este fallando. Los contenedores del probe se
+eliminan al acabar o interrumpir; no toca otros contenedores.
+
+--timeout-import default 45 s, configurable 5..120 por libreria. Es un limite
+tecnico del probe, no un estandar de duracion de tareas. Timeout o ausencia de
+protocolo valido queda NO EVALUADO. Excepcion Python capturada durante import
+con entorno confirmado queda FALLA; import correcto queda OK. Segfault/OOM o
+salida de Docker sin resultado interpretable quedan NO EVALUADO.
+
+Salida local: imports.csv y contexto_imports.json en la carpeta habitual por
+fecha/hora. CSV: digest, siglas/tareas asociadas, modulo, control, Python,
+entorno, version y error saneado. No incluye el token ECR ni logs crudos.
+Exit 0: imports correctos; 1: import fallido; 3: prueba/cobertura incompleta.
+Un OK certifica solo ese import en esa copia/condiciones, no operaciones
+numericas/geograficas, compatibilidad completa, permisos, modelo correcto ni
+salud del proceso activo. Esta prueba es manual en CloudShell/Docker; no se
+declara portable sin cambios a un futuro monitor Lambda/Glue.
+
+Referencias de ejecucion local:
+https://docs.aws.amazon.com/cloudshell/latest/userguide/working-with-aws-cloudshell.html
+https://docs.docker.com/reference/cli/docker/container/run/
+https://docs.docker.com/engine/network/drivers/none/
+
+TAREAS DETENIDAS AUN VISIBLES EN ECS (CONSULTA MANUAL)
+---------------------------------------------------
+  python3 ~/mapear_modelos_dependencias.py --incluir-finalizadas \
+    --correlacionar-modelos --sin-ecr --max-eventos 10000
+
+Lista desiredStatus RUNNING y STOPPED, deduplica ARN y describe en lotes de 100.
+--max-tareas limita cada lista por separado (default 100 por estado); avisa si
+alguna se trunca. La tabla usa lastStatus observado: un cambio de estado durante
+la consulta puede dar un estado diferente del filtro original de descubrimiento.
+Sin flag mantiene el descubrimiento RUNNING habitual. No cambia el modo imports.
+
+Agrega tareas.csv y tareas_observadas en contexto.json: siglas identificadas,
+estado ECS, creacion/inicio/fin en Bogota con offset, codigos de contenedores,
+stopCode y motivos saneados. Hora o codigo ausentes quedan sin confirmar.
+STOPPED no implica exito: codigos no cero y TaskFailedToStart se muestran como
+tales; codigos cero observados tampoco certifican predicciones completas.
+
+Solo descubre tareas que ECS todavia devuelve. AWS documenta al menos una hora
+de disponibilidad de tareas detenidas en describe-tasks; no se garantiza toda
+la semana. Una tarea que desaparece entre listado y descripcion se marca como
+lectura incompleta si ECS informa failure. Sin sigla/configuracion disponibles,
+no la infiere por mensajes cercanos. No recupera tareas eliminadas ni guarda
+historial persistente ni configura EventBridge, Lambda, DynamoDB o envios.
+
+Los logs conservan la ventana global --ventana-minutos (default 60), no toda la
+vida de cada tarea. Una detenida puede aparecer en tareas.csv sin declaraciones
+de modelos en esa ventana. Ausencia de mensajes no significa que no uso modelos.
+Referencia: https://docs.aws.amazon.com/cli/latest/reference/ecs/describe-tasks.html

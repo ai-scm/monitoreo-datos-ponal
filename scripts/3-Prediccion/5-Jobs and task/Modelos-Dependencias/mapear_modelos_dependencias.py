@@ -5,8 +5,9 @@ CloudShell: python3 mapear_modelos_dependencias.py
 Por defecto STS, ECS, ECR y Logs; sin ECS Exec, RunTask ni escrituras AWS.
 --validar-entradas lee cabeceras; --validar-filas agrega conteos de dos entradas S3.
 Se excluyen resultados de prediccion.
-No consulta Secrets Manager ni ejecuta codigo del contenedor. --inspeccionar-imagen
+No consulta Secrets Manager. Los mapeos no ejecutan codigo del contenedor. --inspeccionar-imagen
 descarga capas temporales con presupuesto e inventaria archivos sin extraerlos.
+--probar-imports ejecuta solo imports en una copia Docker local, sin red ni ECS Exec.
 Referencias en configuracion/logs no prueban disponibilidad ni modelo elegido.
 Salida local: mapa.csv, evidencias.csv y contexto.json en salida/modelos_dependencias/FECHA/HORA.
 Exit: 0 sin diferencias confirmadas (puede haber pendientes); 1 diferencia estatica;
@@ -28,11 +29,14 @@ from pathlib import Path
 from pathlib import PurePosixPath
 import re
 import shlex
+import shutil
+import subprocess
 import sys
 import tarfile
 import tempfile
 import textwrap
 import warnings
+import uuid
 from urllib.parse import urlsplit
 from urllib.error import URLError, HTTPError
 from urllib.request import HTTPRedirectHandler, Request, build_opener
@@ -40,6 +44,18 @@ from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 CLUSTER = 'pon-prod-xcrime-predicciones-cluster'
 FAMILY = 'pon-prod-xcrime-prediccion-definition'
+IMPORT_MODULES = ('numpy', 'pandas', 'scipy', 'geopandas', 'shapely', 'fiona',
+    'pyproj', 'rtree', 'statsmodels.api', 'joblib', 'boto3', 'awswrangler',
+    'open_cp', 'open_cp.naive', 'open_cp.sepp', 'open_cp.sources.sepp')
+# Compatible con Python 3.6 del predictor; no importa la aplicacion.
+IMPORT_PROBE = '''import importlib,json,sys
+try:
+    module=importlib.import_module(sys.argv[1])
+    print("PONAL_IMPORT_RESULT="+json.dumps(dict(estado="OK",python=sys.version.split()[0],interprete=sys.executable,entorno_real=sys.prefix,version=str(getattr(module,"__version__",""))[:80])))
+except Exception as exc:
+    print("PONAL_IMPORT_RESULT="+json.dumps(dict(estado="FALLA",python=sys.version.split()[0],interprete=sys.executable,entorno_real=sys.prefix,error=type(exc).__name__,detalle=str(exc)[:1000])))
+    sys.exit(1)
+'''
 BOGOTA = timezone(timedelta(hours=-5))
 MODELS = ('Counter', 'KDE', 'KDEPerDayKernelSize', 'SEEP', 'Uniform')
 EXCLUDED_IMAGE_PREFIXES = ('opt/conda/pkgs/', 'opt/conda/share/doc/')
@@ -51,7 +67,7 @@ ERRORS = ('ModuleNotFoundError', 'ImportError', 'FileNotFoundError',
           'EndpointConnectionError', 'ConnectTimeoutError', 'ReadTimeoutError')
 # Filtro de terminos opcionales OR. Los resultados siguen siendo referencias,
 # nunca una prueba de seleccion de modelo o de fallo de toda la tarea.
-LOG_FILTER = ' '.join('?' + term for term in dict.fromkeys(MODELS + tuple(m.lower() for m in MODELS) + ERRORS))
+LOG_FILTER = ' '.join('?' + term for term in dict.fromkeys(MODELS + tuple(m.lower() for m in MODELS) + ERRORS + ('fallback_used', 'uso_respaldo', 'fallback_model')))
 
 
 def load_report_csv(path, columns):
@@ -1437,7 +1453,101 @@ def log_references(events):
     return counts
 
 
-def read_references(logs, group, stream, start, end, limit, max_samples=3):
+def model_event_details(events):
+    """Contexto explicito del mismo evento; nunca unir mensajes por proximidad."""
+    rows, seen = [], set()
+    aliases = {'proceso': ('id_process', 'process_id', 'id_proceso'),
+               'unidad': ('unidad_base', 'unidad_id', 'unit_id'),
+               'fecha_objetivo': ('fecha_objetivo', 'prediction_date')}
+    for event in events:
+        event_id = event.get('eventId')
+        if event_id and event_id in seen:
+            continue
+        if event_id:
+            seen.add(event_id)
+        message = str(event.get('message', ''))
+        try:
+            data = json.loads(message)
+        except (TypeError, ValueError):
+            data = {}
+        maps = [data] if isinstance(data, dict) and data else []
+        if maps:
+            maps += [data[k] for k in ('context', 'contexto', 'metadata', 'data')
+                     if isinstance(data.get(k), dict)]
+        context, conflicts = {}, []
+        for field, keys in aliases.items():
+            values = set()
+            invalid = False
+            for mapping in maps:
+                for key in keys:
+                    if key not in mapping or mapping[key] is None:
+                        continue
+                    value = mapping[key]
+                    if isinstance(value, (str, int)) and not isinstance(value, bool):
+                        value = str(value)
+                        if re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}', value):
+                            values.add(value)
+                            continue
+                    invalid = True
+            # Texto plano: solo etiquetas explicitas, no numeros sueltos.
+            if not maps:
+                pattern = r'(?<![\w])(?:' + '|'.join(keys) + r')\s*[=:]\s*([A-Za-z0-9][A-Za-z0-9_.:-]{0,127})(?=\s|[,;]|$)'
+                values.update(re.findall(pattern, message))
+            if invalid or len(values) > 1:
+                conflicts.append(field)
+            context[field] = next(iter(values)) if len(values) == 1 and not invalid else ''
+        process = context.pop('proceso')
+        context['proceso_huella'] = hashlib.sha256(process.encode()).hexdigest()[:16] if process else ''
+        context['alcance'] = ('PROCESO/UNIDAD' if process and context['unidad'] else
+                              'PROCESO' if process else 'UNIDAD' if context['unidad'] else 'TAREA/SIGLA')
+        context['contexto_ambiguo'] = ', '.join(conflicts)
+        stamp = event.get('timestamp')
+        instant = datetime.fromtimestamp(stamp/1000, timezone.utc).isoformat() if isinstance(stamp, (int, float)) else ''
+        for kind, model, reason, source in inspect_event(message):
+            rows.append(dict(**context, evento_id=event_id or '', instante_utc=instant,
+                             tipo=kind, modelo=model, motivo=reason, fuente=source))
+    return rows
+
+
+def write_model_correlation(folder, events, coverage):
+    """Conteos de declaraciones, no conteos de predicciones terminadas."""
+    detail_fields = ['tarea', 'sigla', 'contenedor', 'stream', 'cobertura', 'evento_id',
+        'instante_utc', 'proceso_huella', 'unidad', 'fecha_objetivo', 'alcance',
+        'contexto_ambiguo', 'tipo', 'modelo', 'motivo', 'fuente']
+    group_fields = ['tarea', 'sigla', 'contenedor', 'stream', 'cobertura',
+                    'proceso_huella', 'unidad', 'fecha_objetivo', 'alcance', 'tipo', 'modelo']
+    grouped = {}
+    for event in events:
+        key = tuple(event[k] for k in group_fields)
+        row = grouped.setdefault(key, dict(zip(group_fields, key), declaraciones=0,
+                                           primera_utc=event['instante_utc'], ultima_utc=event['instante_utc']))
+        row['declaraciones'] += 1
+        row['primera_utc'] = min(row['primera_utc'], event['instante_utc'])
+        row['ultima_utc'] = max(row['ultima_utc'], event['instante_utc'])
+    for name, fields, rows in (
+            ('eventos_modelos.csv', detail_fields, events),
+            ('resumen_modelos.csv', group_fields + ['declaraciones', 'primera_utc', 'ultima_utc'], grouped.values())):
+        with (folder/name).open('w', encoding='utf-8-sig', newline='') as handle:
+            writer = csv.DictWriter(handle, fieldnames=fields)
+            writer.writeheader()
+            writer.writerows(rows)
+    print('\nMODELOS | Declaraciones observadas en la ventana')
+    print('Tarea        | Sigla      | Seleccion | Uniform | Respaldo | Con proceso* | Lectura')
+    print('-------------+------------+-----------+---------+----------+--------------+----------------')
+    for item in coverage:
+        selected = [e for e in events if e['tarea'] == item['tarea'] and e['contenedor'] == item['contenedor']]
+        declarations = [e for e in selected if e['tipo'] in ('Seleccion reportada', 'Respaldo reportado')]
+        counts = Counter(e['tipo'] for e in declarations)
+        uniform = sum(e['tipo'] == 'Seleccion reportada' and e['modelo'] == 'Uniform' for e in declarations)
+        linked = sum(bool(e['proceso_huella']) for e in declarations)
+        print(f"{item['tarea'][:12] or 'CONFIG':12} | {item['sigla'][:10]:10} | {counts['Seleccion reportada']:9} | {uniform:7} | {counts['Respaldo reportado']:8} | {str(linked)+'/'+str(len(declarations)):12} | {item['logs']}")
+    print('* Con proceso: declaraciones con ID explicito en el mismo evento; ID guardado como huella.')
+    print('Uniform no implica respaldo. Sin contexto no se atribuye proceso/unidad; no se unen mensajes independientes.')
+    print('Los conteos son eventos/declaraciones, no predicciones unicas ni finalizadas. Cero puede significar ausencia de evidencia.')
+    print(f'Modelos locales: {folder}/eventos_modelos.csv | resumen_modelos.csv; cobertura en contexto.json')
+
+
+def read_references(logs, group, stream, start, end, limit, max_samples=3, details=None):
     events = []
     for page in logs.get_paginator('filter_log_events').paginate(
             logGroupName=group, logStreamNames=[stream], filterPattern=LOG_FILTER,
@@ -1445,27 +1555,80 @@ def read_references(logs, group, stream, start, end, limit, max_samples=3):
             PaginationConfig={'MaxItems': limit+1, 'PageSize': min(limit+1, 10000)}):
         events.extend(page.get('events', []))
     selected = events[:limit]
+    if details is not None:
+        details.extend(model_event_details(selected))
     counts, samples = event_evidence(selected, max_samples)
     counts.update(log_references(selected))
     return counts, len(events) > limit, len(selected), samples
 
 
-def collect_tasks(ecs, cluster, family, limit):
+def collect_tasks(ecs, cluster, family, limit, include_stopped=False):
     arns = []
     issues = []
-    for page in ecs.get_paginator('list_tasks').paginate(
-            cluster=cluster, family=family, desiredStatus='RUNNING',
-            PaginationConfig={'MaxItems': limit+1, 'PageSize': min(limit+1, 100)}):
-        arns.extend(page.get('taskArns', []))
-    if len(arns) > limit:
-        issues.append('Tareas truncadas; aumentar --max-tareas')
+    for status in ('RUNNING', 'STOPPED') if include_stopped else ('RUNNING',):
+        found = []
+        for page in ecs.get_paginator('list_tasks').paginate(
+                cluster=cluster, family=family, desiredStatus=status,
+                PaginationConfig={'MaxItems': limit+1, 'PageSize': min(limit+1, 100)}):
+            found.extend(page.get('taskArns', []))
+        if len(found) > limit:
+            issues.append(f'Tareas {status} truncadas; aumentar --max-tareas')
+        arns.extend(found[:limit])
+    arns = list(dict.fromkeys(arns))
     tasks = []
-    for offset in range(0, min(len(arns), limit), 100):
-        response = ecs.describe_tasks(cluster=cluster, tasks=arns[offset:min(offset+100, limit)])
+    for offset in range(0, len(arns), 100):
+        response = ecs.describe_tasks(cluster=cluster, tasks=arns[offset:offset+100])
         tasks.extend(response.get('tasks', []))
         for failure in response.get('failures', []):
             issues.append('DescribeTasks incompleto: ' + str(failure.get('reason', 'sin motivo')))
     return tasks, issues
+
+
+def task_lifecycle_rows(tasks, definitions):
+    rows = []
+    def instant(value):
+        return value.astimezone(BOGOTA).isoformat() if isinstance(value, datetime) and value.tzinfo else ''
+    for task in tasks:
+        definition = definitions.get(task['taskDefinitionArn'], {})
+        siglas = set()
+        for container in definition.get('containerDefinitions', []):
+            for name, (value, _) in effective_environment(container, task).items():
+                ref = safe_reference(name, value)
+                if ref and ref[0] == 'Sigla':
+                    siglas.add(ref[1])
+        exits = {c.get('name', '?'): c['exitCode'] for c in task.get('containers', []) if 'exitCode' in c}
+        stopped = task.get('lastStatus') == 'STOPPED'
+        if not stopped:
+            outcome = task.get('lastStatus', 'SIN ESTADO')
+        elif task.get('stopCode') == 'TaskFailedToStart':
+            outcome = 'ERROR ARRANQUE'
+        elif any(code != 0 for code in exits.values()):
+            outcome = 'SALIDA NO CERO'
+        elif exits:
+            outcome = 'SALIDAS 0 OBSERVADAS'
+        else:
+            outcome = 'SIN CODIGO DE SALIDA'
+        rows.append(dict(tarea=task['taskArn'].rsplit('/', 1)[-1], task_arn=task['taskArn'],
+            siglas=','.join(sorted(siglas)) or 'SIN DATO', estado_ecs=task.get('lastStatus', 'SIN ESTADO'),
+            creacion=instant(task.get('createdAt')), inicio=instant(task.get('startedAt')),
+            fin=instant(task.get('stoppedAt')), resultado_contenedores=outcome,
+            codigos_salida=json.dumps(exits, ensure_ascii=False), stop_code=task.get('stopCode', ''),
+            motivo_parada=sanitize_message(task.get('stoppedReason', '')),
+            motivos_contenedores='; '.join(c.get('name', '?')+': '+sanitize_message(c['reason'])
+                for c in task.get('containers', []) if c.get('reason'))))
+    return rows
+
+
+def print_task_lifecycle(rows):
+    print('\nTAREAS VISIBLES EN ECS | Horas de Bogota')
+    print('Tarea        | Siglas          | Estado ECS | Inicio              | Fin')
+    print('-------------+-----------------+------------+---------------------+--------------------')
+    for row in rows:
+        print(f"{row['tarea'][:12]:12} | {row['siglas'][:15]:15} | {row['estado_ecs']:10} | {(row['inicio'][:19] or '-'):19} | {row['fin'][:19] or '-'}")
+    counts = Counter(row['estado_ecs'] for row in rows)
+    print('Estados observados: '+(', '.join(f'{k}={v}' for k, v in sorted(counts.items())) or 'sin tareas'))
+    print('STOPPED significa detenida; no certifica prediccion completa. Codigos y motivos en tareas.csv.')
+    print('Solo tareas que ECS aun conserva; no es historial completo del domingo ni de la semana.')
 
 
 def print_table(rows):
@@ -1482,6 +1645,12 @@ def print_table(rows):
 INPUT_BUCKET = 'pon-prod-ml-iapol'
 INPUT_KEYS = ('EstructuraNacionaOperativalPONAL.csv', 'utilidades/MaestroMdP.csv')
 INPUT_HEADER_BYTES = 64 * 1024
+# Perfil de referencia, no deteccion del entorno ni prueba de ejecucion.
+SELECTOR_SOURCE_DIGEST = 'sha256:83ea3bbbfef167bfa0882de5b188a6baa6a1ffef3ae327f6be1c70287b76bbc8'
+# pandas 1.1.3 read_csv defaults: na_filter=True, keep_default_na=True.
+# https://pandas.pydata.org/pandas-docs/version/1.1.3/reference/api/pandas.read_csv.html
+SELECTOR_NA_VALUES = frozenset(('', '#N/A', '#N/A N/A', '#NA', '-1.#IND', '-1.#QNAN',
+    '-NaN', '-nan', '1.#IND', '1.#QNAN', '<NA>', 'N/A', 'NA', 'NULL', 'NaN', 'n/a', 'nan', 'null'))
 
 
 def csv_input_header(data, total_bytes, encoding, separator):
@@ -1519,7 +1688,7 @@ def csv_input_header(data, total_bytes, encoding, separator):
     return delimiter, header
 
 
-def input_row_statistics(data, header, delimiter, required, encoding, group_structure=False):
+def input_row_statistics(data, header, delimiter, required, encoding, group_structure=False, selector=False):
     """Contar vacios; solo exportar siglas/tipos agregados, no registros ni IDs."""
     total = valid = empty = inconsistent = 0
     blanks = [0] * len(header)
@@ -1528,6 +1697,10 @@ def input_row_statistics(data, header, delimiter, required, encoding, group_stru
     group_missing = [name for name in group_columns if header.count(name) != 1]
     positions = {name: header.index(name) for name in group_columns if header.count(name) == 1}
     groups, grouped_by_limit, projected_rows = {}, 0, 0
+    selector_columns = ('SIGLA_PAPA', 'UNIDAD_ID')
+    selector_missing = [name for name in selector_columns if header.count(name) != 1]
+    selector_positions = {name: header.index(name) for name in selector_columns if header.count(name) == 1}
+    selector_groups, selector_unprojected = {}, 0
     def project_dimension(cell, is_type=False):
         text = cell.strip()
         if not text:
@@ -1560,6 +1733,23 @@ def input_row_statistics(data, header, delimiter, required, encoding, group_stru
             valid += 1
             for index, cell in enumerate(values):
                 blanks[index] += int(not cell.strip())
+            if selector and not selector_missing:
+                parent = values[selector_positions['SIGLA_PAPA']]
+                # Igualdad del consumidor: no convertir mayusculas ni quitar espacios.
+                unprojected = not re.fullmatch(r'[A-Za-z0-9_-]{1,24}', parent) or parent in SELECTOR_NA_VALUES
+                if unprojected:
+                    parent = '[SIGLA NO PROYECTADA]'
+                if parent not in selector_groups and len(selector_groups) >= 10000:
+                    parent = '[SIGLA NO PROYECTADA]'
+                    unprojected = True
+                selector_unprojected += int(bool(unprojected))
+                group = selector_groups.setdefault(parent, Counter(registros=0, id_nulos=0, candidatos=0, id_solo_espacios=0))
+                identifier = values[selector_positions['UNIDAD_ID']]
+                is_na = identifier in SELECTOR_NA_VALUES
+                group['registros'] += 1
+                group['id_nulos'] += int(is_na)
+                group['candidatos'] += int(not is_na)
+                group['id_solo_espacios'] += int(bool(identifier) and not identifier.strip())
             if group_structure and not group_missing:
                 dimensions = (project_dimension(values[positions['SIGLA_FISICA']]),
                               project_dimension(values[positions['SIGLA_PAPA']]),
@@ -1597,7 +1787,15 @@ def input_row_statistics(data, header, delimiter, required, encoding, group_stru
     group_reason = ('No aplica a este archivo' if not group_structure else
         'Columnas ausentes o ambiguas: ' + ', '.join(group_missing) if group_missing else
         'Conteos por SIGLA_FISICA/SIGLA_PAPA y TIUN_CODIGO; codigos sin interpretacion de negocio')
-    return dict(cobertura_desglose=group_coverage, motivo_desglose=group_reason,
+    selector_rows = [dict(sigla_papa=name, **values) for name, values in sorted(selector_groups.items())]
+    selector_coverage = 'NO EVALUADO' if not selector or selector_missing else 'LEIDA' if complete and not inconsistent and not selector_unprojected else 'PARCIAL'
+    selector_reason = ('Perfil no solicitado' if not selector else
+        'Columnas ausentes o ambiguas: ' + ', '.join(selector_missing) if selector_missing else
+        'Referencia: filtrar SIGLA_PAPA exacta y quitar UNIDAD_ID nulos; read_csv con defaults de pandas 1.1.3')
+    return dict(cobertura_selector=selector_coverage, motivo_selector=selector_reason,
+        selector_unidades=json.dumps(selector_rows, ensure_ascii=False),
+        selector_siglas_no_proyectadas=selector_unprojected,
+        cobertura_desglose=group_coverage, motivo_desglose=group_reason,
         filas_agrupadas_por_limite=grouped_by_limit, filas_dimensiones_no_proyectadas=projected_rows,
         desglose_unidad_id=json.dumps(breakdown, ensure_ascii=False),
         filas_contenido='EVALUADO' if complete else 'NO EVALUADO',
@@ -1613,7 +1811,7 @@ def input_row_statistics(data, header, delimiter, required, encoding, group_stru
 
 
 def read_input_header(s3, owner, key, required, encoding, separator, row,
-                      validate_rows=False, max_input_bytes=5*1024**2):
+                      validate_rows=False, max_input_bytes=5*1024**2, selector=False):
     """HEAD y GET del mismo ETag; cabecera o filas optativas con limite de lectura."""
     request = dict(Bucket=INPUT_BUCKET, Key=key, ExpectedBucketOwner=owner)
     head = s3.head_object(**request)
@@ -1662,7 +1860,8 @@ def read_input_header(s3, owner, key, required, encoding, separator, row,
             if row['estado'] != 'FALLA':
                 row.update(estado='NO EVALUADO', motivo=row['motivo'] + '; filas fuera del presupuesto')
             return
-        stats = input_row_statistics(data, header, delimiter, required, encoding, group_structure=key == INPUT_KEYS[0])
+        stats = input_row_statistics(data, header, delimiter, required, encoding, group_structure=key == INPUT_KEYS[0],
+                                     selector=selector and key == INPUT_KEYS[0])
         warning = stats.pop('aviso_filas')
         row.update(stats)
         if row['estado'] != 'FALLA':
@@ -1709,6 +1908,34 @@ def write_structure_breakdown(folder, row):
     print(f'Desglose local: {path}')
 
 
+def write_selector_units(folder, row):
+    groups = json.loads(row['selector_unidades'])
+    fields = ['digest_referencia', 'cobertura', 'sigla_papa', 'registros', 'id_nulos', 'candidatos', 'id_solo_espacios', 'motivo']
+    path = Path(folder)/'selector_unidades.csv'
+    metadata = dict(digest_referencia=SELECTOR_SOURCE_DIGEST, cobertura=row['cobertura_selector'], motivo=row['motivo_selector'])
+    with path.open('w', encoding='utf-8-sig', newline='') as handle:
+        writer = csv.DictWriter(handle, fieldnames=fields)
+        writer.writeheader()
+        writer.writerows(dict(**metadata, **g) for g in groups)
+        if not groups:
+            writer.writerow(metadata)
+    print(f'\nSELECTOR DE REFERENCIA | {row["cobertura_selector"]} | Codigo {SELECTOR_SOURCE_DIGEST[7:19]}')
+    if groups:
+        total = sum(g['registros'] for g in groups)
+        excluded = sum(g['id_nulos'] for g in groups)
+        candidates = sum(g['candidatos'] for g in groups)
+        print(f'Filas evaluadas: {total} | Nulos segun perfil: {excluded} | Candidatos no nulos: {candidates}')
+        without = sum(g['candidatos'] == 0 for g in groups if g['sigla_papa'] != '[SIGLA NO PROYECTADA]')
+        print(f'SIGLA_PAPA sin candidatos: {without}; no demuestra que deba ejecutarse una prediccion para ellas.')
+        spaces = sum(g['id_solo_espacios'] for g in groups)
+        if spaces:
+            print(f'[AVISO] IDs de solo espacios: {spaces}; no se equiparan automaticamente a nulos de pandas.')
+    else:
+        print(row['motivo_selector'] or 'Selector no evaluado; verificar lectura y columnas.')
+    print('Perfil de referencia, no ejecucion del consumidor. Sin excepciones por TIUN ni garantia de ID valido.')
+    print(f'Selector local: {path}')
+
+
 def validate_candidate_inputs(session, config, identity, args, error_types):
     """Orquestacion independiente: errores por objeto no ocultan el otro control."""
     folder = Path(args.salida)/'modelos_dependencias'/datetime.now(timezone.utc).astimezone(BOGOTA).strftime('%Y-%m-%d/%H-%M-%S_%f')
@@ -1727,10 +1954,12 @@ def validate_candidate_inputs(session, config, identity, args, error_types):
             filas_totales='', filas_datos_validas='', filas_vacias='', filas_campos_inconsistentes='',
             celdas_vacias_configuradas='', vacios_por_columna='{}', columnas_sin_nombre='[]',
             columnas_ambiguas='[]', motivo_filas='', cobertura_desglose='NO EVALUADO', motivo_desglose='',
-            filas_agrupadas_por_limite='', filas_dimensiones_no_proyectadas='', desglose_unidad_id='[]', motivo='')
+            filas_agrupadas_por_limite='', filas_dimensiones_no_proyectadas='', desglose_unidad_id='[]',
+            cobertura_selector='NO EVALUADO', motivo_selector='', selector_unidades='[]',
+            selector_siglas_no_proyectadas='', motivo='')
         try:
             read_input_header(s3, args.cuenta, key, required, args.encoding_entradas, args.separador_entradas, row,
-                              args.validar_filas, args.max_mib_entradas*1024**2)
+                              args.validar_filas, args.max_mib_entradas*1024**2, selector=args.selector_unidades)
         except error_types as exc:
             response = getattr(exc, 'response', {})
             code = str(response.get('Error', {}).get('Code', type(exc).__name__))
@@ -1752,6 +1981,10 @@ def validate_candidate_inputs(session, config, identity, args, error_types):
     context = dict(captura_utc=datetime.now(timezone.utc).isoformat(), cuenta=identity['Account'],
         principal=identity.get('Arn', ''), controles=rows, limite_bytes_por_objeto=args.max_mib_entradas*1024**2 if args.validar_filas else INPUT_HEADER_BYTES,
         modo='FILAS' if args.validar_filas else 'CABECERAS',
+        perfil_selector=dict(digest_referencia=SELECTOR_SOURCE_DIGEST,
+            filtro='SIGLA_PAPA == cad; dropna(subset=[UNIDAD_ID])',
+            supuestos='read_csv con NA defaults de pandas 1.1.3; sin inferencia de tipos ni replica completa del parser',
+            codigos_tiun_no_excluidos=True, ejecucion_del_consumidor='NO EVALUADA') if args.selector_unidades else None,
         alcance='Dos entradas candidatas; HEAD y GET acotado con IfMatch. Filas solo con --validar-filas; exporta conteos y siglas/tipos agregados, no registros ni IDs. No consulta resultados/ECS/ECR ni escribe AWS.',
         pendientes=['Contrato de columnas del consumidor si no se configura', 'Necesidad por modalidad/sigla',
                     'Reglas de elegibilidad de tipos y significado de los vacios'],
@@ -1784,10 +2017,198 @@ def validate_candidate_inputs(session, config, identity, args, error_types):
     print('Sin umbrales de antiguedad.')
     if args.validar_filas:
         write_structure_breakdown(folder, rows[0])
+    if args.selector_unidades:
+        write_selector_units(folder, rows[0])
     print(f'Reportes: {folder}/control_entradas.csv | contexto_entradas.json')
-    if any(r['estado'] == 'NO EVALUADO' or r['existencia'] != 'OK' or args.validar_filas and (r['cobertura_filas'] != 'LEIDA' or r['recurso'].endswith('/' + INPUT_KEYS[0]) and r['cobertura_desglose'] != 'LEIDA') for r in rows):
+    if any(r['estado'] == 'NO EVALUADO' or r['existencia'] != 'OK' or args.validar_filas and (r['cobertura_filas'] != 'LEIDA' or r['recurso'].endswith('/' + INPUT_KEYS[0]) and r['cobertura_desglose'] != 'LEIDA') or args.selector_unidades and r['recurso'].endswith('/' + INPUT_KEYS[0]) and r['cobertura_selector'] != 'LEIDA' for r in rows):
         return 3
     return 1 if any(r['estado'] == 'FALLA' for r in rows) else 0
+
+
+def docker_command(command, timeout, password=None):
+    """Sin shell, salida acotada y credenciales solo por stdin."""
+    with tempfile.TemporaryFile() as out, tempfile.TemporaryFile() as err:
+        result = subprocess.run(command, input=password, stdout=out, stderr=err,
+                                timeout=timeout, check=False)
+        out.seek(0)
+        # El motivo suele estar al final, despues del progreso de descarga.
+        err.seek(0, 2)
+        err.seek(max(0, err.tell()-4096))
+        return result.returncode, out.read(65536).decode('utf-8', errors='replace'), err.read(4096).decode('utf-8', errors='replace')
+
+
+def docker_failure_detail(code, output, error):
+    lines = [line.strip() for line in (error or output).splitlines() if line.strip()]
+    detail = sanitize_message(lines[-1]) if lines else 'Docker no devolvio un motivo'
+    return f'Docker pull fallo (salida {code}): {detail}'
+
+
+def import_container_command(docker, docker_config, image, interpreter, module, name):
+    return [docker, '--config', docker_config, 'run', '--rm', '--pull', 'never', '--no-healthcheck', '--name', name,
+        '--network', 'none', '--read-only', '--cap-drop', 'ALL',
+        '--security-opt', 'no-new-privileges', '--pids-limit', '128',
+        '--memory', '1g', '--cpus', '1', '--user', '65534:65534',
+        '--tmpfs', '/tmp:rw,nosuid,nodev,size=67108864', '--workdir', '/tmp',
+        '--env', 'HOME=/tmp', '--env', 'MPLCONFIGDIR=/tmp/matplotlib',
+        '--env', 'MPLBACKEND=Agg', '--env', 'OPENBLAS_NUM_THREADS=1',
+        '--env', 'OMP_NUM_THREADS=1', '--env', 'MKL_NUM_THREADS=1',
+        '--env', 'AWS_EC2_METADATA_DISABLED=true', '--entrypoint', interpreter,
+        image, '-I', '-B', '-c', IMPORT_PROBE, module]
+
+
+def import_result(code, output, interpreter):
+    lines = [line.partition('=')[2] for line in output.splitlines()
+             if line.startswith('PONAL_IMPORT_RESULT=')]
+    if len(lines) != 1:
+        return dict(estado='NO EVALUADO', error='Sin resultado interpretable', detalle=f'Salida contenedor={code}')
+    try:
+        result = json.loads(lines[0])
+    except ValueError:
+        return dict(estado='NO EVALUADO', error='Resultado JSON no interpretable', detalle='')
+    if (not isinstance(result, dict) or result.get('interprete') != interpreter or
+            result.get('entorno_real') != posixpath.dirname(posixpath.dirname(interpreter))):
+        return dict(estado='NO EVALUADO', error='Interprete no confirmado', detalle='')
+    if code == 0 and result.get('estado') == 'OK':
+        return dict(estado='OK', python=str(result.get('python', ''))[:40], entorno_real=result['entorno_real'],
+                    version=sanitize_message(str(result.get('version', ''))), error='', detalle='Import correcto en copia local')
+    if code == 1 and result.get('estado') == 'FALLA':
+        return dict(estado='FALLA', python=str(result.get('python', ''))[:40], entorno_real=result['entorno_real'], version='',
+                    error=sanitize_message(str(result.get('error', ''))), detalle=sanitize_message(str(result.get('detalle', ''))))
+    return dict(estado='NO EVALUADO', error='Contenedor interrumpido o resultado incoherente', detalle=f'Salida contenedor={code}')
+
+
+def probe_image_imports(session, config, identity, args, aws_errors):
+    """Imagen por digest observado; Docker local, sin ECS Exec/RunTask ni red en el probe."""
+    now = datetime.now(timezone.utc)
+    folder = Path(args.salida)/'modelos_dependencias'/now.astimezone(BOGOTA).strftime('%Y-%m-%d/%H-%M-%S_%f')
+    folder.mkdir(parents=True, exist_ok=True)
+    rows, issues, targets = [], [], {}
+    modules = list(dict.fromkeys(args.modulo_import or IMPORT_MODULES))
+    docker = shutil.which('docker')
+    interpreter = '/'+args.entorno.strip('/')+'/bin/python'
+    print('IMPORTS | Copia local de la imagen del predictor | Sin modificar ECS', flush=True)
+    try:
+        if not docker:
+            raise ValueError('Docker no disponible en esta sesion; imports NO EVALUADOS')
+        code, output, _ = docker_command([docker, 'info', '--format', '{{.Architecture}}'], 15)
+        if code:
+            raise ValueError('Docker no accesible; no se inicia ni modifica el daemon')
+        host_arch = output.strip()
+        ecs = session.client('ecs', config=config)
+        tasks, task_issues = collect_tasks(ecs, args.cluster, args.familia, args.max_tareas)
+        issues.extend(task_issues)
+        if not tasks:
+            raise ValueError('Sin tareas visibles: no se conoce un digest ejecutado para probar')
+        definitions = {}
+        for task in tasks:
+            arn = task['taskDefinitionArn']
+            if arn not in definitions:
+                definitions[arn] = ecs.describe_task_definition(taskDefinition=arn)['taskDefinition']
+            definition = definitions[arn]
+            arch = definition.get('runtimePlatform', {}).get('cpuArchitecture', 'X86_64')
+            for container in definition.get('containerDefinitions', []):
+                actual = next((c for c in task.get('containers', []) if c.get('name') == container['name']), {})
+                digest = actual.get('imageDigest', '')
+                ref = ecr_reference(actual.get('image') or container.get('image', ''), digest)
+                if not ref or not digest:
+                    issues.append('Sin digest ECS/ECR observado: ' + container['name'])
+                    continue
+                registry = (actual.get('image') or container['image']).split('/')[0]
+                image = registry+'/'+ref['repositorio']+'@'+digest
+                values = effective_environment(container, task)
+                siglas = {r[1] for key, (value, _) in values.items()
+                          for r in [safe_reference(key, value)] if r and r[0] == 'Sigla'}
+                target = targets.setdefault(image, dict(referencia=ref, digest=digest,
+                    arquitectura=arch, siglas=set(), tareas=set()))
+                target['siglas'].update(siglas or {'SIN DATO'})
+                target['tareas'].add(task['taskArn'].rsplit('/', 1)[-1])
+        clients = {}
+        # Credenciales de Docker efimeras: no toca ~/.docker/config.json.
+        with tempfile.TemporaryDirectory(prefix='ponal-imports-') as docker_config:
+            for image, target in targets.items():
+                base = dict(digest=target['digest'], siglas=','.join(sorted(target['siglas'])),
+                    tareas=','.join(sorted(target['tareas'])), entorno=args.entorno,
+                    interprete=interpreter, arquitectura=target['arquitectura'])
+                try:
+                    compatible = (target['arquitectura'] == 'X86_64' and host_arch in ('amd64', 'x86_64') or
+                                  target['arquitectura'] == 'ARM64' and host_arch in ('arm64', 'aarch64'))
+                    if not compatible:
+                        raise ValueError('Arquitectura local distinta de ECS; no se usa emulacion')
+                    ref = target['referencia']
+                    if ref['region'] not in clients:
+                        clients[ref['region']] = session.client('ecr', region_name=ref['region'], config=config)
+                    ecr = clients[ref['region']]
+                    metadata = describe_ecr_image(ecr, ref)
+                    code, _, _ = docker_command([docker, '--config', docker_config, 'image', 'inspect', image], 15)
+                    if code:
+                        size = metadata.get('bytes')
+                        if not isinstance(size, int) or size > args.max_mib*1024**2:
+                            raise ValueError('Imagen supera --max-mib o ECR no informa tamano; no se descarga')
+                        import base64
+                        credentials = ecr.get_authorization_token()['authorizationData']
+                        endpoint = 'https://'+image.split('/')[0]
+                        token = next((c['authorizationToken'] for c in credentials if c.get('proxyEndpoint') == endpoint), '')
+                        if not token:
+                            raise ValueError('ECR no devolvio token para el registro esperado')
+                        user, separator, password = base64.b64decode(token).partition(b':')
+                        if user != b'AWS' or not separator:
+                            raise ValueError('Token ECR no interpretable')
+                        code, _, _ = docker_command([docker, '--config', docker_config, 'login', '--username', 'AWS',
+                            '--password-stdin', image.split('/')[0]], 30, password)
+                        del token, password, credentials
+                        if code:
+                            raise ValueError('Docker login ECR fallo; credenciales omitidas')
+                        print(f'Descargando imagen por digest {target["digest"][7:19]} ({size/1024**2:.1f} MiB comprimidos); puede tardar...', flush=True)
+                        code, pull_output, pull_error = docker_command([docker, '--config', docker_config, 'pull', image], 900)
+                        if code:
+                            raise ValueError(docker_failure_detail(code, pull_output, pull_error))
+                    for module in modules:
+                        print(f'Importando {module} | {base["siglas"]}...', flush=True)
+                        name = 'ponal-import-'+uuid.uuid4().hex
+                        try:
+                            code, output, _ = docker_command(import_container_command(docker, docker_config, image,
+                                interpreter, module, name), args.timeout_import)
+                            result = import_result(code, output, interpreter)
+                        except subprocess.TimeoutExpired:
+                            result = dict(estado='NO EVALUADO', error='Timeout de prueba', detalle='Limite tecnico del probe; no es limite de prediccion')
+                        finally:
+                            # Solo el contenedor creado por este probe, incluso ante Ctrl+C.
+                            docker_command([docker, '--config', docker_config, 'rm', '--force', name], 15)
+                        rows.append(dict(base, modulo=module, **result))
+                except aws_errors + (ValueError, OSError, subprocess.SubprocessError) as exc:
+                    reason = type(exc).__name__ if isinstance(exc, aws_errors) else sanitize_message(str(exc))
+                    issues.append(base['digest'][7:19]+': '+reason)
+                    completed = {r['modulo'] for r in rows if r['digest'] == base['digest']}
+                    rows.extend(dict(base, modulo=module, estado='NO EVALUADO', error=reason,
+                                     detalle='Prueba no completada') for module in modules if module not in completed)
+    except aws_errors + (ValueError, OSError, subprocess.SubprocessError) as exc:
+        issues.append(type(exc).__name__ if isinstance(exc, aws_errors) else sanitize_message(str(exc)))
+    if not rows:
+        rows.append(dict(digest='', siglas='', tareas='', entorno=args.entorno, interprete=interpreter,
+            arquitectura='', modulo='[PRUEBA]', estado='NO EVALUADO', error='Sin imports ejecutados',
+            detalle='Ver limitaciones en contexto_imports.json'))
+    fields = ['digest', 'siglas', 'tareas', 'entorno', 'interprete', 'arquitectura',
+              'modulo', 'estado', 'python', 'entorno_real', 'version', 'error', 'detalle']
+    with (folder/'imports.csv').open('w', encoding='utf-8-sig', newline='') as handle:
+        writer = csv.DictWriter(handle, fieldnames=fields)
+        writer.writeheader()
+        writer.writerows(rows)
+    context = dict(captura_utc=now.isoformat(), cuenta=identity['Account'], entorno=args.entorno,
+        modulos=modules, resultados=rows, limitaciones=issues, timeout_segundos=args.timeout_import,
+        alcance='Imports en copia Docker local por digest ECS; no en el proceso activo',
+        limites='Sin aplicacion, datos, red, ECS Exec, RunTask, instalacion de paquetes ni validacion de predicciones')
+    (folder/'contexto_imports.json').write_text(json.dumps(context, ensure_ascii=False, indent=2), encoding='utf-8')
+    print('\nDigest       | Siglas               | Modulo                  | Control      | Python')
+    print('-------------+----------------------+-------------------------+--------------+-------')
+    for row in rows:
+        print(f"{row['digest'][7:19]:12} | {row['siglas'][:20]:20} | {row['modulo']:23} | {row['estado']:12} | {row.get('python', '-')}")
+    counts = Counter(row['estado'] for row in rows)
+    print(f"Imports: {counts['OK']} OK | {counts['FALLA']} FALLA | {counts['NO EVALUADO']} NO EVALUADO")
+    for issue in issues:
+        print('[INCOMPLETO] '+issue)
+    print('Prueba aislada de imports; no certifica el proceso activo ni todos los modelos o combinaciones de librerias.')
+    print(f'Reportes: {folder}/imports.csv | contexto_imports.json')
+    return 3 if issues or counts['NO EVALUADO'] else 1 if counts['FALLA'] else 0
 
 
 def main():
@@ -1796,11 +2217,16 @@ def main():
     parser.add_argument('--familia', default=FAMILY)
     parser.add_argument('--cuenta', default='926162397524')
     parser.add_argument('--region', default='us-east-1')
-    parser.add_argument('--max-tareas', type=int, default=100)
+    parser.add_argument('--max-tareas', type=int, default=100, help='Maximo por estado consultado; con finalizadas, hasta este limite para RUNNING y otro para STOPPED')
+    parser.add_argument('--incluir-finalizadas', action='store_true', help='Incluye STOPPED aun visibles en ECS; no recupera historial eliminado ni certifica exito')
     parser.add_argument('--ventana-minutos', type=int, default=60)
     parser.add_argument('--max-eventos', type=int, default=500, help='Eventos que coincidan con el filtro por contenedor')
     parser.add_argument('--muestras', type=int, default=3, help='Muestras saneadas por tipo/modelo/motivo; 0 desactiva muestras')
     parser.add_argument('--sin-logs', action='store_true')
+    parser.add_argument('--probar-imports', action='store_true', help='Prueba imports en copia Docker local de digests observados; sin ECS Exec ni ejecutar la aplicacion')
+    parser.add_argument('--modulo-import', action='append', default=[], metavar='MODULO', help='Modulo a probar; repetir. Default: 16 librerias numericas/geograficas y de modelos')
+    parser.add_argument('--timeout-import', type=int, default=45, help='Limite tecnico por import, 5..120 segundos; no es umbral de prediccion')
+    parser.add_argument('--correlacionar-modelos', action='store_true', help='Detalla declaraciones por tarea/sigla y contexto explicito del mismo evento; sin inferir proceso por proximidad')
     parser.add_argument('--sin-ecr', action='store_true', help='Omite la verificacion del digest/imagen en ECR')
     parser.add_argument('--inspeccionar-imagen', action='store_true', help='Lee capas sin ejecutar la imagen; genera paquetes.csv y archivos_imagen.csv')
     parser.add_argument('--mapear-arranque', action='store_true', help='Lee config OCI de hasta 2 MiB y referencias de arranque; no descarga capas')
@@ -1808,6 +2234,7 @@ def main():
     parser.add_argument('--auditar-codigo', action='store_true', help='Proyecta filtros de UNIDAD_ID/TIUN y formatos de logs de modelos desde la imagen; sin ejecutar codigo')
     parser.add_argument('--mapear-columnas', action='store_true', help='Inspecciona codigo de la imagen y traza columnas de las dos entradas; sin leer sus datos S3')
     parser.add_argument('--validar-entradas', action='store_true', help='Valida dos entradas S3 candidatas sin ECS/ECR ni descargar capas')
+    parser.add_argument('--selector-unidades', action='store_true', help='Implica --validar-filas; aplica perfil de referencia SIGLA_PAPA + UNIDAD_ID no nulo, sin reglas por TIUN')
     parser.add_argument('--validar-filas', action='store_true', help='Implica --validar-entradas; revisa filas y agrupa vacios por siglas/tipo sin exportar registros ni IDs')
     parser.add_argument('--max-mib-entradas', type=int, default=5, help='Presupuesto por CSV de entrada para --validar-filas; 1..20 MiB, default 5')
     parser.add_argument('--encoding-entradas', choices=('utf-8-sig', 'cp1252', 'latin-1'), default='utf-8-sig')
@@ -1820,8 +2247,24 @@ def main():
     parser.add_argument('--entorno', default=DEFAULT_ENVIRONMENT, help='Entorno objetivo en la imagen; no implica que sea el proceso activo')
     parser.add_argument('--requirements-imagen', default=DEFAULT_REQUIREMENTS, help='Ruta del manifiesto a comparar dentro de la imagen')
     args = parser.parse_args()
+    if args.selector_unidades:
+        args.validar_filas = True
     if args.validar_filas:
         args.validar_entradas = True
+    if args.incluir_finalizadas and (args.validar_entradas or args.desde_reportes or args.probar_imports):
+        parser.error('--incluir-finalizadas requiere un modo de mapeo ECS; no combinar con entradas, reportes locales o prueba de imports')
+    if not 5 <= args.timeout_import <= 120:
+        parser.error('--timeout-import debe estar entre 5 y 120 segundos')
+    if len(args.modulo_import) > 50 or any(not re.fullmatch(r'[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*', module) or len(module) > 120 for module in args.modulo_import):
+        parser.error('--modulo-import: hasta 50 nombres Python de maximo 120 caracteres')
+    if args.modulo_import and not args.probar_imports:
+        parser.error('--modulo-import requiere --probar-imports')
+    if not re.fullmatch(r'/?[A-Za-z0-9_-]+(?:/[A-Za-z0-9_.-]+)*', args.entorno) or '..' in args.entorno.split('/'):
+        parser.error('--entorno debe ser una ruta de entorno sin segmentos ..')
+    if args.probar_imports and (args.correlacionar_modelos or args.validar_entradas or args.desde_reportes or args.mapear_arranque or args.inspeccionar_imagen or args.mapear_auxiliares or args.mapear_columnas or args.auditar_codigo or args.sin_ecr):
+        parser.error('--probar-imports es independiente y requiere ECR; no combinar con otros modos ni --sin-ecr')
+    if args.correlacionar_modelos and (args.sin_logs or args.validar_entradas or args.desde_reportes):
+        parser.error('--correlacionar-modelos requiere logs y no se combina con validacion de entradas ni --desde-reportes')
     if not 1 <= args.max_mib_entradas <= 20:
         parser.error('--max-mib-entradas debe estar entre 1 y 20')
     if args.validar_entradas and (args.mapear_auxiliares or args.mapear_columnas or args.auditar_codigo or args.inspeccionar_imagen or args.mapear_arranque or args.desde_reportes):
@@ -1870,12 +2313,15 @@ def main():
             return 3
         if args.validar_entradas:
             return validate_candidate_inputs(session, config, identity, args, (ClientError, BotoCoreError, OSError))
+        if args.probar_imports:
+            return probe_image_imports(session, config, identity, args, (ClientError, BotoCoreError))
         ecs = session.client('ecs', config=config)
         print(f'MAPEO MODELOS Y DEPENDENCIAS | {args.cluster} | Solo lectura', flush=True)
-        tasks, issues = collect_tasks(ecs, args.cluster, args.familia, args.max_tareas)
+        tasks, issues = collect_tasks(ecs, args.cluster, args.familia, args.max_tareas, args.incluir_finalizadas)
         now = datetime.now(timezone.utc)
         start = now - timedelta(minutes=args.ventana_minutos)
         rows, coverage, definitions, clients, evidence_rows = [], [], {}, {}, []
+        model_events = []
         image_results, ecr_clients, ecr_cache = [], {}, {}
         inspections = {}
         startup_rows, startup_cache, auth_tokens = [], {}, {}
@@ -1996,7 +2442,7 @@ def main():
                 opts = log.get('options', {})
                 group, prefix = opts.get('awslogs-group'), opts.get('awslogs-stream-prefix')
                 region = opts.get('awslogs-region', args.region)
-                item = dict(tarea=task_id, contenedor=container['name'], logs='NO CONFIGURADOS', eventos_filtrados=0)
+                item = dict(tarea=task_id, sigla=sigla, contenedor=container['name'], logs='NO CONFIGURADOS', eventos_filtrados=0)
                 coverage.append(item)
                 if group:
                     add('Grupo de logs', group, 'logConfiguration')
@@ -2004,13 +2450,19 @@ def main():
                     item['logs'] = 'NO CONSULTADOS'
                     continue
                 if log.get('logDriver') != 'awslogs' or not group or not prefix:
+                    if args.correlacionar_modelos:
+                        issues.append(f'{task_id[:12]} / {container["name"]}: sin stream awslogs identificable; modelos no evaluados')
                     continue
                 try:
                     if region not in clients:
                         clients[region] = session.client('logs', region_name=region, config=config)
                     stream = f'{prefix}/{container["name"]}/{task_id}'
                     print(f'Consultando referencias: {task_id[:12]} / {sigla}...', flush=True)
-                    counts, truncated, read, samples = read_references(clients[region], group, stream, start, now, args.max_eventos, args.muestras)
+                    details = [] if args.correlacionar_modelos else None
+                    counts, truncated, read, samples = read_references(clients[region], group, stream, start, now, args.max_eventos, args.muestras, details)
+                    if details is not None:
+                        model_events.extend(dict(tarea=task_id, sigla=sigla, contenedor=container['name'],
+                            stream=stream, cobertura='PARCIAL' if truncated else 'LEIDA', **event) for event in details)
                     evidence_rows.extend(dict(tarea=task_id, sigla=sigla, contenedor=container['name'], **sample) for sample in samples)
                     item.update(logs='TRUNCADOS' if truncated else 'LEIDOS', eventos_filtrados=read,
                                 grupo=group, stream=stream, region=region)
@@ -2022,7 +2474,12 @@ def main():
                     code = exc.response['Error']['Code'] if isinstance(exc, ClientError) else type(exc).__name__
                     item.update(logs='ERROR LECTURA', error=code)
                     issues.append(f'{task_id[:12]} / logs: {code}')
-        print_table(rows)
+        lifecycle = task_lifecycle_rows(tasks, definitions) if args.incluir_finalizadas else []
+        if args.incluir_finalizadas:
+            print_task_lifecycle(lifecycle)
+            print(f'Logs: ventana global de ultimos {args.ventana_minutos} minutos; puede excluir logs de tareas detenidas antes de esa ventana.')
+        if not args.correlacionar_modelos:
+            print_table(rows)
         print(f'\nTareas observadas: {len(tasks)} | Definiciones descritas: {len(definitions)} | Lecturas incompletas: {len(issues)}')
         if not tasks:
             print('Sin tareas visibles: se describe la ultima revision ACTIVE, no una imagen en ejecucion.')
@@ -2030,7 +2487,8 @@ def main():
             print('[INCOMPLETO] ' + issue)
         print('Seleccion/respaldo reportados describen eventos de la muestra, no un modelo unico de toda la tarea ni exito final.')
         print('Mencion o indicio no confirma seleccion/respaldo. Librerias instaladas/compatibles siguen sin verificar.')
-        print('DescribeImages verifica metadata en ECR; no prueba que el rol de la tarea pueda descargarla.')
+        if not args.sin_ecr:
+            print('DescribeImages verifica metadata en ECR; no prueba que el rol de la tarea pueda descargarla.')
         if args.inspeccionar_imagen:
             print('Inspeccion estatica: metadata de paquetes y codigo legible. No ejecuta imports ni certifica compatibilidad o acceso desde ECS.')
         if args.mapear_arranque:
@@ -2038,6 +2496,13 @@ def main():
         print('Sin menciones en la ventana no significa que un modelo no se haya usado. No es un monitor de salud.')
         folder = Path(args.salida)/'modelos_dependencias'/now.astimezone(BOGOTA).strftime('%Y-%m-%d/%H-%M-%S_%f')
         folder.mkdir(parents=True, exist_ok=True)
+        if args.incluir_finalizadas:
+            with (folder/'tareas.csv').open('w', encoding='utf-8-sig', newline='') as handle:
+                writer = csv.DictWriter(handle, fieldnames=['tarea', 'task_arn', 'siglas', 'estado_ecs',
+                    'creacion', 'inicio', 'fin', 'resultado_contenedores', 'codigos_salida',
+                    'stop_code', 'motivo_parada', 'motivos_contenedores'])
+                writer.writeheader()
+                writer.writerows(lifecycle)
         with (folder/'mapa.csv').open('w', encoding='utf-8-sig', newline='') as handle:
             writer = csv.DictWriter(handle, fieldnames=['tarea', 'task_arn', 'sigla', 'contenedor', 'definicion', 'tipo', 'referencia', 'evidencia', 'eventos'])
             writer.writeheader()
@@ -2080,11 +2545,21 @@ def main():
             cobertura=coverage, imagenes=image_results, inspecciones=list(inspections.values()), consultas_completas=not issues, limitaciones=issues,
             controles_estaticos_exit=dependency_exit,
             arranque=startup_rows,
-            pendientes=['Reglas de elegibilidad por tipo de unidad', 'Correlacion modelo/respaldo por proceso',
-                        'Imports en el entorno objetivo'],
+            tareas_observadas=lifecycle,
+            alcance_tareas='RUNNING y STOPPED aun visibles, limitado por estado; no es historial semanal' if args.incluir_finalizadas else 'RUNNING visibles',
+            correlacion_modelos=dict(habilitada=args.correlacionar_modelos,
+                registros=len(model_events), regla='Solo contexto explicito dentro del mismo evento',
+                seleccion_uniform_no_implica_respaldo=True,
+                cobertura_global='PARCIAL' if issues or any(c['logs'] != 'LEIDOS' for c in coverage) else 'LEIDA',
+                sin_tareas=not bool(tasks)),
+            pendientes=['Imports en el entorno objetivo'],
             fuera_de_alcance=['Comprobar acceso desde ECS', 'Validar resultados de prediccion en S3'])
         (folder/'contexto.json').write_text(json.dumps(context, ensure_ascii=False, indent=2), encoding='utf-8')
+        if args.correlacionar_modelos:
+            write_model_correlation(folder, model_events, coverage)
         print(f'Mapa local: {folder}/mapa.csv | evidencias.csv | contexto.json')
+        if args.incluir_finalizadas:
+            print(f'Tareas locales: {folder}/tareas.csv')
         if args.inspeccionar_imagen:
             print(f'Inspeccion local: {folder}/paquetes.csv | archivos_imagen.csv')
         if args.mapear_arranque:
