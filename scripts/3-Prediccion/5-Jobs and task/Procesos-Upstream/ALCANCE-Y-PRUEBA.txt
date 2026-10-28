@@ -11,9 +11,12 @@ RECURSOS INICIALES (nombres sujetos a verificacion real)
 Cluster ECS: pon-prod-xcrime-datacleaning-cluster
 Crawler Glue: pon-prod-xcrime-datacleaning-glue-crawler
 Jobs Glue:
-  update-fuentes-internas
-  update-estructura-nal
-  update-geometrias-nal
+  pon-prod-xcrime-update-fuentes-internas
+  pon-prod-xcrime-update-estructura-nal
+  pon-prod-xcrime-update-geometrias-nal
+Los nombres completos constan en el inventario del 22 de septiembre de 2026
+(hoja Glue Jobs, filas 72, 85 y 86). Sustituyen los nombres abreviados de la
+primera prueba; su existencia actual se verifica en cada consulta a Glue.
 Tablas DynamoDB:
   pon_prod_llamada_siglas_historico
   pon_prod_comparendo_siglas_historico

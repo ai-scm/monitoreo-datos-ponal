@@ -1,0 +1,338 @@
+#!/usr/bin/env python3
+"""Presencia de datos del periodo esperado en probabilidaddelito.
+
+Sin opciones: consulta esquema Glue; no ejecuta Athena ni declara datos vigentes.
+--ejecutar requiere columna, significado de fecha y periodo explicitamente indicados.
+Un unico CSV local. No modifica datos de origen; Athena escribe resultados internos.
+"""
+import argparse
+import csv
+from datetime import date, datetime, timedelta, timezone
+import json
+import os
+from pathlib import Path
+import sys
+import textwrap
+import time
+from urllib.parse import urlsplit
+import uuid
+
+
+BOGOTA = timezone(timedelta(hours=-5))
+OUTPUT_S3 = 's3://pon-prod-ml-iapol/ValidationReports/FreshnessProbabilidaddelito/'
+FIELDS = ('total', 'fechas_no_interpretables', 'primera_fecha', 'ultima_fecha',
+          'registros_periodo', 'dias_con_datos', 'primera_fecha_periodo', 'ultima_fecha_periodo')
+LIMITS = [
+    'Esquema Glue y UpdateTime son metadata; no prueban recencia de los datos.',
+    'La fecha y su significado deben confirmarse; no se deducen del nombre de una columna.',
+    'Periodo explicito e inclusivo por fecha calendario almacenada; no se impone antiguedad estandar.',
+    'Un SELECT agregado lee la columna temporal de toda la tabla; no hay poda de particiones configurada.',
+    'Presencia en periodo no certifica cobertura de todas las siglas/unidades/dias ni calidad de prediccion.',
+    'Fecha objetivo puede ser futura; no se confunde con fecha de generacion o ingestion.',
+    'No valida archivos de prediccion, contenido de informes ni ejecuciones de jobs.',
+    'Sin alertas automaticas. Un CSV local; Athena puede escribir intermediarios S3.',
+]
+
+
+class ReadBlocked(RuntimeError):
+    pass
+
+
+def identifier(value):
+    return '"' + value.replace('"', '""') + '"'
+
+
+def literal(value):
+    return "'" + value.replace("'", "''") + "'"
+
+
+def parse_args():
+    p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument('--region', default='us-east-1')
+    p.add_argument('--cuenta', default='926162397524')
+    p.add_argument('--database', default='pon-prod-mdp')
+    p.add_argument('--tabla', default='probabilidaddelito')
+    p.add_argument('--fecha', help='Columna exacta confirmada del esquema')
+    p.add_argument('--tipo-fecha', choices=('objetivo', 'generacion', 'dato'),
+                   help='Significado confirmado de la columna, no inferido por el script')
+    p.add_argument('--desde', type=date.fromisoformat, help='Primer dia esperado YYYY-MM-DD, inclusivo')
+    p.add_argument('--hasta', type=date.fromisoformat, help='Ultimo dia esperado YYYY-MM-DD, inclusivo')
+    p.add_argument('--formato-fecha', help='Formato Athena date_parse para texto, por ejemplo %%Y%%m%%d')
+    mode = p.add_mutually_exclusive_group()
+    mode.add_argument('--ejecutar', action='store_true', help='Ejecutar un SELECT agregado en Athena')
+    mode.add_argument('--solo-sql', action='store_true', help='Guardar SQL en el CSV sin ejecutarlo')
+    p.add_argument('--workgroup', default=os.getenv('ATHENA_WORKGROUP', 'primary'))
+    p.add_argument('--output-s3', default=os.getenv('ATHENA_OUTPUT_S3') or OUTPUT_S3,
+                   help='Raiz para intermediarios Athena; se agrega fecha/hora/_athena/')
+    p.add_argument('--timeout', type=int, default=600, help='Espera maxima de consulta, segundos (1..3600)')
+    p.add_argument('--salida', default='salida')
+    a = p.parse_args()
+    if a.ejecutar or a.solo_sql:
+        if not all((a.fecha, a.tipo_fecha, a.desde, a.hasta)):
+            p.error('--ejecutar/--solo-sql requieren --fecha, --tipo-fecha, --desde y --hasta')
+    if bool(a.desde) != bool(a.hasta) or a.desde and a.hasta < a.desde:
+        p.error('Indicar --desde y --hasta juntos, en orden cronologico')
+    if not 1 <= a.timeout <= 3600:
+        p.error('--timeout debe estar entre 1 y 3600')
+    for value in (a.database, a.tabla, a.fecha, a.workgroup):
+        if value is not None and (not value.strip() or len(value) > 255 or any(c in value for c in '\n\r\t')):
+            p.error('Nombres no vacios de hasta 255 caracteres, sin saltos de linea')
+    output = urlsplit(a.output_s3)
+    if output.scheme != 's3' or not output.netloc or output.query or output.fragment:
+        p.error('--output-s3 debe ser una ruta s3://bucket/prefijo/')
+    if a.formato_fecha and (not a.fecha or len(a.formato_fecha) > 100):
+        p.error('--formato-fecha requiere --fecha y admite hasta 100 caracteres')
+    return a
+
+
+def schema_rows(table, resource):
+    rows = []
+    for source, columns in (('COLUMNA', table.get('StorageDescriptor', {}).get('Columns', [])),
+                            ('PARTICION', table.get('PartitionKeys', []))):
+        for col in columns:
+            rows.append(dict(tipo_registro='ESQUEMA', recurso=resource, campo=col['Name'],
+                             tipo=col['Type'], resultado=source, control='INFO'))
+    return rows
+
+
+def build_sql(a, table):
+    columns = {r['campo']: r['tipo'] for r in schema_rows(table, '')}
+    if a.fecha not in columns:
+        raise ReadBlocked('La columna --fecha no existe en el esquema consultado')
+    kind = columns[a.fecha].lower()
+    if not (kind == 'date' or kind in ('string', 'varchar', 'char') or kind.startswith(('varchar(', 'char(', 'timestamp'))):
+        raise ReadBlocked('Tipo temporal no admitido; confirmar la representacion antes de consultar')
+    if 'time zone' in kind:
+        raise ReadBlocked('Timestamp con zona: requiere confirmar conversion de zona; no se asume')
+    col = identifier(a.fecha)
+    if a.formato_fecha:
+        if not kind.startswith(('string', 'varchar', 'char')):
+            raise ReadBlocked('--formato-fecha solo se aplica a columnas de texto')
+        expr = f'CAST(TRY(date_parse(CAST({col} AS varchar), {literal(a.formato_fecha)})) AS date)'
+    else:
+        expr = f'COALESCE(TRY_CAST({col} AS date), CAST(TRY_CAST({col} AS timestamp) AS date))'
+    period = f"fecha BETWEEN DATE '{a.desde.isoformat()}' AND DATE '{a.hasta.isoformat()}'"
+    return f'''WITH datos AS (
+ SELECT {expr} AS fecha
+ FROM {identifier(a.database)}.{identifier(a.tabla)}
+)
+SELECT count(*) AS total,
+       count_if(fecha IS NULL) AS fechas_no_interpretables,
+       CAST(min(fecha) AS varchar) AS primera_fecha,
+       CAST(max(fecha) AS varchar) AS ultima_fecha,
+       count_if({period}) AS registros_periodo,
+       count(DISTINCT fecha) FILTER (WHERE {period}) AS dias_con_datos,
+       CAST(min(fecha) FILTER (WHERE {period}) AS varchar) AS primera_fecha_periodo,
+       CAST(max(fecha) FILTER (WHERE {period}) AS varchar) AS ultima_fecha_periodo
+FROM datos'''
+
+
+def execute_query(athena, sql, a, context, errors):
+    output = a.output_s3.rstrip('/') + '/' + context['carpeta_ejecucion'] + '/_athena/'
+    context['athena'] = info = dict(output_solicitado=output)
+    response = athena.start_query_execution(QueryString=sql,
+        QueryExecutionContext={'Database': a.database, 'Catalog': 'AwsDataCatalog'},
+        WorkGroup=a.workgroup, ClientRequestToken=str(uuid.uuid4()),
+        ResultConfiguration={'OutputLocation': output},
+        ResultReuseConfiguration={'ResultReuseByAgeConfiguration': {'Enabled': False}})
+    query_id = response['QueryExecutionId']
+    info['query_id'] = query_id
+    finished = False
+    deadline = time.monotonic() + a.timeout
+    try:
+        while True:
+            query = athena.get_query_execution(QueryExecutionId=query_id)['QueryExecution']
+            state = query['Status']['State']
+            info.update(estado=state, estadisticas=query.get('Statistics', {}),
+                        output_efectivo=query.get('ResultConfiguration', {}).get('OutputLocation', ''),
+                        error_athena=query['Status'].get('AthenaError', {}).get('ErrorType'))
+            if state in ('FAILED', 'CANCELLED'):
+                finished = True
+                raise ReadBlocked(f'Athena {state}; revisar QueryExecutionId={query_id}')
+            if state == 'SUCCEEDED':
+                finished = True
+                break
+            remaining = deadline-time.monotonic()
+            if remaining <= 0:
+                raise ReadBlocked(f'Tiempo de espera agotado; QueryExecutionId={query_id}')
+            time.sleep(min(2, remaining))
+    finally:
+        if not finished:
+            try:
+                athena.stop_query_execution(QueryExecutionId=query_id)
+                info['cancelacion'] = 'SOLICITADA; estado final no confirmado'
+            except errors as exc:
+                info['cancelacion'] = 'NO CONFIRMADA: '+error_code(exc)
+    records, names = [], None
+    for page in athena.get_paginator('get_query_results').paginate(QueryExecutionId=query_id,
+            PaginationConfig={'PageSize': 10, 'MaxItems': 3}):
+        result = page['ResultSet']
+        page_names = [c['Name'] for c in result['ResultSetMetadata']['ColumnInfo']]
+        if tuple(page_names) != FIELDS or names is not None and page_names != names:
+            raise ReadBlocked('Columnas inesperadas en resultado Athena; no se evalua recencia')
+        names = page_names
+        records.extend([[cell.get('VarCharValue') for cell in row.get('Data', [])]
+                        for row in result.get('Rows', [])])
+    if records and records[0] == list(FIELDS):
+        records = records[1:]
+    if len(records) != 1 or len(records[0]) != len(FIELDS):
+        raise ReadBlocked('Resultado agregado ausente o inesperado; no se declara cero')
+    return dict(zip(FIELDS, records[0]))
+
+
+def evaluate(result, a, resource):
+    numbers = {key: int(result[key]) for key in ('total', 'fechas_no_interpretables', 'registros_periodo', 'dias_con_datos')}
+    total, invalid, present, days = (numbers[key] for key in ('total', 'fechas_no_interpretables', 'registros_periodo', 'dias_con_datos'))
+    if min(numbers.values()) < 0 or invalid+present > total or days > present or days > (a.hasta-a.desde).days+1:
+        raise ReadBlocked('Conteos agregados incoherentes; no se evalua presencia')
+    for key in ('primera_fecha', 'ultima_fecha', 'primera_fecha_periodo', 'ultima_fecha_periodo'):
+        if result[key] is not None:
+            date.fromisoformat(result[key])
+    all_min, all_max = result['primera_fecha'], result['ultima_fecha']
+    p_min, p_max = result['primera_fecha_periodo'], result['ultima_fecha_periodo']
+    if bool(all_min) != bool(all_max) or bool(p_min) != bool(p_max):
+        raise ReadBlocked('Faltan extremos de fechas en resultado agregado')
+    if (total-invalid > 0) != bool(all_min and all_max) or (present > 0) != bool(p_min and p_max) or bool(present) != bool(days):
+        raise ReadBlocked('Fechas y conteos no concuerdan; no se evalua presencia')
+    if all_min and (all_min > all_max or p_min and not all_min <= p_min <= p_max <= all_max):
+        raise ReadBlocked('Extremos de fechas incoherentes')
+    if p_min and not a.desde.isoformat() <= p_min <= p_max <= a.hasta.isoformat():
+        raise ReadBlocked('Fecha agregada fuera del periodo configurado')
+    if present:
+        control, detail = ('AVISO' if invalid else 'INFO'), 'Hay registros en el periodo; no certifica cobertura completa'
+    elif invalid:
+        control, detail = 'INCOMPLETO', 'Sin fechas interpretables en periodo; las fechas invalidas impiden confirmar ausencia'
+    else:
+        control, detail = 'FALLA', 'Sin registros en el periodo esperado configurado; no identifica la causa'
+    rows = [dict(tipo_registro='RESUMEN', recurso=resource, campo='Presencia en periodo',
+                 resultado=f'{present} registros; {days} dias con datos', control=control, detalle=detail),
+            dict(tipo_registro='RESUMEN', recurso=resource, campo='Rango de fechas observado',
+                 resultado=f'{all_min or "sin datos"} a {all_max or "sin datos"}', control='INFO'),
+            dict(tipo_registro='RESUMEN', recurso=resource, campo='Calidad temporal',
+                 resultado=f'{invalid}/{total} fechas nulas/no interpretables', control='AVISO' if invalid else 'INFO')]
+    return rows, dict(result, **numbers)
+
+
+def error_code(exc):
+    return getattr(exc, 'response', {}).get('Error', {}).get('Code', type(exc).__name__)
+
+
+def write_report(folder, rows, context):
+    folder.mkdir(parents=True, exist_ok=True)
+    path = folder/'informe_freshness_probabilidaddelito.csv'
+    fields = ('tipo_registro', 'recurso', 'campo', 'tipo', 'resultado', 'control', 'detalle', 'valor')
+    def leaves(value, field=''):
+        if isinstance(value, dict) and value:
+            for key, item in value.items():
+                yield from leaves(item, field+'/'+str(key))
+        elif isinstance(value, list) and value:
+            for i, item in enumerate(value):
+                yield from leaves(item, field+'/'+str(i))
+        else:
+            yield dict(tipo_registro='CONTEXTO', campo=field, valor=json.dumps(value, ensure_ascii=False, default=str))
+    with path.open('w', encoding='utf-8-sig', newline='') as handle:
+        writer = csv.DictWriter(handle, fieldnames=fields)
+        writer.writeheader()
+        writer.writerows(rows)
+        writer.writerows(leaves(context))
+    return path
+
+
+def print_table(rows):
+    widths = (10, 36, 58, 13)
+    def render(values):
+        cells = [textwrap.wrap(str(v), width=w, break_on_hyphens=False) or ['-'] for v, w in zip(values, widths)]
+        for i in range(max(map(len, cells))):
+            print(' | '.join((c[i] if i < len(c) else '').ljust(w) for c, w in zip(cells, widths)))
+    render(('Tipo', 'Campo / control', 'Resultado', 'Control'))
+    print('-+-'.join('-'*w for w in widths))
+    for row in rows:
+        if row['tipo_registro'] in ('RESUMEN', 'ESQUEMA', 'CONTROL'):
+            render((row['tipo_registro'], row['campo'], row.get('tipo') or row.get('resultado', ''), row['control']))
+
+
+def inspect(session, config, a, errors):
+    now = datetime.now(timezone.utc)
+    run_folder = now.astimezone(BOGOTA).strftime('%Y-%m-%d/%H-%M-%S_%f')
+    resource = a.database+'.'+a.tabla
+    rows = []
+    context = dict(cuenta=a.cuenta, region=a.region, captura_utc=now.isoformat(), recurso=resource,
+                   carpeta_ejecucion=run_folder, configuracion=vars(a), limitaciones=LIMITS)
+    code = 0
+    try:
+        glue = session.client('glue', config=config)
+        table = glue.get_table(CatalogId=a.cuenta, DatabaseName=a.database, Name=a.tabla)['Table']
+        context['tabla'] = dict(tipo=table.get('TableType'), ubicacion=table.get('StorageDescriptor', {}).get('Location'),
+                               actualizacion_metadata=table.get('UpdateTime'), particiones=table.get('PartitionKeys', []))
+        rows.append(dict(tipo_registro='RESUMEN', recurso=resource, campo='Tabla Glue', resultado='ENCONTRADA: '+resource, control='INFO'))
+        rows.extend(schema_rows(table, resource))
+        if a.ejecutar or a.solo_sql:
+            sql = build_sql(a, table)
+            rows.append(dict(tipo_registro='SQL', recurso=resource, campo='SELECT agregado', valor=sql))
+            if a.solo_sql:
+                rows.append(dict(tipo_registro='CONTROL', recurso=resource, campo='Datos del periodo',
+                                 resultado='SQL guardado; consulta no ejecutada', control='NO EVALUADO'))
+                code = 3
+            else:
+                result = execute_query(session.client('athena', config=config), sql, a, context, errors)
+                checks, aggregate = evaluate(result, a, resource)
+                rows.extend(checks)
+                context['agregados'] = aggregate
+        else:
+            rows.append(dict(tipo_registro='CONTROL', recurso=resource, campo='Datos del periodo',
+                             resultado='Pendiente: confirmar columna, significado de fecha y periodo esperado', control='NO EVALUADO'))
+            code = 3
+    except KeyboardInterrupt:
+        rows.append(dict(tipo_registro='CONTROL', recurso=resource, campo='Consulta', resultado='Interrumpida; datos no evaluados', control='INCOMPLETO'))
+        code = 130
+    except ReadBlocked as exc:
+        rows.append(dict(tipo_registro='CONTROL', recurso=resource, campo='Consulta', resultado=str(exc), control='INCOMPLETO'))
+        code = 3
+    except errors as exc:
+        err = error_code(exc)
+        missing = err == 'EntityNotFoundException' and 'tabla' not in context
+        rows.append(dict(tipo_registro='CONTROL', recurso=resource, campo='Consulta', resultado=err,
+                         control='AUSENTE' if missing else 'INCOMPLETO'))
+        code = 1 if missing else 3
+    except (ValueError, TypeError, KeyError) as exc:
+        rows.append(dict(tipo_registro='CONTROL', recurso=resource, campo='Resultado',
+                         resultado=type(exc).__name__+'; datos no evaluables', control='INCOMPLETO'))
+        code = 3
+    report = write_report(Path(a.salida).expanduser()/'freshness_probabilidaddelito'/run_folder, rows, context)
+    print(f'PERIODO DE DATOS | {resource} | {a.region}')
+    print_table(rows)
+    print('Metadata no prueba datos actuales. Presencia en periodo no prueba cobertura de todas las unidades.')
+    print(f'Informe: {report}')
+    if code:
+        return code
+    controls = {r.get('control') for r in rows}
+    return 3 if 'INCOMPLETO' in controls else 1 if 'FALLA' in controls else 0
+
+
+def main():
+    a = parse_args()
+    try:
+        import boto3
+        from botocore.config import Config
+        from botocore.exceptions import BotoCoreError, ClientError
+    except ImportError:
+        print('[BLOQUEADO] Ejecutar en CloudShell con boto3/botocore.', file=sys.stderr)
+        return 3
+    try:
+        config = Config(connect_timeout=5, read_timeout=20, retries={'total_max_attempts': 3, 'mode': 'standard'})
+        session = boto3.Session(region_name=a.region)
+        account = session.client('sts', config=config).get_caller_identity()['Account']
+        if account != a.cuenta:
+            print('[BLOQUEADO] Cuenta distinta de la esperada; no se consultan datos.', file=sys.stderr)
+            return 3
+        return inspect(session, config, a, (BotoCoreError, ClientError))
+    except (BotoCoreError, ClientError, OSError) as exc:
+        print('[BLOQUEADO] '+error_code(exc)+'; revisar sesion/permisos y destino local.', file=sys.stderr)
+        return 3
+    except KeyboardInterrupt:
+        print('[AVISO] Consulta interrumpida.', file=sys.stderr)
+        return 130
+
+
+if __name__ == '__main__':
+    sys.exit(main())

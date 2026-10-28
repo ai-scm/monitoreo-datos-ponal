@@ -19,7 +19,8 @@ import textwrap
 
 CLUSTER = 'pon-prod-xcrime-datacleaning-cluster'
 CRAWLER = 'pon-prod-xcrime-datacleaning-glue-crawler'
-JOBS = ('update-fuentes-internas', 'update-estructura-nal', 'update-geometrias-nal')
+JOBS = ('pon-prod-xcrime-update-fuentes-internas',
+        'pon-prod-xcrime-update-estructura-nal', 'pon-prod-xcrime-update-geometrias-nal')
 TABLES = ('pon_prod_llamada_siglas_historico', 'pon_prod_comparendo_siglas_historico', 'pon_prod_delito_siglas_historico')
 BOGOTA = timezone(timedelta(hours=-5))
 JOB_FAILURES = {'FAILED', 'TIMEOUT', 'ERROR', 'EXPIRED'}

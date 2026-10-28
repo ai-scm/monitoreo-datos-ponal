@@ -1,0 +1,85 @@
+PERIODO DE DATOS: probabilidaddelito
+==================================
+Un solo archivo autonomo: monitor_freshness_probabilidaddelito.py.
+
+PRIMER PASO EN CLOUDSHELL
+  python3 ~/monitor_freshness_probabilidaddelito.py
+Consulta STS y Glue/GetTable. Muestra columnas, tipos y particiones en una
+tabla, y genera un solo CSV. No ejecuta Athena. NO EVALUADO es esperado:
+esquema encontrado no significa datos actualizados.
+
+RECURSO
+pon-prod-mdp.probabilidaddelito, segun docs/inventario-aws/catalogo-athena-glue.csv,
+fila de la base pon-prod-mdp. La disponibilidad y el esquema se confirman al
+ejecutar. Es diferente de mdp_limpio, aunque comparten base de datos.
+Cuenta esperada 926162397524; region us-east-1.
+
+PARA VALIDAR DATOS
+Tras confirmar la columna y su significado se usan:
+--fecha COLUMNA_REAL --tipo-fecha objetivo|generacion|dato
+--desde YYYY-MM-DD --hasta YYYY-MM-DD (ambos dias incluidos)
+--solo-sql guarda la consulta en el CSV sin ejecutarla.
+--ejecutar ejecuta exactamente un SELECT agregado en Athena.
+No se elige automaticamente una columna ni un periodo de negocio. La fecha
+objetivo de la prediccion puede ser futura: no se trata como fecha invalida.
+Las fechas sin zona se comparan por fecha calendario almacenada; timestamps
+con zona se bloquean hasta confirmar una conversion apropiada.
+Admite date, timestamp sin zona, string/varchar/char. Para texto no ISO,
+--formato-fecha usa formato Athena date_parse (por ejemplo '%Y%m%d'). No epoch.
+
+CONSULTA
+Lee solo la columna temporal de toda la tabla. Agrega total, nulos/fechas no
+interpretables, primera/ultima fecha, registros en el periodo, dias distintos
+con datos y extremos dentro del periodo. No descarga registros individuales.
+No se garantiza poda de particiones; puede escanear todo el historico.
+El periodo filtra agregados, no elimina las fechas nulas del total evaluado.
+
+RESULTADO
+INFO: existe al menos un registro interpretable en el periodo; no prueba
+cobertura diaria completa ni cobertura de todas las siglas/unidades.
+FALLA: no hay registros del periodo configurado y no hay fechas no
+interpretables que impidan confirmar la ausencia (incluye tabla vacia).
+AVISO: hay datos del periodo, pero tambien fechas nulas/no interpretables.
+INCOMPLETO: sin datos interpretables en periodo y con fechas invalidas;
+tambien errores de lectura, consulta, tiempos de espera o respuesta inesperada.
+AUSENTE: Glue indica que no existe tabla/base al consultar GetTable.
+Sin configurar fecha/periodo: NO EVALUADO, sin inventar cero ni datos vigentes.
+
+ATHENA
+--workgroup primary por defecto (o ATHENA_WORKGROUP).
+--timeout 600 segundos por defecto, 1..3600. En timeout/interrupcion solicita
+cancelar solo la consulta creada por este script. Solicitud no prueba estado
+final; queda QueryExecutionId y resultado de cancelacion en CONTEXTO.
+--output-s3 usa ATHENA_OUTPUT_S3 si existe; si no, por defecto:
+  s3://pon-prod-ml-iapol/ValidationReports/FreshnessProbabilidaddelito/
+Agrega FECHA/HORA_microsegundos/_athena/. El workgroup puede imponer otro
+destino: el CSV registra el solicitado y el efectivo devuelto por Athena.
+No reutiliza resultados anteriores. Solo SELECT, sin modificar datos/tablas.
+Athena escribe resultados internos en S3; no se sube el informe local a S3.
+
+SALIDA
+  salida/freshness_probabilidaddelito/FECHA/HORA_microsegundos/
+    informe_freshness_probabilidaddelito.csv
+Un unico CSV con tipo_registro RESUMEN, ESQUEMA, CONTROL, SQL y CONTEXTO
+segun el modo. Incluye ubicacion de tabla, fecha de metadata, periodo,
+significado de fecha, SQL propio, conteos, query ID, bytes y limitaciones.
+No copia parametros Glue completos ni mensajes crudos de errores Athena.
+--salida cambia solo la raiz local. --database/--tabla admiten nombre explicito.
+
+LIMITES
+UpdateTime de Glue no prueba actualizacion de los datos. No valida archivos
+de prediccion ni contenido de informes; no consulta Lambda/jobs ni modifica
+infraestructura. No envia alertas ni ejecuta periodicamente. No hay calendario
+de negocio confirmado ni umbral fijo de antiguedad. El control verifica
+presencia en el periodo explicitamente solicitado, no toda la calidad final.
+
+EXIT
+0 periodo con registros (puede haber AVISO); 1 ausencia de datos del periodo
+o recurso ausente; 2 argumentos; 3 NO EVALUADO/INCOMPLETO; 130 interrupcion.
+Sin opciones, salir con 3 es esperado: solo se descubrio metadata.
+
+REFERENCIAS
+https://docs.aws.amazon.com/glue/latest/webapi/API_GetTable.html
+https://docs.aws.amazon.com/boto3/latest/reference/services/athena/client/start_query_execution.html
+https://docs.aws.amazon.com/boto3/latest/reference/services/athena/client/get_query_execution.html
+https://docs.aws.amazon.com/boto3/latest/reference/services/athena/paginator/GetQueryResults.html

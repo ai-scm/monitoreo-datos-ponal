@@ -1,0 +1,101 @@
+MONITOR ENTRENAMIENTO / HOMOLOGACION / CONSUMO
+============================================
+Subir solo monitor_entrenamiento.py a CloudShell.
+  python3 ~/monitor_entrenamiento.py
+
+Cuenta 926162397524, region us-east-1, ultimos 8 dias por defecto.
+Un solo script autonomo; no requiere los otros monitores, Docker ni
+ATHENA_OUTPUT_S3. No arranca ni reintenta jobs, no crea alarmas ni envia avisos.
+Los scripts anteriores se conservan sin cambios.
+
+JOBS INICIALES
+  pon_prod_xcrime_train_models_job          Entrenamiento
+  pon_prod_xcrime_homologacion_job          Homologacion
+  pon_prod_xcrime_consume_models_job        Consumo
+Nombres completos del inventario AWS del 22-sep-2026, hoja Glue Jobs,
+filas 103, 102 y 73 respectivamente. Esa captura no prueba existencia actual;
+se verifica al consultar GetJobRuns. El orden de la tabla no declara un workflow.
+No agrega ingest_train_data/ingest_homologacion u otros jobs no acordados.
+
+OPCIONES
+--dias 1..365 (default 8), --max-ejecuciones 1..10000 por job (default 1000),
+--region, --cuenta, --salida. --job NOMBRE repetible sustituye la lista inicial.
+  python3 ~/monitor_entrenamiento.py --dias 15 --max-ejecuciones 2000
+Si se alcanza el limite de runs y se quiere completar la lectura sin probar
+limites cada vez mayores:
+  python3 ~/monitor_entrenamiento.py --historial-completo
+Esta opcion ignora --max-ejecuciones y recorre todas las paginas disponibles.
+Puede tardar mas si hay mucho historial; la ventana sigue siendo --dias (8 por
+defecto). No incorpora todo el historial antiguo al detalle del informe.
+
+LECTURA Y COBERTURA
+Solo sts:GetCallerIdentity y glue:GetJobRuns. Reutiliza un cliente Glue y
+paginador get_job_runs. PageSize hasta 200 (limite por llamada), MaxItems
+max-ejecuciones+1 para detectar truncamiento. No usa tokens manuales ni corta
+al encontrar un run antiguo: otro mas antiguo puede seguir abierto/finalizar
+en la ventana. Runs duplicados con mismo Id/Attempt se cuentan una vez.
+Con --historial-completo no usa MaxItems y agota el paginador. Conserva solo
+metadata necesaria de cada run, excluyendo Arguments y politicas del historial.
+La lectura no es atomica: cambios durante la paginacion pueden afectar la
+captura. Agotar las paginas no certifica el estado futuro de un job.
+EntityNotFound/ResourceNotFound: AUSENTE. Permisos, red o cualquier otra lectura
+fallida: INCOMPLETO, conservando los resultados de los demas jobs.
+
+Cuenta ejecuciones que iniciaron/finalizaron en ventana o siguen abiertas,
+aunque empezaran antes. Ventana desde captura UTC menos --dias; fechas se
+presentan en Bogota con offset en CSV. Tiempos incoherentes/futuros/StartedOn
+ausente dejan INCOMPLETO; no se certifica cero por esa falta de informacion.
+Si se supera el limite de historial, siempre se declara lectura PARCIAL,
+sin deducir que los conteos de ventana sean completos.
+
+ESTADOS
+FAILED/TIMEOUT/ERROR/EXPIRED: FALLA observada.
+STOPPED o estado desconocido: AVISO, no fallo automatico de entrenamiento.
+STARTING/RUNNING/WAITING/STOPPING/SUCCEEDED: INFO sin certificacion de salud.
+Se informa el estado de la ultima ejecucion, incluso fuera de ventana, y los
+conteos de la ventana por separado. Ultima FAILED antigua sigue figurando como
+FALLA observada con fecha, no como fallo ocurrido dentro de los ultimos 8 dias.
+Un run reciente SUCCEEDED no oculta otros fallos en ventana. INCOMPLETO tiene
+prioridad en el resumen; los fallos conocidos se conservan en DETALLE/CONTROL.
+
+No hay calendario confirmado ni umbrales de duracion/freshness: SIN EJECUCIONES
+no se declara como fallo de un disparo esperado. No confirma la secuencia entre
+los tres jobs, sus artefactos, calidad del modelo o uso por la prediccion.
+No revisa parametros, scripts, logs ni contenido de S3. No verifica resultados
+de entrenamiento o PAI/precision. Imports reales y acceso desde ECS no forman
+parte de este script.
+
+DURACIONES Y ERRORES
+Duracion: diferencia entre StartedOn y CompletedOn. Para runs activos sin fin,
+tiempo hasta captura, marcado con * en la tabla y HASTA CAPTURA en CSV.
+Run terminal sin fin no recibe una duracion final inventada: N/V.
+ExecutionTime se conserva separado: es tiempo de recursos Glue, no necesariamente
+igual a inicio-fin. No dispara avisos por una duracion estandar arbitraria.
+Clases de error (por ejemplo KeyError) y Error Category se proyectan mediante
+lista/regex acotada. El resto de ErrorMessage no se exporta; si no se reconoce,
+se indica presencia de mensaje y se remite al run en Glue. No copia Arguments,
+ExecutionRoleSessionPolicy, credenciales, payloads ni mensajes crudos.
+
+SALIDA
+Una tabla y un unico archivo:
+  salida/entrenamiento/YYYY-MM-DD/HH-MM-SS_microsegundos/informe_entrenamiento.csv
+tipo_registro:
+  RESUMEN: ultimo estado, inicio, fin, duracion, conteos y error ultimo.
+  DETALLE: runs en ventana, abiertos, ultimo run y runs con tiempos desconocidos.
+  CONTROL: motivos de FALLA/AVISO/INCOMPLETO/AUSENTE e informacion de cobertura.
+  CONTEXTO: cuenta, region, ventana, limite, recursos y limitaciones.
+ultimo_exito_observado en CSV refiere al CompletedOn mas reciente SUCCEEDED
+en la muestra disponible, no a una validacion de artefactos o modelo vigente.
+Filtrar RESUMEN para lectura rapida. CONTEXTO usa rutas e incluye valores JSON
+para conservar null, ceros y listas vacias sin archivos adicionales.
+No sube reportes a S3 ni almacena historial continuo.
+
+EXIT
+0 lectura completa, incluso con FALLA/AVISO observados. No significa job sano.
+1 recurso ausente. 2 argumentos invalidos. 3 bloqueo/lectura incompleta.
+130 interrupcion. No se conecta todavia a alarmas basadas en codigo de salida.
+
+REFERENCIAS
+https://docs.aws.amazon.com/glue/latest/webapi/API_GetJobRuns.html
+https://docs.aws.amazon.com/glue/latest/webapi/API_JobRun.html
+https://docs.aws.amazon.com/boto3/latest/reference/services/glue/paginator/GetJobRuns.html
