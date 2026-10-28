@@ -14,6 +14,45 @@ fila de la base pon-prod-mdp. La disponibilidad y el esquema se confirman al
 ejecutar. Es diferente de mdp_limpio, aunque comparten base de datos.
 Cuenta esperada 926162397524; region us-east-1.
 
+ESQUEMA CONFIRMADO EN CLOUDSHELL EL 28-OCT-2026
+Columnas: cuadrante string, descripcion string, delito_count bigint,
+total_count bigint, probability double. No hay fecha ni particiones declaradas.
+Ubicacion confirmada: s3://pon-prod-ml-iapol/probabilidadDelito/
+Con este esquema no se puede ejecutar la validacion temporal Athena propuesta.
+
+REVISION DE LA FUENTE SIN FECHA DE NEGOCIO
+  python3 ~/monitor_freshness_probabilidaddelito.py --revisar-fuente-s3 --listado-completo
+Consulta Glue/GetTable y S3/ListObjectsV2 bajo la ubicacion devuelta por Glue;
+no usa Athena, GetObject, HeadObject ni descarga contenido. No escribe en AWS.
+Requiere ubicacion S3 con carpeta explicita; usa ExpectedBucketOwner igual a
+la cuenta esperada. No cambia la ruta fuente ni consulta todo el bucket.
+Muestra conteos de objetos, candidatos no vacios, bytes, vacios, tecnicos,
+ultima modificacion observada y los cinco candidatos no vacios mas recientes.
+Marcadores de carpeta y rutas con componentes que empiezan por _ o . se
+cuentan como tecnicos. No se usan para la ultima modificacion de candidatos.
+Un objeto vacio reciente tampoco reemplaza la fecha de candidatos con contenido.
+La clasificacion por nombre/tamano no confirma que un archivo sea consumido
+por Athena ni que su contenido sea valido. No se leen filas.
+
+--max-objetos 1..1000000 (10000 por defecto), con un elemento adicional para
+detectar truncamiento; listado de S3 no esta ordenado por fecha de modificacion.
+Si es parcial, maximos y conteos son solo de la muestra observada, INCOMPLETO.
+--listado-completo ignora ese limite y agota las paginas. Sigue siendo una
+lectura paginada, no una captura atomica si cambian objetos durante la consulta.
+No se enumeran versiones anteriores ni objetos eliminados.
+Todos los objetos observados quedan en OBJETO_S3 dentro del mismo CSV;
+en consola se omite el esquema en este modo para mantener el resumen corto.
+Permisos/lectura parcial o metadata invalida no se confunden con fuente vacia;
+lo observado se conserva en el CSV aunque una pagina posterior falle.
+Sin candidatos no vacios se informa AVISO, sin deducir el estado de una prediccion.
+
+LastModified indica modificacion del objeto; una copia o reescritura no prueba
+datos de un periodo nuevo ni que todos los archivos correspondan a ese periodo.
+No hay frecuencia de actualizacion confirmada: no se aplica un umbral de edad.
+Por eso Actualidad de los datos sigue NO EVALUADO y el exit sigue siendo 3,
+aunque la lectura de metadata S3 este completa. Este modo no admite opciones
+de fecha de datos (--fecha, --tipo-fecha, --desde, --hasta, --formato-fecha).
+
 PARA VALIDAR DATOS
 Tras confirmar la columna y su significado se usan:
 --fecha COLUMNA_REAL --tipo-fecha objetivo|generacion|dato
@@ -60,7 +99,7 @@ Athena escribe resultados internos en S3; no se sube el informe local a S3.
 SALIDA
   salida/freshness_probabilidaddelito/FECHA/HORA_microsegundos/
     informe_freshness_probabilidaddelito.csv
-Un unico CSV con tipo_registro RESUMEN, ESQUEMA, CONTROL, SQL y CONTEXTO
+Un unico CSV con tipo_registro RESUMEN, ESQUEMA, CONTROL, SQL, OBJETO_S3 y CONTEXTO
 segun el modo. Incluye ubicacion de tabla, fecha de metadata, periodo,
 significado de fecha, SQL propio, conteos, query ID, bytes y limitaciones.
 No copia parametros Glue completos ni mensajes crudos de errores Athena.

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Monitor manual upstream PONAL: ECS de limpieza, crawler, jobs de referencia y DynamoDB.
+"""Monitor manual upstream PONAL: ECS de limpieza, crawler y DynamoDB.
 
 Solo lectura AWS. No arranca tareas/crawlers/jobs ni lee items de DynamoDB.
 Una tabla y un CSV local con RESUMEN, DETALLE, CONTROL y CONTEXTO.
@@ -19,11 +19,8 @@ import textwrap
 
 CLUSTER = 'pon-prod-xcrime-datacleaning-cluster'
 CRAWLER = 'pon-prod-xcrime-datacleaning-glue-crawler'
-JOBS = ('pon-prod-xcrime-update-fuentes-internas',
-        'pon-prod-xcrime-update-estructura-nal', 'pon-prod-xcrime-update-geometrias-nal')
 TABLES = ('pon_prod_llamada_siglas_historico', 'pon_prod_comparendo_siglas_historico', 'pon_prod_delito_siglas_historico')
 BOGOTA = timezone(timedelta(hours=-5))
-JOB_FAILURES = {'FAILED', 'TIMEOUT', 'ERROR', 'EXPIRED'}
 ERROR_MARKERS = ('AccessDeniedException', 'EntityNotFoundException', 'ResourceNotFoundException',
     'ThrottlingException', 'OutOfMemoryError', 'CannotPullContainerError',
     'CannotStartContainerError', 'ResourceInitializationError', 'ModuleNotFoundError',
@@ -32,7 +29,7 @@ LIMITS = [
     'Solo lectura; no crea alarmas, habilita Container Insights ni modifica recursos.',
     'ECS: snapshot RUNNING/STOPPED visibles, no historial completo de la ventana ni de la semana.',
     'Crawler: configuracion actual y LastCrawl, no historial de todos los crawls.',
-    'Jobs: muestra acotada de ejecuciones recientes; ventana incluye inicios, fines y ejecuciones aun abiertas.',
+    'Jobs de referencia, entrenamiento e informes se consultan en monitor_glue_jobs.py, de forma independiente.',
     'Ningun estado SUCCEEDED o salida cero certifica calidad/freshness de datos ni ejecucion de predicciones.',
     'Sin umbrales de duracion/antiguedad: no hay frecuencia operativa confirmada para estos recursos.',
     'DynamoDB: describe tablas y consulta CloudWatch; no usa Scan, Query ni GetItem.',
@@ -202,40 +199,6 @@ def inspect_crawler(glue, reader, name, details):
                 schedule=crawler.get('Schedule', {}))
 
 
-def inspect_job(glue, reader, name, args, start, now, details):
-    result = reader.read(name, 'GetJobRuns', lambda: listing(glue, 'get_job_runs', 'JobRuns', args.max_ejecuciones, JobName=name), missing=True)
-    if result is None:
-        return dict(estado='NO DISPONIBLE')
-    runs, truncated = result
-    if truncated:
-        reader.partial(name, 'GetJobRuns', 'Muestra limitada; puede faltar historial de la ventana')
-    selected = []
-    for run in runs:
-        began, ended = run.get('StartedOn'), run.get('CompletedOn')
-        if not isinstance(began, datetime) or not began.tzinfo:
-            reader.partial(name, 'GetJobRuns', 'Ejecucion sin StartedOn interpretable')
-            continue
-        if began > now or ended is not None and (not isinstance(ended, datetime) or not ended.tzinfo):
-            reader.partial(name, 'GetJobRuns', 'Tiempos de ejecucion no interpretables')
-            continue
-        active = run.get('JobRunState') in ('STARTING', 'RUNNING', 'WAITING', 'STOPPING')
-        if began >= start or isinstance(ended, datetime) and ended >= start or active:
-            selected.append(run)
-            state = run.get('JobRunState', 'DESCONOCIDO')
-            severity = 'FALLA' if state in JOB_FAILURES else 'AVISO' if state == 'STOPPED' else 'INFO'
-            if severity != 'INFO':
-                reader.flag(name, 'Job run '+run.get('Id', '?'), severity, state+'; inicio='+when(began))
-            details.append(dict(tipo='Glue ejecucion', recurso=name, estado=state, control=severity,
-                inicio=when(began), fin=when(ended), duracion_segundos=elapsed(began, ended if ended else now) if active or ended else None,
-                detalle=json.dumps(dict(id=run.get('Id'), intento=run.get('Attempt'),
-                    execution_time=run.get('ExecutionTime'), error=error_hint(run.get('ErrorMessage'))), ensure_ascii=False)))
-    last = runs[0] if runs else {}
-    return dict(estado=last.get('JobRunState', 'SIN EJECUCIONES'), ultimo_inicio=when(last.get('StartedOn')),
-        ultimo_fin=when(last.get('CompletedOn')), muestra_leida=len(runs), truncada=truncated,
-        estados_ventana=dict(Counter(r.get('JobRunState', '?') for r in selected)),
-        fallas_ventana=sum(r.get('JobRunState') in JOB_FAILURES for r in selected))
-
-
 def metric(cw, reader, name, metric_name, dimensions, start, end):
     response = reader.read(name, 'Metrica:'+metric_name, lambda: cw.get_metric_statistics(
         Namespace='AWS/DynamoDB', MetricName=metric_name, Dimensions=dimensions,
@@ -348,9 +311,6 @@ def inspect(session, config, identity, args, errors):
     add('ECS limpieza', args.cluster, cluster, 'Tareas visibles='+str(counts)+'; fallas observadas='+str(cluster.get('fallas_observadas', 'N/V'))+'; Insights='+str(cluster.get('container_insights', 'N/V')))
     crawler = inspect_crawler(glue, reader, args.crawler, details)
     add('Glue crawler', args.crawler, crawler, 'Ultimo='+crawler.get('ultimo_estado', 'N/V')+'; inicio='+crawler.get('ultimo_inicio', 'N/V'))
-    for name in dict.fromkeys(args.job or JOBS):
-        job = inspect_job(glue, reader, name, args, start, now, details)
-        add('Glue job', name, job, 'Estados en ventana='+str(job.get('estados_ventana', 'N/V'))+'; ultimo inicio='+job.get('ultimo_inicio', 'N/V'))
     for name in dict.fromkeys(args.tabla or TABLES):
         table = inspect_table(ddb, cw, reader, name, args, start, now)
         add('DynamoDB', name, table, 'Observado: solicitudes limitadas='+count_text(table.get('solicitudes_limitadas'))+
@@ -360,7 +320,7 @@ def inspect(session, config, identity, args, errors):
     report = write_report(folder, summaries, details, reader, dict(cuenta=identity['Account'], region=args.region,
         captura_utc=now.isoformat(), ventana_utc=dict(desde=start.isoformat(), hasta=now.isoformat()),
         configuracion=vars(args), recursos=resources, lecturas_incompletas=reader.issues, limitaciones=LIMITS))
-    print(f'PROCESOS UPSTREAM | Solo lectura | {args.region} | Ventana jobs/metricas: {args.dias} dias')
+    print(f'PROCESOS UPSTREAM | Solo lectura | {args.region} | Ventana metricas: {args.dias} dias')
     print_table(summaries)
     print('ECS: solo tareas aun visibles. Crawler: solo ultima ejecucion. SIN DATOS no equivale a cero.')
     print('FALLA/AVISO describen evidencia observada; INFO no certifica datos actualizados. Sin limites de duracion.')
@@ -375,15 +335,13 @@ def main():
     parser.add_argument('--dias', type=int, default=8)
     parser.add_argument('--cluster', default=CLUSTER)
     parser.add_argument('--crawler', default=CRAWLER)
-    parser.add_argument('--job', action='append', help='Nombre job; repetir. Sustituye la lista inicial')
     parser.add_argument('--tabla', action='append', help='Nombre tabla; repetir. Sustituye la lista inicial')
     parser.add_argument('--max-tareas', type=int, default=100, help='Maximo por estado RUNNING/STOPPED')
-    parser.add_argument('--max-ejecuciones', type=int, default=200, help='Maximo de runs recientes por job')
     parser.add_argument('--salida', default='salida')
     args = parser.parse_args()
-    if not 1 <= args.dias <= 31 or not 1 <= args.max_tareas <= 1000 or not 1 <= args.max_ejecuciones <= 10000:
-        parser.error('Limites: dias 1..31; tareas 1..1000; ejecuciones 1..10000')
-    names = [args.cluster, args.crawler]+(args.job or [])+(args.tabla or [])
+    if not 1 <= args.dias <= 31 or not 1 <= args.max_tareas <= 1000:
+        parser.error('Limites: dias 1..31; tareas 1..1000')
+    names = [args.cluster, args.crawler]+(args.tabla or [])
     if any(not name or len(name) > 255 or any(c in name for c in '\n\r\t') for name in names):
         parser.error('Nombres de recurso no vacios, hasta 255 caracteres y sin saltos de linea')
     try:

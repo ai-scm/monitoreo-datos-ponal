@@ -1,0 +1,419 @@
+AUDITORIA DE MONITOREO DE PREDICCIONES - 28 DE OCTUBRE DE 2026
+==========================================================
+
+Directorio auditado:
+scripts/3-Prediccion/5-Jobs and task
+
+Las referencias archivo:linea son relativas a ese directorio.
+Alcance: 8 archivos Python (5970 lineas), 17 TXT, 8 CSV de evidencia, 2 JSON
+de evidencia y 1 bytecode derivado; 36 archivos en total. Se revisaron todos
+los fuentes/documentos; los CSV/JSON completos se cargaron y contrastaron.
+El .pyc se identifico como artefacto derivado CPython 3.14; no se ejecuto.
+No se modificaron monitores ni se consulto AWS. Las reproducciones usan
+clientes simulados y archivos temporales. No son pruebas de despliegue real.
+
+1. ESTADO DEL AVANCE
+===================
+
+Dictamen: prototipo funcional de auditoria manual y recoleccion de evidencia,
+no sistema integral listo para Lambda. La afirmacion anterior de que estaban
+"terminados" solo puede aplicarse a una primera version CLI, con limites.
+Hay 8 scripts en este directorio, no 12 ejecutables independientes. Los 12
+controles del plan estan repartidos entre archivos y no equivalen a 12 Lambdas.
+
+Datos-Entrada/monitor_datos_entrada.py
+  Fase: control funcional de datos, con configuracion manual.
+  Valor: comparacion 15/15, conteos diarios y por BD, recencia y coordenadas.
+  Evidencia: 429-451 (SQL), 481-557 (controles), 597-645 (ejecucion/reporte).
+  Limites: sin catalogo no ve todas las unidades ausentes (489-493, 555-556);
+  sin particiones confirmadas no evalua calidad de fechas (551-552).
+  Las fechas de hechos no certifican ingesta. La ejecucion por defecto solo
+  descubre esquema y sale con 0 (678-681). No implementa una barrera previa
+  al disparo ni una dependencia operativa con el resto de los monitores.
+
+Disparo-Semanal/monitor_disparo_semanal.py
+  Fase: auditoria de configuracion, metricas y evidencia de lanzamiento.
+  Valor: reglas/targets, Lambdas, manejo asincrono configurado y errores.
+  Evidencia: 450-586; parser RunTask 140-185.
+  Limites: no calcula el ciclo esperado (26-38); metricas por recurso no
+  prueban la relacion regla -> invocacion -> tareas esperadas. No configura
+  alarmas ni destinos. Sin respuesta explicita, creacion N/V (548-550).
+
+Entrenamiento/monitor_entrenamiento.py
+  Fase: recolector Glue y clasificador funcional para CLI.
+  Valor: ultimo run, runs en ventana/abiertos, errores y duracion (89-162).
+  Limites: no valida artefactos ni uso de modelos por ECS (41-43); historial
+  completo acumula todos los runs (75-86). Sin calendario no detecta una
+  ejecucion que debio ocurrir. No demuestra la cadena train -> consume -> ECS.
+
+Informes/monitor_glue_job_informes.py
+  Fase: recolector Glue funcional; esencialmente la misma implementacion.
+  Valor: resultados de ejecuciones del job de informes (87-164).
+  Limites: no valida contenido/entrega ni correlacion con Lambda (39-41).
+  El IndexError visto en CloudShell no esta en ERROR_TYPES (28-31), por eso
+  se pierde su clase en el resumen; el estado FAILED si se detecta.
+
+Procesos-Upstream/monitor_procesos_upstream.py
+  Fase: recolectores funcionales de infraestructura, agrupados en una CLI.
+  Valor: ECS limpieza, ultimo crawler, runs de referencia y throttling DDB
+  (132-296). No lee items ni hace Scan de tablas DynamoDB.
+  Limites: crawler solo LastCrawl, ECS solo tareas visibles y ninguna
+  comprobacion de fecha del dato o dependencias entre recursos (31-43).
+  Estado de jobs desconocido se trata como INFO (225), diferente de los
+  monitores de entrenamiento/informes. No ejecuta acciones ni alertas.
+
+Inicio-Progreso/mapear_inicio_progreso.py
+  Fase: diagnostico ECS/telemetria funcional.
+  Valor: errores de contenedores esenciales, tiempos, sigla, logs y metricas
+  especificas de tarea (74-261, 292-397).
+  Limites: snapshots y ventana de logs; avance solo si la aplicacion lo
+  informa (168-174). No detecta solicitudes sin tarea creada ni reconstruye
+  tareas desaparecidas entre capturas. Reporte local (555-576).
+
+Modelos-Dependencias/mapear_modelos_dependencias.py
+  Fase: herramienta de descubrimiento/forense mas recolector de selecciones.
+  Valor operativo: formatos de modelos observados (1350-1406), eventos y
+  conteos por tarea/sigla (1456-1547). Valor forense: digest, paquetes,
+  auxiliares y columnas. El analisis offline reprodujo 37 versiones fijadas
+  coincidentes y una no fijada con los CSV incluidos, sin AWS.
+  Limites: sin estado incremental ni deduplicacion entre ejecuciones; datos
+  insuficientes son avisos del log, no una validacion estadistica del dataset.
+  No calcula solicitudes unicas ni avisa por uso exclusivo de Uniform.
+  Mezcla modos operativos y analisis pesado, algunos descartados del alcance.
+
+Freshness/monitor_freshness_probabilidaddelito.py
+  Fase: inventario Glue/S3 funcional; actualidad de la tabla no implementable
+  con el esquema confirmado. El modo SQL es generico pero no aplicable a
+  esta tabla sin una columna temporal (111-119; ALCANCE-Y-PRUEBA.txt:17-21).
+  El modo S3 siempre termina con actualidad NO EVALUADO (307-309, 361-364),
+  sin importar la edad de LastModified. No es una alarma de frescura.
+  La relacion de esa tabla con el pipeline actual tampoco esta demostrada.
+
+Dependencias y piezas externas
+-----------------------------
+- Ninguno de los 8 Python importa otro monitor local: no hay modulo local
+  obligatorio perdido. Dependencias del monitor: stdlib y boto3/botocore.
+  No confundir paquetes del predictor inventariados en paquetes.csv con
+  dependencias que deban instalarse en la Lambda del monitor.
+- No hay handler, manifiesto de despliegue/roles ni suite automatizada en
+  este directorio. No se infiere que no exista infraestructura en la cuenta:
+  simplemente no hay aqui un despliegue reproducible de estos 8 monitores.
+- El validador final S3 esta fuera del directorio auditado; no es importado
+  ni invocado por estos monitores. Su integracion no puede darse por hecha.
+- Datos-Entrada:454-478 necesita un CSV local externo si se activa
+  --catalogo-unidades. Ese catalogo no esta incluido aqui y debe provisionarse
+  para usar esa cobertura. Es opcional; no bloquea los demas modos.
+- Disparo-Semanal:373-390 necesita un informe anterior con evidencia para
+  --revisar-formatos; una Lambda nueva no lo tendra en su disco local.
+- Modelos:209-212 necesita paquetes.csv y archivos_imagen.csv para
+  --desde-reportes; existen copias historicas en docs/, no un inventario
+  actualizado automatico. Los directorios CloudShell de ejemplos no estan
+  incluidos. Las rutas code/... y opt/conda/... son rutas DENTRO de la imagen,
+  no imports locales faltantes.
+- Modelos:2087-2095 requiere Docker/daemon para --probar-imports; no estan
+  suministrados por este directorio. Los CSV S3 y las imagenes ECR son
+  recursos externos, sujetos a permisos y disponibilidad.
+
+2. REDUNDANCIAS Y TRABAJO SIN RESULTADO OPERATIVO CONFIRMADO
+=========================================================
+
+R1. Tres variantes del recolector de runs Glue.
+  Entrenamiento:75-162, Informes:73-164, Upstream:205-236.
+  Entrenamiento/Informes tienen 94.7% de similitud textual por lineas y 8
+  funciones identicas por AST: aware, stamp, duration, error_hint, severity,
+  collect_runs, pretty_duration y print_table. Difieren recursos, etiquetas
+  y algunas validaciones. Ambos admiten --job; no hacen falta dos motores
+  distintos para consultar el mismo GetJobRuns.
+  Riesgo ya reproducido: un SUCCEEDED sin CompletedOn es INFO en entrenamiento
+  e INCOMPLETO en informes. Un FAILED antiguo fuera de ventana es FALLA en
+  entrenamiento e INFO en upstream. No eliminar un archivo a ciegas: primero
+  unificar la politica en un colector probado; conservar entradas separadas
+  por dominio si ayudan a operar.
+
+R2. Descubrimiento/ciclo de vida ECS duplicado.
+  Inicio-Progreso:375-397, 482-496; Modelos:1565-1619, 2328-2345.
+  Ambos consultan el mismo cluster/familia y sus definiciones para obtener
+  tareas/siglas. Si se ejecutan juntos vuelven a consultar la misma evidencia.
+  Las selecciones de modelos y errores ECS son controles complementarios,
+  no scripts completamente equivalentes. Upstream usa OTRO cluster: no es
+  redundancia de recurso, aunque su adaptador ECS pueda reutilizarse.
+
+R3. SQL, espera Athena, formatos y exportadores repetidos.
+  Datos-Entrada:50-55, 272-315; Freshness:44-49, 143-193. identifier/literal son
+  identicos por AST. Las esperas duplicadas ya divergen en cancelacion.
+  Exportadores CSV/contexto y tablas se repiten en varios archivos, p. ej.
+  Entrenamiento:190-212 e Informes:192-214. Dos helpers de dos lineas no son
+  por si solos una razon para una refactorizacion costosa; el valor esta en
+  compartir protocolo, politicas de errores y pruebas.
+
+R4. Forense pesado dentro de un monitor periodico.
+  Modelos:292-356, 368-1071, 1260-1330, 2028-2211, 2276-2277.
+  AST/capas/paquetes/imports no aportan una seleccion nueva por tarea en cada
+  sondeo. Si el digest no cambia, repetir esa inspeccion no agrega evidencia
+  de avance. El cache de inspecciones es solo de la invocacion (2325-2327).
+  Conservar ese trabajo como herramienta de diagnostico por cambio de digest;
+  sacar Docker/imports del paquete operacional. No confundir codigo opcional
+  con algo que se ejecuta siempre: el modo por defecto no descarga capas.
+
+R5. Freshness temporal sin campo temporal en el recurso real.
+  Freshness:111-119, 307-309, 361-364; ALCANCE-Y-PRUEBA.txt:17-21 y 49-54.
+  El SQL generico no puede dar la senal prometida para esta tabla; el listado
+  S3 solo agrega inventario. Hasta definir productor/consumidor y frecuencia,
+  ejecutarlo repetidamente no aporta una decision automatizable de actualidad.
+  No hay evidencia suficiente para declarar la tabla o un job "inutil" o
+  eliminarlo. Su aplicabilidad esta sin confirmar, no demostrada inexistente.
+
+R6. Documentacion y evidencia mezcladas con el entregable.
+  Freshness/README.txt:81-88 usa monitor_freshness.py, que no existe aqui.
+  Disparo-Semanal/README.txt:43 describe exit 1 como falla, pero codigo:586
+  solo lo usa por recursos ausentes. Entrenamiento/README.txt:23 e
+  Informes/README.txt:20 dicen extraer errores de logs, pero solo usan
+  GetJobRuns/ErrorMessage (Entrenamiento:99,132; Informes:97,134).
+  Los CSV/JSON en Modelos/docs son evidencia historica, no tests ni estado
+  de ejecucion. contexto_auxiliares.json repite las 183 referencias de
+  auxiliares.csv y contexto_consumo_entradas.json las 18 de consumo_entradas.csv.
+  Esa redundancia puede servir para compartir diagnosticos; no debe incluirse
+  en cada ZIP ni tratarse como estado vigente. __pycache__ es artefacto derivado.
+
+No se encontraron pruebas de creacion de jobs duplicados en estos Python:
+observan recursos existentes, no hacen StartJobRun/RunTask. Tampoco hay base
+para eliminar jobs productivos por similitud de sus nombres. La redundancia
+verificada es de implementacion y relectura, no de necesidad de negocio.
+
+3. PUNTOS CRITICOS, ORDENADOS POR SEVERIDAD
+=========================================
+
+P1 - BLOQUEO DE DESPLIEGUE DIRECTO
+
+C1. No existe entrada Lambda ni contrato de invocacion.
+  Los 8 main() tienen cero argumentos, argparse y sys.exit. Ejemplos:
+  Inicio-Progreso:439-451,585-586; Entrenamiento:241-251,279-280;
+  Modelos:2214-2249,2576-2577. No hay handler(event,context), IaC ni
+  empaquetado para estos monitores. Verificacion: main(event,context)
+  produce TypeError en los ocho. Requiere adaptadores, no subir el .py tal cual.
+
+C2. Rutas locales incompatibles por defecto y ausencia de persistencia remota.
+  Entrenamiento:227-232, Informes:229-234, Upstream:358-362,
+  Disparo:573-579, Inicio:555-571, Modelos:2497-2557, Freshness:397.
+  Usan salida/ relativo, fuera del /tmp escribible del runtime habitual.
+  Cambiarlo a /tmp resuelve escritura, no retencion durable. Excepto los CSV
+  de Datos-Entrada (381-400,626), los resultados de los otros siete quedan
+  locales. CloudWatch stdout no conserva el reporte completo ni el estado.
+
+P1 - BLOQUEO DEL OBJETIVO DE MONITOREO INTEGRAL
+
+C3. No hay ruta de alerta implementada.
+  No hay publicacion SNS/EventBridge de hallazgos ni metricas/alarma propias.
+  Codigo de terminacion de CLI no es una alerta de Lambda: devolver 1 o 3
+  desde un handler no equivale a lanzar excepcion. Entrenamiento:238,
+  Informes:240, Upstream:368 y Disparo:586 devuelven 0 aun con hallazgos.
+  Prueba: FAILED reciente en entrenamiento/informes conserva FALLA en CSV y
+  main devuelve 0. Deben separarse fallo del pipeline, fallo del monitor y
+  accion de notificacion; no provocar reintentos solo por un FAILED historico.
+
+C4. No hay estado del ciclo ni garantia del resumen del lunes.
+  Inicio:375-397 y Modelos:1565-1584 dependen de tareas aun visibles. AWS solo
+  garantiza al menos una hora de disponibilidad de detenidas en DescribeTasks.
+  Inicio:180-189 y Modelos:1550-1562 releen ventanas, sin cursor persistente.
+  Modelos:1512-1547,2497-2557 escribe capturas nuevas, no acumula/deduplica
+  entre invocaciones. Los caches son locales al proceso. No existe registro
+  durable de ciclo/sigla/tarea/evento, cierre por tarea ni informe semanal.
+
+C5. Falta el universo esperado y la deteccion de ausencias.
+  Disparo:26-38 y 111-112 no calcula disparos esperados. Inicio:414-415 admite
+  cero tareas sin demostrar falta. Entrenamiento:147-151 e Informes:149-153
+  marcan falta de actividad como INFO sin calendario. Datos:489-493,555-556
+  solo ve unidades observadas sin catalogo. Un fallo total de lanzamiento
+  puede no producir ningun recurso/evento que los colectores clasifiquen.
+  Hace falta contrato de ciclo, participantes y entregas esperadas, no solo
+  sondeo de recursos que existan. No se impone un SLA arbitrario por sigla.
+
+C6. El aviso principal de modelos Uniform no existe.
+  Modelos:1350-1406 reconoce mensajes y 1512-1547 cuenta declaraciones.
+  No hay regla de porcentaje/exclusividad ni notificacion. El return:2567
+  solo considera issues y controles estaticos. Prueba con 3/3 selecciones
+  Uniform y lectura completa: salida 0, sin aviso de uso exclusivo.
+  Los conteos son declaraciones, no solicitudes/predicciones unicas. No debe
+  anunciarse un porcentaje del ciclo completo con una ventana parcial.
+
+C7. Sin presupuesto global de tiempo ni reanudacion.
+  Inicio:505-542 consulta tareas/contenedores en serie; default hasta 500
+  por estado (445). Modelos:2337-2476 tambien recorre en serie. Ninguno
+  consulta context.get_remaining_time_in_millis ni guarda progreso remoto.
+  Datos:720-721 aplica timeout independiente a cada consulta; timeout=600
+  con dos consultas puede consumir 1200 s mas overhead. Freshness:74 permite
+  3600 s; Modelos:2162 permite pull de 900 s mas 16 imports de 45 s (2228).
+  Superan o pueden superar los 900 s de Lambda On-Demand. No es una medicion
+  de que el modo ligero siempre tarde mas de 15 minutos; es falta de garantia.
+  El timeout del runtime puede cortar el proceso antes de guardar informe.
+
+C8. Consulta Athena puede quedar ejecutandose tras fallo de lectura.
+  Datos:279 crea la consulta; 284-298 cancela solo KeyboardInterrupt/TimeoutError.
+  Un error SDK en GetQueryExecution sale al catch de main:746, sin cancelarla
+  ni persistir temprano el query ID como estado recuperable. Reproducido con
+  un cliente que falla al consultar estado: StopQueryExecution no se llama.
+  Freshness:172-178 tiene un finally mas robusto, pero un hard timeout del
+  runtime no garantiza que ese finally se complete. Riesgo de trabajo/costo
+  sin seguimiento y nuevas consultas ante reintentos.
+
+P2 - CONSISTENCIA, COSTO Y MANTENIBILIDAD
+
+C9. Contratos de severidad/cobertura inconsistentes.
+  R1 reproduce diferencias reales para los mismos runs. Datos:322-323 y
+  487-488 codifica truncamiento como FALLA; Glue como INCOMPLETO.
+  Entrenamiento:155-156 da prioridad INCOMPLETO sobre FALLA, aunque un fallo
+  conocido siga en detalle. Un agregador que lea solo "control" perdera esa
+  distincion. Separar severidad del recurso y cobertura de observacion.
+
+C10. No hay suite de regresion versionada ni prueba de runtime Lambda aqui.
+  PRUEBAS-CLOUDSHELL.txt:8-15 son comandos manuales; no fixtures/asserts.
+  En los 36 archivos no hay tests, CI, requirements/lock ni manifiesto de
+  empaquetado. Compilar o una salida real de CloudShell no verifica cambios
+  de formato, paginas parciales, permisos, concurrencia, reinvocacion ni /tmp.
+  El SDK es la unica dependencia externa del monitor, pero no se fija/versiona
+  su contrato. Lambda incluye boto3; no es correcto decir que falta siempre,
+  aunque conviene empaquetarlo para controlar versiones.
+
+C11. El costo y el volumen de lectura crecen con cada sondeo completo.
+  Datos:171-180,429-451 aplica funciones a filtros; poda opcional 406-426,
+  desactivada por defecto. LIMIT limita grupos devueltos, no escaneo de datos.
+  Freshness:128-140 lee toda la columna temporal. Historial completo de Glue
+  (Entrenamiento:75-86; Informes:73-84) acumula todos los runs en memoria.
+  Freshness:247-269 conserva todos los objetos y rows, sin limite con
+  --listado-completo. Modelos:1260-1330 vuelve a descargar/analizar imagenes
+  por invocacion; no cachea inventarios entre ciclos. No se estima un importe
+  sin frecuencia, bytes, region y volumen reales. Riesgos: latencia, memoria,
+  limites API, tiempo Lambda y escaneos/almacenamiento repetidos.
+
+C12. Configuracion y permisos no preparados como despliegue portable.
+  Cuenta/region en todos los CLI; recursos fijos en Upstream:20-24 y
+  Disparo:23-24; destino final S3 fijo Datos:43,384, independiente de
+  --output-s3. Modelos:62-64,1645-1653 fija entorno, auxiliares y digest
+  del perfil del selector. Son decisiones explicitas utiles para la prueba,
+  no credenciales secretas ni vulnerabilidades por si mismas. Para otros
+  entornos requieren configuracion y roles minimos por funcion.
+  No se encontraron claves AWS estaticas en los fuentes. boto3.Session usa
+  la cadena normal de credenciales y puede usar el rol de Lambda. Las
+  politicas/validaciones de ese rol para Athena, datos/resultados S3 y KMS/
+  Lake Formation no se proporcionan aqui. No se asume ni ausencia ni exceso
+  de permisos en una cuenta que no se consulto.
+
+VALORACION FINAL
+===============
+Utilidad alta como kit de auditoria manual: evidencia reusable y controles
+que ya detectaron fallos. Hay buenas bases: paginadores, limites explicitos,
+distincion SIN DATOS/cero, cliente SDK con reintentos, control de cuenta,
+SQL con identificadores escapados, validacion S3 condicional y ausencia de
+Scan sobre datos de negocio DynamoDB. No todo debe reescribirse.
+
+Preparacion baja para operar integralmente en Lambda. Hoy faltan entradas de
+runtime, contrato comun, persistencia/eventos, expectativas del ciclo,
+notificaciones, pruebas y despliegue. Separar archivos hasta llegar a 12 no
+resuelve esos bloqueos. Tampoco conviene eliminar diagnosticos utiles solo
+porque no deban ejecutarse en cada sondeo.
+
+ACCIONES PRIORIZADAS
+====================
+1. Fijar contrato de CheckResult: ciclo, recurso/sigla/tarea, control,
+   severidad, cobertura, evidencia, observado_en y version del evaluador.
+   Separar hallazgo del pipeline de error del monitor y NO EVALUADO.
+2. Extraer motores Glue/ECS/Athena comunes con politicas consistentes y tests.
+   Mantener CLI existentes y handlers separados si conviene; no duplicar
+   codigo para alcanzar un numero de scripts.
+3. Crear adaptadores Lambda event/context. Usar /tmp solo para temporales y
+   persistir resultados/historial antes de dar por completada una observacion.
+   Anadir empaquetado, roles minimos y configuracion por entorno reproducibles.
+4. Capturar eventos de cambio de estado y guardar ciclo/tarea/evento con claves
+   idempotentes. Reconciliar periodicamente; no depender del snapshot del lunes.
+5. Implementar conteos incrementales de seleccion por tarea/sigla con event ID,
+   cobertura y denominador de declaraciones explicitos. Aviso provisional
+   cuando lo observado sea solo Uniform; cierre del ciclo solo con cobertura
+   suficiente. No exigir correlacion por unidad/proceso retirada del alcance.
+6. Definir disparos, participantes y entregas esperados. Integrar el validador
+   S3 externo y confirmar productor/consumidor de los jobs de entrenamiento.
+   Freshness queda informativo hasta confirmar el contrato de la tabla real.
+7. Anadir canal de alertas, deduplicacion, recuperacion y vigilancia del propio
+   monitor; no convertir automaticamente cada AVISO de configuracion en alarma.
+8. Corregir cancelacion Athena y limitar trabajo por invocacion con presupuesto
+   del contexto, lotes/checkpoints y reconciliacion de queries pendientes.
+   Sacar Docker/imports/AST pesado del monitor periodico y cachear por digest.
+9. Versionar pruebas de las reproducciones y hacer piloto Lambda con casos
+   sanos, fallos, permisos denegados, datos ausentes, truncamientos y reintentos.
+   Medir tiempo/memoria/bytes reales antes de fijar la frecuencia y el costo.
+10. Corregir README y archivar evidencia historica fuera del paquete operacional.
+    No modificar jobs productivos ni borrar tablas solo por esta auditoria.
+
+VERIFICACION EJECUTADA
+=====================
+- Compilacion/importacion local controlada de los 8 modulos: correcta.
+- --help de los 8 CLI: correcto, sin llamadas AWS.
+- Comparacion AST: 8 funciones Glue identicas y 2 helpers SQL identicos.
+- Similitud Entrenamiento/Informes: 94.7% por lineas (no avance del proyecto).
+- Reproduccion A1: los 8 main(event,context) fallan por firma incompatible.
+- A2: SUCCEEDED sin CompletedOn -> INFO vs INCOMPLETO.
+- A3: FAILED antiguo -> FALLA entrenamiento vs INFO upstream.
+- A4: truncamiento de datos -> FALLA aunque mensaje indica INCOMPLETO.
+- A5: error SDK durante espera Athena de Datos-Entrada no cancela consulta.
+- A6: esquema real sin fechas bloquea build_sql de Freshness.
+- A7: FAILED reciente -> main retorna 0 en entrenamiento/informes.
+- A8: 3/3 selecciones Uniform, lectura completa -> exit 0 sin aviso Uniform.
+- A9: salidas observadas permanecen locales salvo exportador de Datos-Entrada.
+- Analisis offline real de paquetes.csv/archivos_imagen.csv: 37 versiones
+  fijadas coincidentes, 1 sin fijar, 4 controles generales NO EVALUADOS.
+- CSV/JSON: estructura valida; hashes de paquetes.csv/archivos_imagen.csv
+  coinciden con analisis_inspeccion_2026-10-22.txt:85-86.
+
+LIMITES DE ESTA AUDITORIA
+No prueba permisos reales del rol futuro, latencia, limites efectivos,
+conectividad VPC ni salud actual de AWS. No prueba que un job sea inutil por
+no existir su productor/consumidor en este directorio. Las capturas aportadas
+por el usuario son evidencia de esas ejecuciones, no estado vivo certificado.
+
+DOCUMENTACION AWS CONTRASTADA
+https://docs.aws.amazon.com/lambda/latest/dg/python-handler.html
+https://docs.aws.amazon.com/lambda/latest/dg/images-create.html
+https://docs.aws.amazon.com/lambda/latest/dg/gettingstarted-limits.html
+https://docs.aws.amazon.com/lambda/latest/dg/configuration-ephemeral-storage.html
+https://docs.aws.amazon.com/lambda/latest/dg/python-package.html
+https://docs.aws.amazon.com/lambda/latest/dg/invocation-retries.html
+https://docs.aws.amazon.com/cli/latest/reference/ecs/describe-tasks.html
+
+INVENTARIO COMPLETO DE LA CAPTURA AUDITADA
+========================================
+Ruta relativa | bytes | lineas fisicas | SHA256
+Datos-Entrada/PRUEBAS-CLOUDSHELL.txt | 10649 | 176 | 9d13e7b741187c8a1fc478247a8f9f144494c6b6487db44fc5a91a5d06273184
+Datos-Entrada/README.txt | 1487 | 34 | af455542bdac0a93de67c2c85c0eb4018d3b3b13042865fc7db1924bc1cae488
+Datos-Entrada/monitor_datos_entrada.py | 46365 | 756 | 49a725f63164fc851ebc97d86c162037efd26805594dae9df26b57fad7965b5e
+Disparo-Semanal/ALCANCE-Y-PRUEBA.txt | 13176 | 221 | a97d00605ad43c25ff05e0801b38fec44bfa78568344224b3cbfb799c14bccc2
+Disparo-Semanal/README.txt | 1911 | 43 | 394a4123ecc5e0bad3763ad04c5a5dac5e817071ad12fb33354e38d4364a4eca
+Disparo-Semanal/monitor_disparo_semanal.py | 40823 | 642 | 9dff2d7959499e0165838f4af6ead61cd15bc4369a772906d2d6bab9a4958e70
+Entrenamiento/ALCANCE-Y-PRUEBA.txt | 5830 | 101 | 9b9dfa7b22d3047d14bbb1cc34caea12edcdf9a65237934bdf21184d89c472c8
+Entrenamiento/README.txt | 2066 | 46 | 4e15b4484ce11ab7d448d1ea5eab764923f1d7c28e5da3f81178751241d7228c
+Entrenamiento/monitor_entrenamiento.py | 15857 | 280 | ffd0c8df94210c50642f1315fb82db854ca6eacbb79d135c01ba54303421b095
+Freshness/ALCANCE-Y-PRUEBA.txt | 7343 | 124 | 30bd57b42312aaaafe92d5a2796b2f6a438960f0de84effc400f5e1385903ada
+Freshness/README.txt | 3520 | 89 | 37552d7f904db4127e950b23aa366e94fcb622a35272f31c9bd3b24ac9a9b7ad
+Freshness/monitor_freshness_probabilidaddelito.py | 25015 | 434 | 034eccdf961d3487f72e57def6970caf724fc0c677ffdee0f7adb7535f44b2bc
+Informes/ALCANCE-Y-PRUEBA.txt | 4096 | 73 | 877859669f016be7b8d9b6e9cc87f351f321abb5b37d6339698fece3b4ec607f
+Informes/README.txt | 1732 | 39 | b71405ae5cfc803171332f3dd6669dee8b4fc8c2dddcede2e185c950babdebdb
+Informes/monitor_glue_job_informes.py | 16117 | 282 | b5a2d0800861bbd501dd055b724189116431eb89996ad1f4c28bcfda2a4a38e2
+Inicio-Progreso/MAPA-INICIAL.txt | 8272 | 132 | c921e4fc00d190890c2302a836125b9eb00fad4683bddb36b620b46b3e05f8e6
+Inicio-Progreso/README.txt | 2562 | 59 | e9b458506fa58f69a3ee326743108c12fe627f741cda2ce71cba32802ac447b5
+Inicio-Progreso/mapear_inicio_progreso.py | 33907 | 586 | 101662768512c6c5dc515a39400a215c5e0f3637ac69913203554d4d113e4b09
+Modelos-Dependencias/MAPA-INICIAL.txt | 55943 | 880 | 859aefad5c73317c372c6b4b815b2616b0e9950bffbde8d6e0125a2593aaa438
+Modelos-Dependencias/README.txt | 2647 | 59 | 0f9c596fc366ac96319233e61ab336d9d3fb59f4164bf9fc25100547731cd5b6
+Modelos-Dependencias/__pycache__/mapear_modelos_dependencias.cpython-314.pyc | 228026 | binario derivado | b17dd093c21b1345a0bcb87c762c36ca5d7281cf75ef4fea6f41ff040bc60cdf
+Modelos-Dependencias/docs/analisis_inspeccion_2026-10-22.txt | 5126 | 86 | 227dfa787947db8c2ddb7e2b918e1305f3871facd92aa481f13c812e795dfce6
+Modelos-Dependencias/docs/archivos_imagen.csv | 262142 | 1507 | 1391a332cbae48afd42c041e62081a0f4ca7f6cd8000f948136ac3ff7fbefdbc
+Modelos-Dependencias/docs/auxiliares.csv | 72379 | 184 | fbe55678f9a0d5f691f38bc14d771534d714f6c39790649c6208aff1ff5c8461
+Modelos-Dependencias/docs/comparacion_requisitos_2026-10-22.csv | 8129 | 39 | 1e1eae45452814f28ae32ac0a22f2d4d70abca64823edd3085a4bf191db2e148
+Modelos-Dependencias/docs/consumo_entradas.csv | 6202 | 19 | 7cadaee401d781e506559e845dfa196fc649595b2928c98596e4fbbb2ab0f594
+Modelos-Dependencias/docs/contexto_auxiliares.json | 153032 | 3761 | e00b1c25fe604da62053008e26715792fcc8bf299933ae90eaf2da8c3f8f1e43
+Modelos-Dependencias/docs/contexto_consumo_entradas.json | 13366 | 319 | e054d98f91770fd1f7e01811acad8f5617e5c222a87802ff08fc5b2152e13dfb
+Modelos-Dependencias/docs/control_entradas (1).csv | 2016 | 3 | 38838ae0db7ae63b46955f0341c855d5efccdb880c06b60d8e1fc6bad62d08f7
+Modelos-Dependencias/docs/control_entradas.csv | 1226 | 3 | 876a0e08ec3d73d2092269cf30d87763748669d658998e426e7306e1a65cf98a
+Modelos-Dependencias/docs/desglose_estructura.csv | 47705 | 357 | cf3b2c817eebdc86f6eb33feffe2d81aca8ada8bf932a4b1dee919bf79412c35
+Modelos-Dependencias/docs/paquetes.csv | 60724 | 173 | 15298b7390913bb96d45831a453b29b7f5fc0dff6275a690033f2f0c3b93c42d
+Modelos-Dependencias/mapear_modelos_dependencias.py | 169308 | 2577 | 471f65fbc255187a9b1aba0e5f42db077982fdc7628eb0c0127494d64f97f2c3
+Procesos-Upstream/ALCANCE-Y-PRUEBA.txt | 6668 | 119 | e53cda2af6110a87916768ae68200ba9d12901fc1ce5c4786d7dc518df2c200c
+Procesos-Upstream/README.txt | 2633 | 62 | 705afd924439795a28ecf7d09196cdff845365bb9709788c5002ef7a48d61463
+Procesos-Upstream/monitor_procesos_upstream.py | 24219 | 413 | 5c239d0c031df098953b51b45068482f7e5ee93f4db4deb2bc6d3221f9a45c6f

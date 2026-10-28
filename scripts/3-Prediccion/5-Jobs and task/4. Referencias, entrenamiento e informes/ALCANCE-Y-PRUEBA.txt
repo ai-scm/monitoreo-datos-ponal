@@ -1,0 +1,65 @@
+ALCANCE ACTUAL - MONITOR UNIFICADO DE JOBS GLUE
+=============================================
+Referencia:
+  pon-prod-xcrime-update-fuentes-internas
+  pon-prod-xcrime-update-estructura-nal
+  pon-prod-xcrime-update-geometrias-nal
+Entrenamiento:
+  pon_prod_xcrime_train_models_job
+  pon_prod_xcrime_homologacion_job
+  pon_prod_xcrime_consume_models_job
+Informes:
+  pon-prod-xcrime-informes-anticipaciones
+Los nombres se verifican en cada consulta, no se presupone su existencia.
+
+LECTURA Y CRITERIOS
+GetJobRuns paginado con PageSize <= 200. Por defecto hasta 1000 runs por job
+y uno adicional para detectar truncamiento. --max-ejecuciones: 1..10000.
+--historial-completo agota paginas sin ese limite; puede tardar y conserva
+--dias (1..365) como ventana de evaluacion. No corta por un inicio antiguo:
+puede haber un run abierto o terminado en ventana aunque iniciara antes.
+Deduplica por Id + Attempt. La lectura no es una captura atomica.
+
+Ventana: captura menos --dias hasta captura. Un run pertenece si su inicio o
+fin interpretable esta dentro, o si sigue abierto. Ultimo estado es el primer
+run devuelto por Glue (mas reciente), aunque este fuera de ventana.
+FALLA: FAILED/TIMEOUT/ERROR/EXPIRED dentro de ventana. Un fallo antiguo queda
+visible en ultimo estado y DETALLE con en_ventana=NO, sin contar como actual.
+Cambiar --dias para incluirlo. STOPPED y estados no reconocidos son AVISO.
+No hay frecuencias esperadas ni limites de duracion arbitrarios.
+
+Tiempos con zona horaria, sin futuro ni fin anterior al inicio. Terminal sin
+fin y abierto con fin son cobertura PARCIAL; duracion N/V, sin inventar un
+fin. Si un inicio/fin valido prueba que un fallo pertenece a la ventana, se
+conserva FALLA aun con tiempos incompletos. Para runs abiertos la duracion
+hasta captura lleva asterisco. ExecutionTime se guarda como valor separado.
+
+Errores entre paginas conservan datos previos y no detienen los otros jobs.
+Error SDK sin datos es cobertura ERROR, no cero runs. EntityNotFound es
+AUSENTE; AccessDenied no se interpreta como ausencia. FALLA y cobertura se
+separan para evitar ocultar evidencia conocida con una lectura incompleta.
+
+SALIDA Y LIMITES
+Un CSV con RESUMEN, DETALLE (ventana/ultimo/incompletos), CONTROL y CONTEXTO.
+No acumula Arguments, conexiones ni ErrorMessage crudo. Reconoce clases de
+error, incluidos KeyError e IndexError, y categorias sin valores de negocio.
+No consulta logs de aplicacion, S3 ni metricas Glue. SUCCEEDED no comprueba
+calidad, vigencia ni entrega. No confirma dependencia u orden real de jobs.
+
+CODIGO REUTILIZABLE, SIN DESPLIEGUE LAMBDA
+collect_report(glue, jobs, now, days, max_runs, sdk_errors) devuelve datos sin
+argparse, archivos ni consola. CLI verifica STS/cuenta antes de Glue y reutiliza
+un cliente por servicio. Solo escribe en el destino local configurado.
+No hay handler, presupuesto global de tiempo, checkpoint, historial persistido
+ni notificaciones. Historial completo aun no es un sondeo preparado para Lambda.
+
+PRUEBAS (desde la raiz del repositorio)
+  python3 -B -m unittest discover -s 'scripts/3-Prediccion/5-Jobs and task/tests' -v
+SDK simulado, sin AWS: catalogo/filtros, paginacion, historial completo, intentos,
+fallos con ultimo exito, ventana, tiempos incoherentes, errores entre paginas,
+cuenta incorrecta, redaccion, unico CSV y upstream sin GetJobRuns.
+La validacion real queda en CloudShell con los archivos actuales (ver README).
+
+REFERENCIAS
+https://docs.aws.amazon.com/glue/latest/webapi/API_GetJobRuns.html
+https://docs.aws.amazon.com/boto3/latest/reference/services/glue/paginator/GetJobRuns.html
