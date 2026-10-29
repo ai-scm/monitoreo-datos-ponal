@@ -1,5 +1,30 @@
 Este script consulta modelos reportados por tareas de predicción y dispone de modos de auditoría de imagen y dependencias. No modifica AWS. La prueba opcional de imports ejecuta librerías en una copia Docker local.
 
+LECTOR ACTUALIZADO - 29 DE OCTUBRE DE 2026
+Reconoce los nombres completos reportados, incluidos Conteo y Auto Exitatory.
+Counter y Conteo se conservan separados: no se supone que sean equivalentes.
+Una declaracion explicita con un nombre nuevo valido tambien se cuenta con
+su nombre; las simples menciones y avisos de entrenamiento no son selecciones.
+El filtro de consulta incluye las frases/campos de seleccion, ademas del
+catalogo conocido, para no excluir nombres nuevos antes de analizarlos.
+
+Reconoce CAD desde la cabecera real, por ejemplo:
+  Version de Codigo: v3.2.14 Prediccion para: DECAU - 26709 ... timeFrame: HORA
+Esto sirve para historial y para --mapear-streams aunque ECS ya no conserve
+la tarea. Evidencias contradictorias siguen marcadas como CONFLICTO.
+Los numeros del sufijo del modelo no se interpretan como unidad/proceso.
+
+El porcentaje Uniform usa TODAS las selecciones recuperadas como denominador.
+Ejemplo: Uniform=1, KDE=1, Conteo=1, Auto Exitatory=1 => total=4; Uniform=25%.
+El resumen por CAD suma declaraciones de sus streams; no promedia porcentajes.
+Una lectura limitada sigue siendo PARCIAL y no certifica toda la prediccion.
+La correccion del lector no convierte la lectura del historial en una consulta
+agregada de Logs Insights; --max-eventos sigue limitando eventos por stream.
+
+Tras subir esta version del mismo archivo a CloudShell, una revision acotada:
+  python3 ~/mapear_modelos_dependencias.py --dias-logs 7
+Conserva la tabla por CAD y el unico historial_tareas.csv con resumen/detalle.
+
 Tabla de todas las siglas de estructura y sus streams
   python3 ~/mapear_modelos_dependencias.py --mapear-streams
 Lee SIGLA_PAPA de la estructura actual S3 y cruza sus CAD con la evidencia

@@ -62,7 +62,8 @@ except Exception as exc:
     sys.exit(1)
 '''
 BOGOTA = timezone(timedelta(hours=-5))
-MODELS = ('Counter', 'KDE', 'KDEPerDayKernelSize', 'SEEP', 'Uniform')
+# Nombres observados; Conteo y Counter se conservan separados, sin inferir alias.
+MODELS = ('Counter', 'Conteo', 'KDE', 'KDEPerDayKernelSize', 'SEEP', 'Uniform', 'Auto Exitatory')
 EXCLUDED_IMAGE_PREFIXES = ('opt/conda/pkgs/', 'opt/conda/share/doc/')
 DEFAULT_ENVIRONMENT = 'opt/conda/envs/predenv'
 DEFAULT_REQUIREMENTS = 'code/requirements.txt'
@@ -72,7 +73,15 @@ ERRORS = ('ModuleNotFoundError', 'ImportError', 'FileNotFoundError',
           'EndpointConnectionError', 'ConnectTimeoutError', 'ReadTimeoutError')
 # Filtro de terminos opcionales OR. Los resultados siguen siendo referencias,
 # nunca una prueba de seleccion de modelo o de fallo de toda la tarea.
-LOG_FILTER = ' '.join('?' + term for term in dict.fromkeys(MODELS + tuple(m.lower() for m in MODELS) + ERRORS + ('fallback_used', 'uso_respaldo', 'fallback_model')))
+# Consultar tambien las declaraciones: un nombre nuevo no debe desaparecer
+# antes de llegar al parser. Las frases son terminos opcionales entre comillas.
+MODEL_REPORT_TERMS = ('The best model to run the prediction is', 'selected model', 'chosen model',
+    'modelo seleccionado', 'modelo elegido', 'selected_model', 'chosen_model',
+    'modelo_seleccionado', 'modelo_elegido', 'Not enough records in the train data for')
+LOG_FILTER = ' '.join('?' + (term if term.isalnum() else json.dumps(term))
+    for term in dict.fromkeys(MODELS + tuple(m.lower() for m in MODELS) + ERRORS +
+        MODEL_REPORT_TERMS + tuple(term.lower() for term in MODEL_REPORT_TERMS) +
+        ('fallback_used', 'uso_respaldo', 'fallback_model')))
 
 
 def load_report_csv(path, columns):
@@ -1335,8 +1344,27 @@ def inspect_image(ecr, reference, digest, architecture, max_bytes):
         limitaciones=issues, **inventory)
 
 
-def canonical_model(value):
-    return next((m for m in MODELS if isinstance(value, str) and m.lower() == value.strip().lower()), '')
+def canonical_model(value, allow_unknown=False):
+    """Normalizar nombres conocidos; conservar nuevos solo en declaraciones."""
+    if not isinstance(value, str):
+        return ''
+    name = ' '.join(value.split())
+    known = next((model for model in MODELS if model.lower() == name.lower()), '')
+    if known or not allow_unknown:
+        return known
+    # Solo nombres acotados, sin URLs, rutas, credenciales o frases negadas.
+    if (len(name) > 80 or not re.fullmatch(r'[A-Za-z][A-Za-z0-9_.+-]*(?: [A-Za-z0-9][A-Za-z0-9_.+-]*){0,7}', name)
+            or re.search(r'password|secret|token|credential|access.?key', name, re.I)
+            or re.search(r'\b(?:AKIA|ASIA)[A-Z0-9]{16}\b', name)
+            or re.search(r'\b(?:no|not|none|null|unknown|sin|ninguno|pending|candidate|candidato|selected|chosen)\b', name, re.I)):
+        return ''
+    return name
+
+
+def reported_model(value):
+    """El sufijo numerico observado no pertenece al nombre ni identifica unidad."""
+    name = re.sub(r'\s+-\s+\d+\s+-\s+\d+\s*$', '', value.strip())
+    return canonical_model(name, allow_unknown=True)
 
 
 def sanitize_message(message):
@@ -1362,22 +1390,25 @@ def inspect_event(message):
         data = {}
     findings = []
     for key in ('selected_model', 'chosen_model', 'modelo_seleccionado', 'modelo_elegido'):
-        model = canonical_model(data.get(key))
+        model = canonical_model(data.get(key), allow_unknown=True)
         if model:
             findings.append(('Seleccion reportada', model, '', 'campo JSON: ' + key))
     # Texto solo cuando la declaracion es afirmativa, sin negaciones/candidatos.
-    match = re.search(r'(?im)^\s*(?:\[(?:INFO|DEBUG)\]\s*)?(?:modelo seleccionado|modelo elegido|selected model|chosen model)\s*[:=]\s*([A-Za-z]+)\b', message)
-    if match and canonical_model(match.group(1)):
-        findings.append(('Seleccion reportada', canonical_model(match.group(1)), '', 'declaracion textual'))
+    match = re.search(r'(?im)^\s*(?:\[(?:INFO|DEBUG)\]\s*)?(?:modelo seleccionado|modelo elegido|selected model|chosen model)\s*[:=]\s*([^\r\n]+?)\s*$', message)
+    model = reported_model(match.group(1)) if match else ''
+    if model:
+        findings.append(('Seleccion reportada', model, '', 'declaracion textual'))
     # Formatos observados en las muestras reales aportadas desde CloudShell.
     # Los numeros posteriores no se interpretan como unidad, dia ni turno.
     prefix = r'(?im)^\s*(?:\[(?:INFO|DEBUG|WARNING|WARN)\]\s*)?'
-    match = re.search(prefix + r'The best model to run the prediction is\s+([A-Za-z]+)(?=\s|$)', message)
-    if match and canonical_model(match.group(1)):
-        findings.append(('Seleccion reportada', canonical_model(match.group(1)), '', 'formato observado: best model'))
-    match = re.search(prefix + r'Not enough records in the train data for\s+([A-Za-z]+)(?=\s|$)', message)
-    if match and canonical_model(match.group(1)):
-        findings.append(('Datos insuficientes', canonical_model(match.group(1)),
+    match = re.search(prefix + r'The best model to run the prediction is\s+([^\r\n]+?)\s*$', message)
+    model = reported_model(match.group(1)) if match else ''
+    if model:
+        findings.append(('Seleccion reportada', model, '', 'formato observado: best model'))
+    match = re.search(prefix + r'Not enough records in the train data for\s+([^\r\n]+?)\s*$', message)
+    model = reported_model(match.group(1)) if match else ''
+    if model:
+        findings.append(('Datos insuficientes', model,
                          'Registros insuficientes para entrenamiento', 'formato observado: train data'))
     fallback_model = canonical_model(data.get('fallback_model'))
     if fallback_model or data.get('fallback_used') is True or data.get('uso_respaldo') is True:
@@ -1392,7 +1423,11 @@ def inspect_event(message):
         findings.append(('Indicio de respaldo', 'Uniform', '', 'texto; requiere revision'))
     if not findings and any(re.search(r'(?<!\w)' + re.escape(m) + r'(?!\w)', message, re.I) for m in MODELS):
         findings.append(('Mencion sin seleccion', '', '', 'texto sin declaracion explicita'))
-    return list(dict.fromkeys(findings))
+    # Alias del mismo campo JSON no representan dos selecciones del modelo.
+    unique = {}
+    for finding in findings:
+        unique.setdefault(finding[:3], finding)
+    return list(unique.values())
 
 
 def event_evidence(events, max_samples):
@@ -2258,6 +2293,11 @@ def history_labels(message):
         walk(json.loads(message))
     except (ValueError, TypeError, RecursionError):
         pass
+    # Cabecera real del predictor; el taskId y el nombre del stream no son CAD.
+    for match in re.finditer(
+            r'(?im)^\s*(?:\[(?:INFO|DEBUG|WARNING|WARN)\]\s*)?Version de C[oó]digo:\s*\S+\s+'
+            r'Predicci[oó]n para:\s*([A-Z][A-Z0-9]{2,11})\s*-\s*\d+\s+en la fecha:', message):
+        record('CAD', match.group(1))
     # Formato textual acotado; requiere etiqueta y separador en el mismo evento.
     for key, value in re.findall(
             r'''(?i)(?<![\w])\b(CAD|sigla(?:_fisica)?|time_?frame|modalidad)['"]?\s*[:=]\s*['"]?([A-Z][A-Z0-9]{2,11})(?=[\s'",;}\]]|$)''', message):

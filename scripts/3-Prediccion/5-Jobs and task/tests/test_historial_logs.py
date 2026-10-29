@@ -19,6 +19,11 @@ GROUP = 'Anticipaciones-Automaticas-Stack-containerLogGroup14238BF8-VYMB21QxRjoB
 PREFIX = 'pon-prod-xcrime-prediccion/pon-prod-prediccion/'
 TASK = 'f475c4a7' + '0'*24
 SECOND_TASK = '1'*32
+REAL_HEADER = (
+    'Version de Codigo:  v3.2.14  Prediccion para:  DECAU  -  26709 '
+    ' en la fecha:  2026-11-02  con rango:  2025-10-31  a  2026-10-25 '
+    ' con Jobs:  1  Dias a predecir: 7  process: PRED  timeFrame: HORA  Timeout: 3000'
+)
 
 
 def load(name, path):
@@ -122,6 +127,135 @@ def task(task_id=TASK, **extra):
                     {'name': 'CAD', 'value': 'DESAB'}, {'name': 'TIME_FRAME', 'value': 'TURNO'}]}]})
     data.update(extra)
     return data
+
+
+class RealLogReaderTests(unittest.TestCase):
+    """Formatos observados en CloudWatch y efecto sobre el informe final."""
+
+    def report(self, messages, **options):
+        logs = FakeLogs(events={PREFIX+TASK: [[event(message) for message in messages]]})
+        rows, context = models.collect_log_history(
+            FakeECS(), lambda region: logs, arguments(**options), NOW, (SDKError,))
+        return rows[0], context
+
+    def test_observed_names_and_multiple_spaces_are_preserved(self):
+        for name in ('Uniform', 'KDE', 'Conteo', 'Counter', 'Auto Exitatory'):
+            with self.subTest(name=name):
+                findings = models.inspect_event(
+                    'The best model to run the prediction is  '+name+' - 5 - 19')
+                selected = [model for kind, model, _, _ in findings if kind == 'Seleccion reportada']
+                self.assertEqual(selected, [name])
+
+    def test_multiword_model_in_json_and_plain_selection(self):
+        for message in (json.dumps({'selected_model': 'Auto Exitatory'}),
+                        'Modelo elegido: Auto Exitatory', '[INFO] chosen model = Auto Exitatory'):
+            with self.subTest(message=message):
+                selected = [model for kind, model, _, _ in models.inspect_event(message)
+                            if kind == 'Seleccion reportada']
+                self.assertEqual(selected, ['Auto Exitatory'])
+
+    def test_future_model_declaration_is_kept_in_the_denominator(self):
+        row, _ = self.report([REAL_HEADER,
+            'The best model to run the prediction is  Uniform - 5 - 19',
+            'The best model to run the prediction is  ModeloNuevo v2 - 5 - 20'])
+        self.assertEqual(json.loads(row['selecciones_por_modelo']), {'ModeloNuevo v2': 1, 'Uniform': 1})
+        self.assertEqual((row['total_selecciones'], row['porcentaje_uniform_observado']), (2, 50))
+
+    def test_unknown_json_model_is_counted_without_becoming_a_known_alias(self):
+        row, _ = self.report([REAL_HEADER, json.dumps({'chosen_model': 'ModeloNuevo v2'})])
+        self.assertEqual(json.loads(row['selecciones_por_modelo']), {'ModeloNuevo v2': 1})
+        self.assertEqual(row['total_selecciones'], 1)
+
+    def test_same_declaration_in_json_aliases_is_not_duplicated_in_event_details(self):
+        details = models.model_event_details([event(json.dumps({
+            'selected_model': 'Conteo', 'chosen_model': 'Conteo'}))])
+        self.assertEqual(len([r for r in details if r['tipo'] == 'Seleccion reportada']), 1)
+
+    def test_mentions_insufficient_data_and_negations_are_not_selections(self):
+        for message in ('Training Conteo and Auto Exitatory',
+                        'Not enough records in the train data for Counter',
+                        'The best model to run the prediction is not Uniform - 5 - 19',
+                        'Selected model: Uniform was not selected',
+                        'No selected model: KDE',
+                        'The best model to run the prediction is KDE candidate - 5 - 19'):
+            with self.subTest(message=message):
+                selected = [f for f in models.inspect_event(message) if f[0] == 'Seleccion reportada']
+                self.assertEqual(selected, [])
+
+    def test_model_name_does_not_export_url_or_credentials(self):
+        for name in ('https://example.invalid/token=NO_EXPORTAR', 'password=NO_EXPORTAR',
+                     'credentials NO_EXPORTAR', 'ASIA'+'X'*16):
+            with self.subTest(name=name):
+                findings = models.inspect_event(json.dumps({'selected_model': name}))
+                self.assertFalse(any(kind == 'Seleccion reportada' for kind, _, _, _ in findings))
+
+    def test_actual_header_identifies_expired_task(self):
+        row, context = self.report([REAL_HEADER, 'End Script!'])
+        self.assertEqual((row['sigla'], row['modalidad'], row['estado_ecs']),
+                         ('DECAU', 'HORA', 'NO DISPONIBLE'))
+        self.assertEqual(row['sigla_fuente'], 'logs explicitos')
+        self.assertEqual(context['lecturas_incompletas'], [])
+
+    def test_header_can_repeat_for_subunits_without_losing_cad(self):
+        row, _ = self.report([REAL_HEADER, REAL_HEADER.replace('26709', '26710')])
+        self.assertEqual((row['sigla'], row['modalidad']), ('DECAU', 'HORA'))
+
+    def test_header_and_other_cad_evidence_remain_a_conflict(self):
+        row, _ = self.report([REAL_HEADER, 'CAD=MEBOG'])
+        self.assertEqual(row['sigla'], 'CONFLICTO')
+        self.assertEqual(row['siglas_evidencia'], 'DECAU,MEBOG')
+
+    def test_header_quoted_in_another_message_does_not_attribute_cad(self):
+        siglas, _ = models.history_labels('No se pudo leer la cabecera: '+REAL_HEADER)
+        self.assertEqual(siglas, set())
+
+    def test_mapping_sample_uses_the_same_actual_header(self):
+        logs = FakeLogs(events={PREFIX+TASK: [[event(REAL_HEADER)]]})
+        sampled = models.sample_stream_cad(logs, GROUP, PREFIX+TASK,
+            NOW-timedelta(days=8), NOW, 200, (SDKError,))
+        self.assertEqual((sampled['siglas'], sampled['modalidades']), ({'DECAU'}, {'HORA'}))
+        self.assertEqual(len(logs.calls), 1)
+
+    def test_all_observed_models_and_training_notices_feed_separate_counters(self):
+        row, _ = self.report([REAL_HEADER,
+            *['The best model to run the prediction is  '+name+' - 5 - 19'
+              for name in ('Uniform', 'KDE', 'Conteo', 'Auto Exitatory')],
+            'Not enough records in the train data for Counter'])
+        self.assertEqual(json.loads(row['selecciones_por_modelo']),
+                         {'Auto Exitatory': 1, 'Conteo': 1, 'KDE': 1, 'Uniform': 1})
+        self.assertEqual((row['total_selecciones'], row['porcentaje_uniform_observado']), (4, 25))
+        self.assertEqual(json.loads(row['avisos_datos_insuficientes']), {'Counter': 1})
+
+    def test_cad_summary_uses_the_sum_of_declarations_across_streams(self):
+        first = [event(REAL_HEADER)] + [event('The best model to run the prediction is  '+name+' - 5 - 19')
+                                      for name in ('Uniform', 'KDE', 'Conteo', 'Auto Exitatory')]
+        second = [event(REAL_HEADER.replace('HORA', 'TURNO')),
+                  event('The best model to run the prediction is  Uniform - 5 - 19'),
+                  event('The best model to run the prediction is  ModeloNuevo v2 - 5 - 20')]
+        logs = FakeLogs(streams=[[PREFIX+TASK, PREFIX+SECOND_TASK]],
+                        events={PREFIX+TASK: [first], PREFIX+SECOND_TASK: [second]})
+        rows, context = models.collect_log_history(
+            FakeECS(), lambda region: logs, arguments(), NOW, (SDKError,))
+        summary, = models.summarize_history_siglas(rows)
+        self.assertEqual((summary['sigla'], summary['tareas'], summary['modalidades']),
+                         ('DECAU', 2, 'HORA, TURNO'))
+        self.assertEqual((summary['total_selecciones'], summary['uniform'],
+                          summary['porcentaje_uniform_observado']), (6, 2, 33.33))
+        self.assertEqual(context['lecturas_incompletas'], [])
+        with tempfile.TemporaryDirectory() as folder:
+            path = models.write_history_report(Path(folder), rows, [summary])
+            with path.open(encoding='utf-8-sig', newline='') as handle:
+                exported = next(csv.DictReader(handle))
+            self.assertEqual(exported['total_selecciones'], '6')
+            self.assertEqual(exported['porcentaje_uniform_observado'], '33.33')
+            self.assertEqual(json.loads(exported['selecciones_por_modelo'])['Auto Exitatory'], 1)
+
+    def test_correct_names_do_not_turn_partial_read_into_complete_coverage(self):
+        row, context = self.report([REAL_HEADER,
+            'The best model to run the prediction is  Uniform - 5 - 19',
+            'The best model to run the prediction is  Conteo - 5 - 19'], max_eventos=2)
+        self.assertEqual((row['total_selecciones'], row['lectura_logs']), (1, 'PARCIAL'))
+        self.assertTrue(context['lecturas_incompletas'])
 
 
 class HistoryTests(unittest.TestCase):
