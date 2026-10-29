@@ -2,15 +2,19 @@
 """Punto 4: descubrimiento de modelos y dependencias, no monitor de salud.
 
 CloudShell: python3 mapear_modelos_dependencias.py
-Por defecto STS, ECS, ECR y Logs; sin ECS Exec, RunTask ni escrituras AWS.
+Por defecto resumen por sigla identificada desde streams de logs y metadata ECS vinculada.
+--por-tarea conserva el mapeo ECS/ECR anterior. Sin ECS Exec, RunTask ni escrituras AWS.
 --validar-entradas lee cabeceras; --validar-filas agrega conteos de dos entradas S3.
+--historial-logs descubre streams por tarea aunque ECS ya no la conserve.
+--mapear-streams cruza todas las siglas de la estructura S3 con sus streams identificados.
 Se excluyen resultados de prediccion.
 No consulta Secrets Manager. Los mapeos no ejecutan codigo del contenedor. --inspeccionar-imagen
 descarga capas temporales con presupuesto e inventaria archivos sin extraerlos.
 --probar-imports ejecuta solo imports en una copia Docker local, sin red ni ECS Exec.
 Referencias en configuracion/logs no prueban disponibilidad ni modelo elegido.
-Salida local: mapa.csv, evidencias.csv y contexto.json en salida/modelos_dependencias/FECHA/HORA.
-Exit: 0 sin diferencias confirmadas (puede haber pendientes); 1 diferencia estatica;
+Salida por sigla: historial_tareas.csv (RESUMEN_SIGLA/DETALLE_TAREA) y contexto_historial.json.
+Modo --por-tarea: mapa.csv, evidencias.csv y contexto.json en salida/modelos_dependencias/FECHA/HORA.
+Exit: 0 sin diferencias confirmadas (puede haber pendientes); 1 diferencia estatica o falla ECS;
 2 argumentos; 3 lectura/comparacion incompleta; 130 Ctrl+C.
 """
 import argparse
@@ -35,6 +39,7 @@ import sys
 import tarfile
 import tempfile
 import textwrap
+import time
 import warnings
 import uuid
 from urllib.parse import urlsplit
@@ -1562,6 +1567,14 @@ def read_references(logs, group, stream, start, end, limit, max_samples=3, detai
     return counts, len(events) > limit, len(selected), samples
 
 
+def stopped_log_window(task, start, now):
+    began, stopped = task.get('createdAt') or task.get('startedAt'), task.get('stoppedAt')
+    if (task.get('lastStatus') == 'STOPPED' and isinstance(began, datetime) and began.tzinfo
+            and isinstance(stopped, datetime) and stopped.tzinfo and began <= stopped <= now):
+        return began, min(stopped + timedelta(seconds=1), now)
+    return start, now
+
+
 def collect_tasks(ecs, cluster, family, limit, include_stopped=False):
     arns = []
     issues = []
@@ -2211,6 +2224,694 @@ def probe_image_imports(session, config, identity, args, aws_errors):
     return 3 if issues or counts['NO EVALUADO'] else 1 if counts['FALLA'] else 0
 
 
+def history_labels(message):
+    """Solo CAD/sigla y HORA/TURNO explicitos; nunca inferirlos del taskId."""
+    siglas, modes = set(), set()
+
+    def record(key, value):
+        key = re.sub(r'[^a-z]', '', str(key).lower())
+        if not isinstance(value, str):
+            return
+        value = value.strip().upper()
+        if key in ('cad', 'sigla', 'siglafisica') and re.fullmatch(r'[A-Z][A-Z0-9]{2,11}', value):
+            if value not in ('NONE', 'NULL', 'UNKNOWN', 'TODAS', 'TODOS'):
+                siglas.add(value)
+        if key in ('timeframe', 'modalidad') and value in ('HORA', 'TURNO'):
+            modes.add(value)
+
+    def walk(value, depth=0):
+        if depth > 8:
+            return
+        if isinstance(value, dict):
+            record(value.get('name', ''), value.get('value'))
+            for key, child in value.items():
+                if re.search(r'secret|password|token|credential|access.?key', str(key), re.I):
+                    continue
+                record(key, child)
+                if isinstance(child, (dict, list)):
+                    walk(child, depth + 1)
+        elif isinstance(value, list):
+            for child in value:
+                walk(child, depth + 1)
+
+    try:
+        walk(json.loads(message))
+    except (ValueError, TypeError, RecursionError):
+        pass
+    # Formato textual acotado; requiere etiqueta y separador en el mismo evento.
+    for key, value in re.findall(
+            r'''(?i)(?<![\w])\b(CAD|sigla(?:_fisica)?|time_?frame|modalidad)['"]?\s*[:=]\s*['"]?([A-Z][A-Z0-9]{2,11})(?=[\s'",;}\]]|$)''', message):
+        record(key, value)
+    return siglas, modes
+
+
+def empty_history_log():
+    return dict(eventos=0, seleccion=Counter(), insuficientes=Counter(), errores_dependencia=Counter(),
+        siglas=set(), modalidades=set(), cierres=0, unidades_cierre=set(),
+        indicios_error=0, primero=None, ultimo=None, cobertura='LEIDA', error='')
+
+
+def history_log_summary(logs, group, stream, start, end, limit, sdk_errors):
+    """Agregacion por stream con memoria acotada; retiene evidencia entre errores."""
+    result = empty_history_log()
+    seen, raw_count = set(), 0
+    try:
+        for page in logs.get_paginator('filter_log_events').paginate(
+                logGroupName=group, logStreamNames=[stream],
+                startTime=int(start.timestamp()*1000), endTime=int(end.timestamp()*1000),
+                PaginationConfig={'MaxItems': limit + 1, 'PageSize': min(limit + 1, 10000)}):
+            for event in page.get('events', []):
+                if raw_count >= limit:
+                    result['cobertura'] = 'PARCIAL'
+                    return result
+                raw_count += 1
+                event_id = event.get('eventId')
+                if event_id and event_id in seen:
+                    continue
+                if event_id:
+                    seen.add(event_id)
+                result['eventos'] += 1
+                message = str(event.get('message', ''))
+                siglas, modes = history_labels(message)
+                result['siglas'].update(siglas)
+                result['modalidades'].update(modes)
+                findings = inspect_event(message)
+                result['seleccion'].update({model for kind, model, _, _ in findings if kind == 'Seleccion reportada'})
+                result['insuficientes'].update({model for kind, model, _, _ in findings if kind == 'Datos insuficientes'})
+                result['errores_dependencia'].update({reason for kind, _, reason, _ in findings
+                                                     if kind == 'Error de dependencia mencionado'})
+                closures = len(re.findall(r'\bEnd\s+Script\s*!', message, re.I))
+                result['cierres'] += closures
+                if closures:
+                    units = set(re.findall(r'''(?i)\bsubunidad['"]?\s*[:=]?\s*['"]?(\d+)\b''', message))
+                    if len(units) == 1:
+                        result['unidades_cierre'].update(units)
+                try:
+                    data = json.loads(message)
+                except (ValueError, TypeError):
+                    data = {}
+                level = str(data.get('level', data.get('levelname', data.get('severity', '')))).upper() if isinstance(data, dict) else ''
+                result['indicios_error'] += int(level in ('ERROR', 'FATAL', 'CRITICAL') or bool(re.search(
+                    r'(?:^|\s|\[)(?:ERROR|FATAL|CRITICAL)(?:\]|\s*[:|]|\s)|Traceback \(most recent call last\)|^\s*[\w.]+(?:Error|Exception):',
+                    message, re.M)))
+                stamp = event.get('timestamp')
+                if isinstance(stamp, (int, float)) and not isinstance(stamp, bool):
+                    result['primero'] = stamp if result['primero'] is None else min(result['primero'], stamp)
+                    result['ultimo'] = stamp if result['ultimo'] is None else max(result['ultimo'], stamp)
+    except sdk_errors as exc:
+        result.update(cobertura='PARCIAL' if result['eventos'] else 'ERROR',
+                      error=getattr(exc, 'response', {}).get('Error', {}).get('Code', type(exc).__name__))
+    return result
+
+
+def sample_stream_cad(logs, group, stream, start, end, limit, sdk_errors, deadline=None):
+    """Dos muestras como maximo, sin paginar ni analizar modelos: inicio y final.
+
+    GetLogEvents puede devolver paginas parciales/vacias: estas muestras nunca
+    se presentan como lectura completa del stream ni prueba de ausencia de CAD.
+    """
+    result = empty_history_log()
+    result['cobertura'] = 'MUESTRA CAD'
+    budget = min(limit, 1000)
+    for from_head in (True, False):
+        if deadline is not None and time.monotonic() >= deadline:
+            result['cobertura'] = 'PENDIENTE'
+            break
+        if budget <= 0:
+            break
+        amount = min(budget, max(1, (limit + 1)//2), 500)
+        try:
+            response = logs.get_log_events(logGroupName=group, logStreamName=stream,
+                startTime=int(start.timestamp()*1000), endTime=int(end.timestamp()*1000),
+                startFromHead=from_head, limit=amount)
+            for event in response.get('events', [])[:amount]:
+                result['eventos'] += 1
+                siglas, modes = history_labels(str(event.get('message', '')))
+                result['siglas'].update(siglas)
+                result['modalidades'].update(modes)
+                stamp = event.get('timestamp')
+                if isinstance(stamp, (int, float)) and not isinstance(stamp, bool):
+                    result['primero'] = stamp if result['primero'] is None else min(result['primero'], stamp)
+                    result['ultimo'] = stamp if result['ultimo'] is None else max(result['ultimo'], stamp)
+            budget -= amount
+            if result['siglas']:
+                break
+        except sdk_errors as exc:
+            result.update(cobertura='ERROR',
+                error=getattr(exc, 'response', {}).get('Error', {}).get('Code', type(exc).__name__))
+            break
+    return result
+
+
+def mapping_stream_key(candidate):
+    return json.dumps([candidate['region'], candidate['grupo'], candidate['stream']])
+
+
+def mapping_cached_labels(record):
+    if not isinstance(record, dict):
+        return set(), set()
+    return history_labels(json.dumps({'CAD': record.get('cad'), 'modalidad': record.get('modalidad')}))
+
+
+def discover_history_streams(logs, group, prefix, limit, sdk_errors, deadline=None):
+    """Priorizar actividad reciente; AWS no permite combinar ese orden y prefijo.
+
+    Los prefijos se filtran localmente. No se corta por timestamps de metadata,
+    que tienen consistencia eventual, ni se infiere fin desde LastEventTime.
+    """
+    rows, seen, issues = [], set(), []
+    prefixes = (prefix,) if isinstance(prefix, str) else tuple(prefix)
+    if deadline is not None and time.monotonic() >= deadline:
+        return rows, ['Presupuesto de tiempo agotado antes de listar streams']
+    try:
+        for page in logs.get_paginator('describe_log_streams').paginate(
+                logGroupName=group, orderBy='LastEventTime', descending=True,
+                PaginationConfig={'MaxItems': limit + 1, 'PageSize': min(limit + 1, 50)}):
+            if deadline is not None and time.monotonic() >= deadline:
+                issues.append('Presupuesto de tiempo agotado durante el listado de streams')
+                return rows, issues
+            for item in page.get('logStreams', []):
+                name = item.get('logStreamName', '')
+                if name in seen:
+                    continue
+                seen.add(name)
+                if len(seen) > limit:
+                    issues.append('Listado de streams truncado; aumentar --max-streams')
+                    return rows, issues
+                matched = next((item for item in prefixes if name.startswith(item)), None)
+                if matched is None:
+                    continue
+                suffix = name[len(matched):]
+                if not re.fullmatch(r'[a-fA-F0-9]{32}|[a-fA-F0-9]{8}(?:-[a-fA-F0-9]{4}){3}-[a-fA-F0-9]{12}', suffix):
+                    issues.append('Stream omitido: sufijo distinto de un taskId ECS')
+                    continue
+                rows.append(dict(tarea=suffix, stream=name, grupo=group))
+    except sdk_errors as exc:
+        code = getattr(exc, 'response', {}).get('Error', {}).get('Code', type(exc).__name__)
+        issues.append('DescribeLogStreams: ' + code)
+    return rows, issues
+
+
+def history_task_row(candidate, task, definition, logs, metadata_error=False):
+    """ECS confirma parada; End Script solo es evidencia de cierre de subunidades."""
+    siglas, modes = set(), set()
+    for container in definition.get('containerDefinitions', []):
+        for name, (value, source) in effective_environment(container, task).items():
+            ref_siglas, ref_modes = history_labels(json.dumps({name: value}))
+            siglas.update(ref_siglas)
+            modes.update(ref_modes)
+    # Overrides siguen siendo evidencia si la revision exacta no se pudo describir.
+    for container in task.get('overrides', {}).get('containerOverrides', []):
+        for variable in container.get('environment', []):
+            ref_siglas, ref_modes = history_labels(json.dumps({variable.get('name', ''): variable.get('value', '')}))
+            siglas.update(ref_siglas)
+            modes.update(ref_modes)
+    direct = set(siglas)
+    siglas.update(logs['siglas'])
+    modes.update(logs['modalidades'])
+    label = next(iter(siglas)) if len(siglas) == 1 else 'CONFLICTO' if siglas else 'SIN DATO'
+    mode = next(iter(modes)) if len(modes) == 1 else 'CONFLICTO' if modes else 'SIN DATO'
+    state = task.get('lastStatus', 'NO DISPONIBLE')
+    total = sum(logs['seleccion'].values())
+    uniform = logs['seleccion']['Uniform']
+    exits = {c.get('name', '?'): c['exitCode'] for c in task.get('containers', []) if 'exitCode' in c}
+    essential = {c['name'] for c in definition.get('containerDefinitions', []) if c.get('essential', True)}
+    stopped_reason = str(task.get('stoppedReason', ''))
+    failure = (task.get('stopCode') == 'TaskFailedToStart' or any(exits.get(name) not in (None, 0) for name in essential)
+               or stopped_reason.startswith(('OutOfMemoryError', 'CannotPullContainerError',
+                                              'ResourceInitializationError', 'CannotStartContainerError')))
+    if failure:
+        closure = 'FALLA ECS'
+    elif state == 'STOPPED':
+        closure = 'DETENIDA EN ECS; RESULTADO NO VALIDADO'
+    else:
+        closure = 'CIERRES DE SUBUNIDAD EN LOGS' if logs['cierres'] else 'NO CONFIRMADA'
+    notices = []
+    if label in ('SIN DATO', 'CONFLICTO'):
+        notices.append('Sigla sin atribucion unica')
+    if logs['indicios_error'] or logs['errores_dependencia']:
+        notices.append('Indicios de error en logs')
+    if logs['insuficientes']:
+        notices.append('Avisos de datos insuficientes')
+    if total and uniform == total:
+        notices.append('100% Uniform en las selecciones observadas; no certifica toda la tarea')
+    if logs['cobertura'] != 'LEIDA':
+        notices.append('Lectura de logs incompleta')
+    if metadata_error:
+        notices.append('Metadata ECS incompleta')
+    if not failure and any(value not in (None, 0) for value in exits.values()):
+        notices.append('Contenedor con salida no cero; revisar esencialidad')
+    if task.get('stopCode') in ('UserInitiated', 'ServiceSchedulerInitiated', 'SpotInterruption', 'TerminationNotice'):
+        notices.append('Parada/interrupcion reportada por ECS')
+    if not task:
+        notices.append('ECS ya no aporta estado/codigos; no se infiere finalizacion')
+
+    def instant(value):
+        return value.astimezone(BOGOTA).isoformat() if isinstance(value, datetime) and value.tzinfo else ''
+
+    def event_instant(value):
+        return datetime.fromtimestamp(value/1000, timezone.utc).astimezone(BOGOTA).isoformat() if value is not None else ''
+
+    return dict(**candidate, sigla=label, siglas_evidencia=','.join(sorted(siglas)),
+        sigla_fuente='ECS y logs' if direct and logs['siglas'] else 'ECS' if direct else 'logs explicitos' if siglas else '',
+        modalidad=mode, estado_ecs=state, inicio_ecs=instant(task.get('startedAt')),
+        fin_ecs=instant(task.get('stoppedAt')), codigos_salida=json.dumps(exits, sort_keys=True),
+        stop_code=task.get('stopCode', ''), motivo_parada=sanitize_message(stopped_reason),
+        primera_emision=event_instant(logs['primero']), ultima_emision=event_instant(logs['ultimo']),
+        finalizacion=closure, cierres_reportados=logs['cierres'],
+        subunidades_con_cierre_explicito=len(logs['unidades_cierre']),
+        selecciones_por_modelo=json.dumps(dict(sorted(logs['seleccion'].items()))),
+        total_selecciones=total, uniform=uniform, porcentaje_uniform_observado=round(100*uniform/total, 2) if total else '',
+        avisos_datos_insuficientes=json.dumps(dict(sorted(logs['insuficientes'].items()))),
+        indicios_error=logs['indicios_error'], errores_dependencia=json.dumps(dict(logs['errores_dependencia'])),
+        eventos_leidos=logs['eventos'], lectura_logs=logs['cobertura'], error_lectura=logs['error'],
+        control='FALLA' if failure else 'AVISO' if notices else 'INFO', detalle='; '.join(notices))
+
+
+def collect_log_history(ecs, client_for_region, args, now, sdk_errors,
+                        mapping_state=None, deadline=None, progress=None):
+    """Descubrimiento independiente de ListTasks; no ejecuta ECS/ECR/S3."""
+    start = now - timedelta(days=args.dias_logs)
+    targets, candidates, issues = set(), [], []
+    def notify(message, rows):
+        if progress is not None:
+            progress(message, rows)
+    notify('Descubriendo grupos y streams...', [])
+    if args.grupo_logs:
+        targets.add((args.region, args.grupo_logs, args.prefijo_logs.rstrip('/') + '/'))
+    else:
+        definition = ecs.describe_task_definition(taskDefinition=args.familia)['taskDefinition']
+        for container in definition.get('containerDefinitions', []):
+            log = container.get('logConfiguration', {})
+            options = log.get('options', {})
+            if log.get('logDriver') == 'awslogs' and options.get('awslogs-group') and options.get('awslogs-stream-prefix'):
+                targets.add((options.get('awslogs-region', args.region), options['awslogs-group'],
+                             options['awslogs-stream-prefix'].rstrip('/') + '/' + container['name'] + '/'))
+    if not targets:
+        issues.append('No se encontro un grupo/prefijo awslogs; usar --grupo-logs con el nombre completo')
+    grouped = {}
+    for region, group, prefix in sorted(targets):
+        grouped.setdefault((region, group), set()).add(prefix)
+    for (region, group), prefixes in grouped.items():
+        found, errors = discover_history_streams(client_for_region(region), group, prefixes, args.max_streams, sdk_errors, deadline)
+        candidates.extend(dict(**item, region=region) for item in found)
+        issues.extend(group + ': ' + error for error in errors)
+    ids = list(dict.fromkeys(candidate['tarea'] for candidate in candidates))
+    notify(f'{len(candidates)} streams candidatos; consultando metadata ECS...', [])
+    tasks, failed_ids = {}, set()
+    for offset in range(0, len(ids), 100):
+        if deadline is not None and time.monotonic() >= deadline:
+            issues.append('Presupuesto de tiempo agotado durante consulta ECS')
+            failed_ids.update(ids[offset:])
+            break
+        batch = ids[offset:offset + 100]
+        try:
+            response = ecs.describe_tasks(cluster=args.cluster, tasks=batch)
+            tasks.update({t['taskArn'].rsplit('/', 1)[-1]: t for t in response.get('tasks', [])})
+            for failure in response.get('failures', []):
+                # MISSING es esperado para historial que ECS ya no conserva.
+                if failure.get('reason') != 'MISSING':
+                    failed_ids.add(failure.get('arn', '').rsplit('/', 1)[-1])
+                    issues.append('DescribeTasks: ' + str(failure.get('reason', 'sin motivo')))
+        except sdk_errors as exc:
+            failed_ids.update(batch)
+            issues.append('DescribeTasks: ' + getattr(exc, 'response', {}).get('Error', {}).get('Code', type(exc).__name__))
+    definitions = {}
+    for task in tasks.values():
+        arn = task.get('taskDefinitionArn')
+        if arn and arn not in definitions:
+            if deadline is not None and time.monotonic() >= deadline:
+                issues.append('Presupuesto de tiempo agotado durante consulta de definiciones ECS')
+                break
+            try:
+                definitions[arn] = ecs.describe_task_definition(taskDefinition=arn)['taskDefinition']
+            except sdk_errors as exc:
+                definitions[arn] = {}
+                issues.append('Revision ECS: ' + getattr(exc, 'response', {}).get('Error', {}).get('Code', type(exc).__name__))
+    if mapping_state is not None:
+        def priority(candidate):
+            saved = mapping_state['streams'].get(mapping_stream_key(candidate))
+            cached, _ = mapping_cached_labels(saved)
+            return (0, '') if cached else (1, '') if saved is None else (2, saved.get('consultada_utc', ''))
+        candidates.sort(key=priority)
+    rows, omitted, pending = [], 0, 0
+    for number, candidate in enumerate(candidates, 1):
+        task = tasks.get(candidate['tarea'], {})
+        task_family = task.get('taskDefinitionArn', '').rsplit('/', 1)[-1].rsplit(':', 1)[0]
+        expected_family = args.familia.rsplit('/', 1)[-1].rsplit(':', 1)[0]
+        if task_family and task_family != expected_family:
+            issues.append(candidate['tarea'][:12] + ': ECS identifica otra familia; stream omitido')
+            omitted += 1
+            continue
+        # Solo la revision exacta observada en ECS sirve para defaults historicos.
+        definition = definitions.get(task.get('taskDefinitionArn'), {})
+        cache_source = ''
+        if mapping_state is None:
+            log = history_log_summary(client_for_region(candidate['region']), candidate['grupo'], candidate['stream'],
+                                      start, now, args.max_eventos, sdk_errors)
+            if not log['eventos'] and log['cobertura'] == 'LEIDA' and not task:
+                omitted += 1
+                continue
+            if log['cobertura'] != 'LEIDA':
+                issues.append(candidate['tarea'][:12] + ': lectura de logs ' + log['cobertura'])
+        else:
+            log = empty_history_log()
+            direct = history_task_row(candidate, task, definition, log)
+            saved = mapping_state['streams'].get(mapping_stream_key(candidate), {})
+            cached, cached_modes = mapping_cached_labels(saved)
+            if direct['sigla'] not in ('SIN DATO', 'CONFLICTO'):
+                log['cobertura'] = 'CAD ECS; SIN LECTURA LOG'
+            elif cached:
+                log.update(siglas=cached, modalidades=cached_modes, cobertura='CACHE ASOCIACION')
+                cache_source = 'CACHE: ' + ('ECS' if saved.get('fuente') == 'ECS' else 'MUESTRA LOGS')
+            elif deadline is not None and time.monotonic() >= deadline:
+                log['cobertura'] = 'PENDIENTE'
+            else:
+                notify(f'Consultando CAD: stream {number}/{len(candidates)} ({candidate["tarea"][:12]})...', rows)
+                log = sample_stream_cad(client_for_region(candidate['region']), candidate['grupo'], candidate['stream'],
+                                        start, now, args.max_eventos, sdk_errors, deadline)
+            if log['cobertura'] == 'ERROR':
+                issues.append(candidate['tarea'][:12] + ': muestra CAD: ' + log['error'])
+            if log['cobertura'] == 'PENDIENTE':
+                pending += 1
+        row = history_task_row(candidate, task, definition, log,
+                              candidate['tarea'] in failed_ids or bool(task and not definition))
+        if cache_source:
+            row['sigla_fuente'] = cache_source
+        elif mapping_state is not None and log['siglas']:
+            row['sigla_fuente'] = 'MUESTRA LOGS'
+        rows.append(row)
+        if mapping_state is not None and log['cobertura'] != 'PENDIENTE':
+            mapping_state['streams'][mapping_stream_key(candidate)] = dict(
+                cad=row['sigla'] if row['sigla'] not in ('SIN DATO', 'CONFLICTO') else '',
+                modalidad=row['modalidad'] if row['modalidad'] in ('HORA', 'TURNO') else '',
+                fuente='ECS' if row['sigla_fuente'] in ('ECS', 'CACHE: ECS') else 'MUESTRA LOGS',
+                consultada_utc=now.isoformat())
+        notify(f'Resueltos {number}/{len(candidates)} streams; {pending} pendientes de muestra', rows)
+    if pending:
+        issues.append(f'Presupuesto de tiempo agotado; {pending} streams pendientes. Repetir el comando para continuar con la cache')
+    return rows, dict(captura_utc=now.isoformat(), desde_utc=start.isoformat(), hasta_utc=now.isoformat(),
+        streams_candidatos=len(candidates), streams_sin_evidencia_en_ventana=omitted,
+        tareas_distintas=len({r['tarea'] for r in rows}), lecturas_incompletas=issues,
+        streams_pendientes=pending, modo='ASOCIACION RAPIDA' if mapping_state is not None else 'HISTORIAL MODELOS',
+        limitaciones=['Una fila por stream de contenedor; varios streams pueden pertenecer a una tarea.',
+            'Primer/ultimo log no son hora de inicio/fin ECS. Silencio no demuestra parada.',
+            'End Script es cierre reportado de subunidad, no finalizacion global ni cobertura esperada.',
+            'Los conteos son declaraciones de la ventana/muestra, no solicitudes ni predicciones unicas.',
+            'Sin campos explicitos no se inventa sigla, HORA/TURNO, subunidad ni proceso.',
+            'No usa la definicion actual para atribuir siglas a tareas que ECS ya no conserva.',
+            'La retencion del grupo limita los eventos disponibles; streams vacios pueden persistir.',
+            'DescribeLogStreams ordena por actividad reciente; max-streams limita streams examinados por grupo, incluidos otros prefijos.',
+            'No confirma familia/cluster historico de una tarea ausente en ECS; origen es el prefijo configurado.'])
+
+
+def summarize_history_siglas(rows, incomplete=False):
+    """Una fila por sigla, sin filtrar por RUNNING ni duplicar tareas por stream."""
+    labels = {row['sigla'] for row in rows if row['sigla'] not in ('SIN DATO', 'CONFLICTO')}
+    unresolved = [row for row in rows if row['sigla'] in ('SIN DATO', 'CONFLICTO')]
+    result = []
+    for sigla in sorted(labels):
+        selected, seen = [], set()
+        for row in rows:
+            key = (row.get('region', ''), row.get('grupo', ''), row.get('stream', ''))
+            if row['sigla'] == sigla and key not in seen:
+                seen.add(key)
+                selected.append(row)
+        tasks = {}
+        for row in selected:
+            tasks.setdefault((row.get('region', ''), row['tarea']), set()).add(row['estado_ecs'])
+        active = stopped = unknown = 0
+        for states in tasks.values():
+            states.discard('NO DISPONIBLE')
+            if states == {'STOPPED'}:
+                stopped += 1
+            elif states and states <= {'PROVISIONING', 'PENDING', 'ACTIVATING', 'RUNNING',
+                                       'DEACTIVATING', 'STOPPING', 'DEPROVISIONING'}:
+                active += 1
+            else:
+                unknown += 1
+        models, insufficient, dependencies = Counter(), Counter(), Counter()
+        for row in selected:
+            models.update(json.loads(row['selecciones_por_modelo']))
+            insufficient.update(json.loads(row['avisos_datos_insuficientes']))
+            dependencies.update(json.loads(row['errores_dependencia']))
+        total = sum(models.values())
+        uniform = models['Uniform']
+        coverage = ('PARCIAL' if incomplete or unresolved or any(row['lectura_logs'] != 'LEIDA' for row in selected) else 'LEIDA')
+        control = ('FALLA' if any(row['control'] == 'FALLA' for row in selected) else 'AVISO'
+                   if unknown or coverage != 'LEIDA' or any(row['control'] == 'AVISO' for row in selected) else 'INFO')
+        notes = []
+        if unknown:
+            notes.append('Tareas recuperadas de logs sin estado ECS; finalizacion no confirmada')
+        if total and uniform == total:
+            notes.append('100% Uniform observado; no prueba toda la prediccion si la cobertura es parcial')
+        if unresolved:
+            notes.append('Hay streams sin sigla unica; detalle conservado sin asignarlos arbitrariamente')
+        starts = [row['inicio_ecs'] for row in selected if row['inicio_ecs']]
+        ends = [row['fin_ecs'] for row in selected if row['fin_ecs']]
+        result.append(dict(sigla=sigla, tareas=len(tasks), activas_ecs=active, detenidas_ecs=stopped, sin_estado_ecs=unknown,
+            modalidades=', '.join(sorted({row['modalidad'] for row in selected
+                                         if row['modalidad'] not in ('SIN DATO', 'CONFLICTO')})),
+            primer_inicio_ecs=min(starts) if starts else '', ultimo_fin_ecs=max(ends) if ends else '',
+            selecciones_por_modelo=json.dumps(dict(sorted(models.items()))),
+            total_selecciones=total, uniform=uniform,
+            porcentaje_uniform_observado=round(100*uniform/total, 2) if total else '',
+            avisos_datos_insuficientes=json.dumps(dict(sorted(insufficient.items()))),
+            indicios_error=sum(row['indicios_error'] for row in selected),
+            errores_dependencia=json.dumps(dict(sorted(dependencies.items()))),
+            cierres_reportados=sum(row['cierres_reportados'] for row in selected),
+            streams=len(selected), lectura_logs=coverage, control=control, detalle='; '.join(notes)))
+    return result
+
+
+def write_history_report(folder, rows, summaries):
+    """Un solo CSV: resumen por sigla y detalle trazable por tarea/stream."""
+    fields = list(dict.fromkeys(['tipo_registro'] + [key for row in summaries + rows for key in row]))
+    if len(fields) == 1:
+        fields += ['sigla', 'tarea', 'estado_ecs', 'lectura_logs', 'control']
+    path = folder/'historial_tareas.csv'
+    with path.open('w', encoding='utf-8-sig', newline='') as handle:
+        writer = csv.DictWriter(handle, fieldnames=fields)
+        writer.writeheader()
+        writer.writerows(dict(tipo_registro='RESUMEN_SIGLA', **row) for row in summaries)
+        writer.writerows(dict(tipo_registro='DETALLE_TAREA', **row) for row in rows)
+    return path
+
+
+def collect_history_from_session(session, config, args, sdk_errors, **options):
+    clients = {}
+    def client_for_region(region):
+        if region not in clients:
+            clients[region] = session.client('logs', region_name=region, config=config)
+        return clients[region]
+    return collect_log_history(session.client('ecs', config=config), client_for_region,
+                               args, datetime.now(timezone.utc), sdk_errors, **options)
+
+
+def read_stream_structure_siglas(s3, args):
+    """SIGLA_PAPA es la dimension filtrada por CAD en el selector inspeccionado."""
+    row = {}
+    read_input_header(s3, args.cuenta, INPUT_KEYS[0], ('SIGLA_PAPA', 'UNIDAD_ID'),
+                      args.encoding_entradas, args.separador_entradas, row,
+                      validate_rows=True, max_input_bytes=args.max_mib_entradas*1024**2, selector=True)
+    groups = json.loads(row.get('selector_unidades', '[]'))
+    siglas = sorted({item['sigla_papa'] for item in groups
+                     if re.fullmatch(r'[A-Z][A-Z0-9]{2,11}', item['sigla_papa'])})
+    return siglas, dict(fuente='s3://' + INPUT_BUCKET + '/' + INPUT_KEYS[0], columna='SIGLA_PAPA',
+        cobertura=row.get('cobertura_selector', 'NO EVALUADO') if siglas else 'NO EVALUADO',
+        siglas=len(siglas), etag=row.get('etag', ''),
+        ultima_modificacion=row.get('ultima_modificacion', ''),
+        alcance='Todas las SIGLA_PAPA proyectables; su presencia no define ejecuciones esperadas')
+
+
+def build_sigla_stream_mapping(rows, structure_siglas):
+    """Una fila por relacion CAD/stream; sin asociar por orden o similitud."""
+    catalog = set(structure_siglas)
+    observed = {row['sigla'] for row in rows if row['sigla'] not in ('SIN DATO', 'CONFLICTO')}
+    result = []
+    for sigla in sorted(catalog | observed):
+        selected = [row for row in rows if row['sigla'] == sigla]
+        if not selected:
+            result.append(dict(sigla=sigla, stream='', grupo='', region='', tarea='', modalidad='',
+                estado_ecs='NO DISPONIBLE', fuente_cad='', en_estructura='SI',
+                asociacion='SIN STREAM ASOCIADO', lectura_logs='NO EVALUADO', ultima_emision='',
+                detalle='Sin relacion CAD/stream confirmada en la ventana; no demuestra falta de ejecucion'))
+        for row in selected:
+            result.append(dict(sigla=sigla, stream=row['stream'], grupo=row['grupo'], region=row['region'],
+                tarea=row['tarea'], modalidad=row['modalidad'], estado_ecs=row['estado_ecs'],
+                fuente_cad=row['sigla_fuente'], en_estructura='SI' if sigla in catalog else 'NO',
+                asociacion='ASOCIADO', lectura_logs=row['lectura_logs'], ultima_emision=row['ultima_emision'],
+                detalle='' if sigla in catalog else 'CAD observado fuera de la estructura leida'))
+    for row in rows:
+        if row['sigla'] in ('SIN DATO', 'CONFLICTO'):
+            result.append(dict(sigla='SIN CAD CONFIRMADO' if row['sigla'] == 'SIN DATO' else 'CONFLICTO CAD',
+                stream=row['stream'], grupo=row['grupo'], region=row['region'], tarea=row['tarea'],
+                modalidad=row['modalidad'], estado_ecs=row['estado_ecs'], fuente_cad=row['sigla_fuente'],
+                en_estructura='NO EVALUADO', asociacion='SIN ATRIBUCION UNICA', lectura_logs=row['lectura_logs'],
+                ultima_emision=row['ultima_emision'], detalle='No asignar a una sigla; evidencias=' + row['siglas_evidencia']))
+    return list({(row['sigla'], row['region'], row['grupo'], row['stream']): row for row in result}.values())
+
+
+def atomic_mapping_text(path, text):
+    temporary = path.with_name('.' + path.name + '.' + uuid.uuid4().hex + '.tmp')
+    try:
+        temporary.write_text(text, encoding='utf-8')
+        temporary.replace(path)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def load_mapping_state(path, scope):
+    empty = dict(version=1, scope=scope, streams={})
+    if not path.exists():
+        return empty
+    try:
+        data = json.loads(path.read_text(encoding='utf-8'))
+        if data.get('version') != 1 or data.get('scope') != scope or not isinstance(data.get('streams'), dict):
+            raise ValueError('Formato de cache incompatible')
+        for key, row in data['streams'].items():
+            if isinstance(key, str) and isinstance(row, dict):
+                empty['streams'][key] = dict(cad=row.get('cad') if isinstance(row.get('cad'), str) else '',
+                    modalidad=row.get('modalidad') if isinstance(row.get('modalidad'), str) else '',
+                    fuente='ECS' if row.get('fuente') == 'ECS' else 'MUESTRA LOGS',
+                    consultada_utc=str(row.get('consultada_utc') or ''))
+        return empty
+    except (OSError, ValueError, TypeError, AttributeError):
+        print('[AVISO] Cache no interpretable; se reconstruira sin reutilizar asociaciones.', flush=True)
+        return empty
+
+
+def inspect_stream_mapping(session, config, args, sdk_errors):
+    print('MAPA CAD / STREAM | Asociacion rapida | Todas las siglas de estructura | Solo lectura', flush=True)
+    now = datetime.now(timezone.utc)
+    deadline = time.monotonic() + getattr(args, 'max_segundos_mapeo', 180)
+    base = Path(args.salida).expanduser()/'modelos_dependencias'
+    folder = base/now.astimezone(BOGOTA).strftime('%Y-%m-%d/%H-%M-%S_%f')
+    folder.mkdir(parents=True, exist_ok=True)
+    path = folder/'mapa_siglas_streams.csv'
+    scope = {name: getattr(args, name, '') for name in ('cuenta', 'region', 'cluster', 'familia', 'grupo_logs', 'prefijo_logs')}
+    scope_id = hashlib.sha256(json.dumps(scope, sort_keys=True).encode()).hexdigest()[:16]
+    cache_path = base/('cache_mapa_streams_' + scope_id + '.json')
+    state = (dict(version=1, scope=scope, streams={}) if getattr(args, 'reiniciar_mapeo', False)
+             else load_mapping_state(cache_path, scope))
+    context = dict(captura_utc=now.isoformat(), configuracion=vars(args), en_proceso=True,
+        lecturas_incompletas=[], cache=str(cache_path),
+        alcance='Solo asociacion CAD/stream; muestras limitadas y cache, sin analisis de modelos')
+    print(f'Avance y resultados: {path}', flush=True)
+    siglas, rows, latest_rows = [], [], []
+    structure = dict(cobertura='NO EVALUADO')
+    try:
+        print('Leyendo siglas de estructura...', flush=True)
+        siglas, structure = read_stream_structure_siglas(session.client('s3', config=config), args)
+        if structure['cobertura'] != 'LEIDA':
+            context['lecturas_incompletas'].append('Estructura incompleta; no se certifica lista completa de siglas')
+    except (*sdk_errors, OSError, ValueError, csv.Error) as exc:
+        code = getattr(exc, 'response', {}).get('Error', {}).get('Code', type(exc).__name__)
+        structure = dict(cobertura='ERROR', codigo=code)
+        context['lecturas_incompletas'].append('Lectura de estructura: ' + code)
+
+    def persist(current, provisional, running=True):
+        mapping = build_sigla_stream_mapping(current, siglas)
+        if provisional:
+            for row in mapping:
+                if row['asociacion'] == 'SIN STREAM ASOCIADO':
+                    row['asociacion'] = 'PENDIENTE DE MAPEO'
+        handle = io.StringIO(newline='')
+        writer = csv.DictWriter(handle, fieldnames=list(mapping[0]) if mapping else ['sigla', 'stream', 'asociacion'])
+        writer.writeheader()
+        writer.writerows(mapping)
+        atomic_mapping_text(path, '\ufeff' + handle.getvalue())
+        context.update(estructura=structure, relaciones=mapping, en_proceso=running, mapa_parcial=provisional)
+        atomic_mapping_text(folder/'contexto_streams.json', json.dumps(context, ensure_ascii=False, indent=2))
+        atomic_mapping_text(cache_path, json.dumps(state, ensure_ascii=False))
+        return mapping
+
+    persist([], True)
+    saved_at, printed_at, saved_size = time.monotonic(), 0.0, 0
+    def progress(message, current):
+        nonlocal latest_rows, saved_at, printed_at, saved_size
+        latest_rows = current
+        tick = time.monotonic()
+        if tick - printed_at >= 2:
+            print(message, flush=True)
+            printed_at = tick
+        if len(current) == 1 or len(current) >= saved_size + 5 or tick - saved_at >= 2:
+            persist(current, True)
+            saved_at, saved_size = tick, len(current)
+
+    interrupted = False
+    try:
+        rows, collected = collect_history_from_session(session, config, args, sdk_errors,
+            mapping_state=state, deadline=deadline, progress=progress)
+        collected['lecturas_incompletas'] = context['lecturas_incompletas'] + collected['lecturas_incompletas']
+        context.update(collected)
+    except KeyboardInterrupt:
+        interrupted = True
+        rows = latest_rows
+        context['lecturas_incompletas'].append('Interrumpido; repetir el mismo comando reutiliza la cache guardada')
+    except sdk_errors as exc:
+        rows = latest_rows
+        code = getattr(exc, 'response', {}).get('Error', {}).get('Code', type(exc).__name__)
+        context['lecturas_incompletas'].append('Descubrimiento de streams: ' + code)
+    provisional = interrupted or bool(context['lecturas_incompletas'])
+    mapping = persist(rows, provisional, running=False)
+    width = 19
+    print('Sigla / CAD'.ljust(width) + ' | Stream')
+    print('-'*width + '-+-' + '-'*90)
+    for row in mapping:
+        print(row['sigla'].ljust(width) + ' | ' + (row['stream'] or row['asociacion']))
+    print(f'Siglas de estructura: {len(siglas)} | Asociaciones CAD/stream: {sum(row["asociacion"] == "ASOCIADO" for row in mapping)}')
+    print('Muestras limitadas para identificar CAD; no analiza modelos ni certifica ausencia de ejecucion.')
+    for issue in context['lecturas_incompletas']:
+        print('[INCOMPLETO] ' + issue)
+    print(f'Informe: {path} | contexto_streams.json')
+    print(f'Cache: {cache_path}; repetir el comando continua sin releer asociaciones confirmadas.')
+    return 130 if interrupted else 3 if context['lecturas_incompletas'] else 0
+
+
+def inspect_log_history(session, config, args, sdk_errors):
+    print(f'MONITOREO POR SIGLA | {args.cluster} | Ultimos {args.dias_logs} dias | Solo lectura', flush=True)
+    now = datetime.now(timezone.utc)
+    rows, context = collect_history_from_session(session, config, args, sdk_errors)
+    context['universo_siglas'] = dict(fuente='Streams de logs y metadata ECS vinculada',
+        alcance='Solo siglas identificadas en la evidencia disponible; no permite detectar las nunca observadas',
+        catalogo_externo=False)
+    summaries = summarize_history_siglas(rows, incomplete=bool(context['lecturas_incompletas']))
+    columns = ('sigla', 'tareas', 'activas_ecs', 'detenidas_ecs', 'sin_estado_ecs',
+               'selecciones_por_modelo', 'total_selecciones', 'porcentaje_uniform_observado',
+               'avisos_datos_insuficientes', 'indicios_error', 'lectura_logs', 'control')
+    widths = (12, 6, 7, 8, 8, 26, 7, 10, 22, 7, 13, 7)
+    def render(values):
+        cells = [textwrap.wrap(str(value), width=width, break_on_hyphens=False) or ['-']
+                 for value, width in zip(values, widths)]
+        for index in range(max(map(len, cells))):
+            print(' | '.join((cell[index] if index < len(cell) else '').ljust(width)
+                             for cell, width in zip(cells, widths)))
+    render(('Sigla', 'Tareas', 'Activas', 'Detenidas', 'Sin ECS', 'Modelos (logs)', 'Total', '% Uniform*', 'Pocos datos (logs)', 'Errores', 'Lectura', 'Control'))
+    print('-+-'.join('-'*width for width in widths))
+    for row in summaries:
+        values = [row[name] for name in columns]
+        values[5] = '; '.join(f'{model}:{count}' for model, count in json.loads(row['selecciones_por_modelo']).items())
+        values[8] = '; '.join(f'{model}:{count}' for model, count in json.loads(row['avisos_datos_insuficientes']).items())
+        render(values)
+    folder = Path(args.salida)/'modelos_dependencias'/now.astimezone(BOGOTA).strftime('%Y-%m-%d/%H-%M-%S_%f')
+    folder.mkdir(parents=True, exist_ok=True)
+    path = write_history_report(folder, rows, summaries)
+    context['siglas_resumidas'] = len(summaries)
+    context['streams_sin_sigla_unica'] = sum(row['sigla'] in ('SIN DATO', 'CONFLICTO') for row in rows)
+    context['configuracion'] = vars(args)
+    (folder/'contexto_historial.json').write_text(json.dumps(context, ensure_ascii=False, indent=2), encoding='utf-8')
+    print('* Porcentaje sobre declaraciones observadas, no solicitudes. Detenida no equivale a prediccion validada.')
+    print('Incluye activas, detenidas y recuperadas desde logs. Sin ECS no significa finalizada.')
+    print('Alcance: siglas identificadas en la evidencia disponible; sin catalogo S3. Las nunca observadas no se pueden detectar.')
+    print(f'Siglas: {len(summaries)} | Streams sin sigla unica: {context["streams_sin_sigla_unica"]}; conservados en DETALLE_TAREA.')
+    print(f'Streams candidatos: {context["streams_candidatos"]} | Tareas con evidencia: {context["tareas_distintas"]}')
+    for issue in context['lecturas_incompletas']:
+        print('[INCOMPLETO] ' + issue)
+    print(f'Informe: {path} | Filtrar tipo_registro=RESUMEN_SIGLA; detalle en el mismo CSV.')
+    return 3 if context['lecturas_incompletas'] else 1 if any(r['control'] == 'FALLA' for r in rows) else 0
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('--cluster', default=CLUSTER)
@@ -2219,8 +2920,18 @@ def main():
     parser.add_argument('--region', default='us-east-1')
     parser.add_argument('--max-tareas', type=int, default=100, help='Maximo por estado consultado; con finalizadas, hasta este limite para RUNNING y otro para STOPPED')
     parser.add_argument('--incluir-finalizadas', action='store_true', help='Incluye STOPPED aun visibles en ECS; no recupera historial eliminado ni certifica exito')
+    view = parser.add_mutually_exclusive_group()
+    view.add_argument('--historial-logs', action='store_true', help='Resumen por siglas observadas: historial ECS/Logs (modo predeterminado, sin catalogo S3)')
+    view.add_argument('--por-tarea', action='store_true', help='Mapeo anterior por tarea ECS; inspecciones opcionales conservan su modo')
+    view.add_argument('--mapear-streams', action='store_true', help='Tabla CAD/stream para todas las SIGLA_PAPA de la estructura actual S3')
+    parser.add_argument('--max-segundos-mapeo', type=int, default=180, help='Presupuesto tecnico del mapa entre llamadas AWS: 10..900 s; no es umbral de prediccion')
+    parser.add_argument('--reiniciar-mapeo', action='store_true', help='Ignora asociaciones guardadas del mapa y las vuelve a consultar')
+    parser.add_argument('--dias-logs', type=int, default=30, help='Ventana historica: 1..30 dias; default 30, sujeto a retencion; no es un SLA')
+    parser.add_argument('--max-streams', type=int, default=1000, help='Maximo de streams examinados por grupo, orden reciente; 1..10000')
+    parser.add_argument('--grupo-logs', help='Nombre completo del grupo; sin el flag se descubre desde la familia ECS')
+    parser.add_argument('--prefijo-logs', default='pon-prod-xcrime-prediccion/pon-prod-prediccion/', help='Prefijo completo con contenedor, para --grupo-logs')
     parser.add_argument('--ventana-minutos', type=int, default=60)
-    parser.add_argument('--max-eventos', type=int, default=500, help='Eventos que coincidan con el filtro por contenedor')
+    parser.add_argument('--max-eventos', type=int, help='Default mapa: 200 muestreados; historial: 100000; por tarea: 500 filtrados')
     parser.add_argument('--muestras', type=int, default=3, help='Muestras saneadas por tipo/modelo/motivo; 0 desactiva muestras')
     parser.add_argument('--sin-logs', action='store_true')
     parser.add_argument('--probar-imports', action='store_true', help='Prueba imports en copia Docker local de digests observados; sin ECS Exec ni ejecutar la aplicacion')
@@ -2251,6 +2962,23 @@ def main():
         args.validar_filas = True
     if args.validar_filas:
         args.validar_entradas = True
+    if not args.por_tarea and not args.mapear_streams and not any((args.validar_entradas, args.desde_reportes, args.probar_imports,
+            args.sin_logs, args.mapear_arranque, args.inspeccionar_imagen, args.mapear_auxiliares,
+            args.mapear_columnas, args.auditar_codigo)):
+        args.historial_logs = True
+    if args.max_eventos is None:
+        args.max_eventos = 200 if args.mapear_streams else 100000 if args.historial_logs else 500
+    if not 10 <= args.max_segundos_mapeo <= 900:
+        parser.error('--max-segundos-mapeo: 10..900')
+    if args.reiniciar_mapeo and not args.mapear_streams:
+        parser.error('--reiniciar-mapeo requiere --mapear-streams')
+    if not 1 <= args.dias_logs <= 30 or not 1 <= args.max_streams <= 10000:
+        parser.error('--dias-logs: 1..30; --max-streams: 1..10000')
+    if args.grupo_logs and (not (args.historial_logs or args.mapear_streams) or '...' in args.grupo_logs or '…' in args.grupo_logs):
+        parser.error('--grupo-logs requiere historial/mapa de streams y el nombre completo, sin puntos suspensivos')
+    if (args.historial_logs or args.mapear_streams) and (args.sin_logs or args.validar_entradas or args.desde_reportes or args.probar_imports
+            or args.mapear_arranque or args.inspeccionar_imagen or args.mapear_auxiliares or args.mapear_columnas or args.auditar_codigo):
+        parser.error('Historial/mapa de streams son modos independientes; no combinar con inspeccion, entradas, imports ni --sin-logs')
     if args.incluir_finalizadas and (args.validar_entradas or args.desde_reportes or args.probar_imports):
         parser.error('--incluir-finalizadas requiere un modo de mapeo ECS; no combinar con entradas, reportes locales o prueba de imports')
     if not 5 <= args.timeout_import <= 120:
@@ -2275,8 +3003,9 @@ def main():
         parser.error('Los contratos de columnas requieren --validar-entradas')
     if args.mapear_auxiliares or args.mapear_columnas or args.auditar_codigo:
         args.inspeccionar_imagen = True
-    if not 1 <= args.max_tareas <= 1000 or not 1 <= args.max_eventos <= 10000 or not 1 <= args.ventana_minutos <= 1440:
-        parser.error('Limites: --max-tareas 1..1000; --max-eventos 1..10000; --ventana-minutos 1..1440')
+    max_events_limit = 1000 if args.mapear_streams else 100000 if args.historial_logs else 10000
+    if not 1 <= args.max_tareas <= 1000 or not 1 <= args.max_eventos <= max_events_limit or not 1 <= args.ventana_minutos <= 1440:
+        parser.error(f'Limites: --max-tareas 1..1000; --max-eventos 1..{max_events_limit}; --ventana-minutos 1..1440')
     if not 0 <= args.muestras <= 10:
         parser.error('--muestras debe estar entre 0 y 10')
     if not 1 <= args.max_mib <= 4096:
@@ -2305,12 +3034,18 @@ def main():
         print('[BLOQUEADO] Ejecutar en CloudShell con boto3/botocore.', file=sys.stderr)
         return 3
     try:
-        config = Config(connect_timeout=5, read_timeout=20, retries={'total_max_attempts': 3, 'mode': 'standard'})
+        config = (Config(connect_timeout=3, read_timeout=5, retries={'total_max_attempts': 2, 'mode': 'standard'})
+                  if args.mapear_streams else Config(connect_timeout=5, read_timeout=20,
+                      retries={'total_max_attempts': 3, 'mode': 'standard'}))
         session = boto3.Session(region_name=args.region)
         identity = session.client('sts', config=config).get_caller_identity()
         if identity['Account'] != args.cuenta:
             print('[BLOQUEADO] Cuenta distinta de la esperada; no se consultan recursos.', file=sys.stderr)
             return 3
+        if args.mapear_streams:
+            return inspect_stream_mapping(session, config, args, (ClientError, BotoCoreError))
+        if args.historial_logs:
+            return inspect_log_history(session, config, args, (ClientError, BotoCoreError))
         if args.validar_entradas:
             return validate_candidate_inputs(session, config, identity, args, (ClientError, BotoCoreError, OSError))
         if args.probar_imports:
@@ -2459,13 +3194,15 @@ def main():
                     stream = f'{prefix}/{container["name"]}/{task_id}'
                     print(f'Consultando referencias: {task_id[:12]} / {sigla}...', flush=True)
                     details = [] if args.correlacionar_modelos else None
-                    counts, truncated, read, samples = read_references(clients[region], group, stream, start, now, args.max_eventos, args.muestras, details)
+                    log_start, log_end = stopped_log_window(task, start, now)
+                    counts, truncated, read, samples = read_references(clients[region], group, stream, log_start, log_end, args.max_eventos, args.muestras, details)
                     if details is not None:
                         model_events.extend(dict(tarea=task_id, sigla=sigla, contenedor=container['name'],
                             stream=stream, cobertura='PARCIAL' if truncated else 'LEIDA', **event) for event in details)
                     evidence_rows.extend(dict(tarea=task_id, sigla=sigla, contenedor=container['name'], **sample) for sample in samples)
                     item.update(logs='TRUNCADOS' if truncated else 'LEIDOS', eventos_filtrados=read,
-                                grupo=group, stream=stream, region=region)
+                                grupo=group, stream=stream, region=region,
+                                desde_utc=log_start.isoformat(), hasta_utc=log_end.isoformat())
                     for (kind, name), count in sorted(counts.items()):
                         add(kind, name, 'declaracion en logs' if kind in ('Seleccion reportada', 'Respaldo reportado') else 'referencia en logs', count)
                     if truncated:
@@ -2477,7 +3214,7 @@ def main():
         lifecycle = task_lifecycle_rows(tasks, definitions) if args.incluir_finalizadas else []
         if args.incluir_finalizadas:
             print_task_lifecycle(lifecycle)
-            print(f'Logs: ventana global de ultimos {args.ventana_minutos} minutos; puede excluir logs de tareas detenidas antes de esa ventana.')
+            print(f'Logs activas: ultimos {args.ventana_minutos} minutos. STOPPED: vida de la tarea visible; metadata en contexto.json.')
         if not args.correlacionar_modelos:
             print_table(rows)
         print(f'\nTareas observadas: {len(tasks)} | Definiciones descritas: {len(definitions)} | Lecturas incompletas: {len(issues)}')

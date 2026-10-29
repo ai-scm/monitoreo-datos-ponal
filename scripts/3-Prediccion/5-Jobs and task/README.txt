@@ -125,3 +125,39 @@ Consulta el esquema de pon-prod-mdp.probabilidaddelito y la metadata de su fuent
 python3 ~/monitor_freshness_probabilidaddelito.py \
   --revisar-fuente-s3 \
   --listado-completo
+
+
+ACTUALIZACION - HISTORIAL POR STREAMS DE PREDICCION
+Los siete monitores se conservan. La recuperacion historica se implementa en:
+  6. Modelos utilizados y componentes/mapear_modelos_dependencias.py
+  python3 ~/mapear_modelos_dependencias.py --historial-logs --dias-logs 8 --max-eventos 100000
+Guia: 6. Modelos utilizados y componentes/HISTORIAL-LOGS.txt.
+Busca streams incluso sin tareas visibles en ECS, agrega modelos/Uniform,
+pocos datos, errores y cierres de subunidad, y recupera metadata ECS disponible.
+Sigla y HORA/TURNO requieren evidencia explicita; no estan en el nombre del stream.
+End Script no equivale a exito global. Se exporta historial_tareas.csv y contexto.
+El monitor 5 de ejecucion y el modo normal del monitor 6 tambien leen la vida de
+las tareas STOPPED visibles, conservando la ventana reciente para las activas.
+Los otros cinco monitores conservan su alcance; este patron es de los logs ECS
+Del predictor, no de los logs de Lambda, Glue o los datos S3.
+
+RESUMEN POR SIGLAS OBSERVADAS - COMPORTAMIENTO ACTUAL DEL MONITOR 6
+python3 ~/mapear_modelos_dependencias.py muestra por defecto una fila por sigla
+identificada desde los streams conservados y la metadata ECS de sus tareas.
+Incluye activas, detenidas y recuperadas de logs, sin exigir ninguna RUNNING.
+No consulta estructura nacional ni catalogos S3. Las siglas nunca observadas
+no se pueden identificar ni declarar ausentes. Ventana default: 30 dias,
+sujeta a retencion; --dias-logs 8 sirve para acotar una revision semanal.
+El CSV contiene RESUMEN_SIGLA y DETALLE_TAREA. --por-tarea conserva el mapeo
+anterior de ECS/ECR. Ver HISTORIAL-LOGS.txt.
+
+MAPA EXPLICITO DE SIGLAS DE LA ESTRUCTURA Y STREAMS
+python3 ~/mapear_modelos_dependencias.py --mapear-streams
+Muestra Sigla/CAD | Stream para todas las SIGLA_PAPA de la estructura S3,
+sin filtro DESAB/RUNNING. Varias filas por CAD si tiene varios streams.
+SIN STREAM ASOCIADO no implica ejecucion faltante. Guarda mapa_siglas_streams.csv.
+El resumen por defecto mantiene la fuente de logs; este modo explicito consulta
+la estructura para contrastar todas sus siglas, como se solicito para el mapeo.
+El mapa es una consulta rapida: CAD ECS/cache o dos muestras pequenas por stream,
+sin analizar modelos. Guarda CSV/cache y tiene presupuesto tecnico de 180 s.
+Puede repetirse para continuar y ejecutarse con nohup; ver HISTORIAL-LOGS.txt.

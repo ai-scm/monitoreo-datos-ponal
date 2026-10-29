@@ -8,7 +8,8 @@ Incluye tareas con desiredStatus RUNNING (pueden estar PENDING) y STOPPED visibl
 La captura de detenidas no es un historial completo. Busca sigla en parametros,
 etiquetas y referencias explicitas de logs, sin inferirla por el cluster compartido.
 Salida: tabla corta y tareas.csv/contexto.json locales en salida/inicio_progreso/.
-Logs y metricas: ultimos 60 minutos, sin interpretar silencio como bloqueo.
+Logs RUNNING y metricas: ultimos 60 minutos. Logs STOPPED: vida de la tarea ECS.
+End Script es cierre reportado de subunidad, no prueba de finalizacion global.
 Exit: 0 sin FALLA (puede haber AVISO); 1 error confirmado de tarea/contenedor;
 2 argumentos; 3 consulta incompleta/error AWS; 130 interrupcion.
 """
@@ -130,7 +131,8 @@ def analyze_logs(events):
     Solo se extraen etiquetas explicitas y contadores estructurados conocidos.
     """
     result = dict(eventos=len(events), errores=0, reintentos=0,
-                  ultima_emision_colombia='', etapa='', avance='', categorias={}, siglas_referenciadas=[])
+                  ultima_emision_colombia='', etapa='', avance='', categorias={}, siglas_referenciadas=[],
+                  cierres_reportados=0)
     categories = Counter()
     referenced = set()
     latest = max((e.get('timestamp', 0) for e in events), default=0)
@@ -138,6 +140,7 @@ def analyze_logs(events):
         result['ultima_emision_colombia'] = local_time(datetime.fromtimestamp(latest/1000, timezone.utc))
     for event in sorted(events, key=lambda e: e.get('timestamp', 0)):
         message = str(event.get('message', ''))
+        result['cierres_reportados'] += len(re.findall(r'\bEnd\s+Script\s*!', message, re.I))
         try:
             data = json.loads(message)
         except (ValueError, TypeError):
@@ -185,8 +188,18 @@ def read_container_logs(client, group, stream, start, end, limit):
             PaginationConfig={'MaxItems': limit+1, 'PageSize': min(limit+1, 10000)}):
         events.extend(page.get('events', []))
     result = analyze_logs(events[:limit])
-    result.update(grupo=group, stream=stream, truncado=len(events) > limit)
+    result.update(grupo=group, stream=stream, truncado=len(events) > limit,
+                  desde_utc=start.isoformat(), hasta_utc=end.isoformat())
     return result
+
+
+def task_log_window(task, start, now):
+    """Leer una tarea detenida aunque todos sus logs sean anteriores a la ventana."""
+    began = utc_time(task.get('createdAt')) or utc_time(task.get('startedAt'))
+    stopped = utc_time(task.get('stoppedAt'))
+    if task.get('lastStatus') == 'STOPPED' and began and stopped and began <= stopped <= now:
+        return began, min(stopped + timedelta(seconds=1), now)
+    return start, now
 
 
 def read_task_metrics(client, cluster, task_id, start, end):
@@ -222,6 +235,7 @@ def apply_telemetry(row, containers, observations, metrics, problems):
                eventos_log=sum(o.get('eventos', 0) for o in observations),
                indicios_error=sum(o.get('errores', 0) for o in observations),
                indicios_reintento=sum(o.get('reintentos', 0) for o in observations),
+               cierres_subunidad_reportados=sum(o.get('cierres_reportados', 0) for o in observations),
                logs_cobertura='INCOMPLETA' if any(p.startswith('Logs') for p in problems) else 'LEIDA',
                logs_detalle=json.dumps(observations, ensure_ascii=False),
                metricas_detalle=json.dumps(metrics, ensure_ascii=False),
@@ -234,7 +248,8 @@ def apply_telemetry(row, containers, observations, metrics, problems):
     if evidence:
         row['avance'] = '; '.join(evidence)
     elif row['eventos_log']:
-        row['avance'] = 'LOGS PRESENTES; sin avance explicito'
+        row['avance'] = (f'{row["cierres_subunidad_reportados"]} cierres de subunidad reportados'
+                         if row['cierres_subunidad_reportados'] else 'LOGS PRESENTES; sin avance explicito')
     latest_metrics = {}
     for metric in sorted(metrics, key=lambda m: (m['timestamp'], json.dumps(m['dimensiones'], sort_keys=True))):
         latest_metrics[metric['metrica']] = metric
@@ -421,7 +436,7 @@ def print_rows(rows):
 
 
 def print_telemetry(rows, window):
-    print(f'\nTELEMETRIA | Ultimos {window} minutos (ventana de lectura; no es limite de duracion)')
+    print(f'\nTELEMETRIA | Activas: ultimos {window} minutos; logs STOPPED: entre creacion y parada ECS')
     widths = (12, 23, 7, 16, 14, 40)
     def render(values):
         print(' | '.join(textwrap.shorten(str(v), width=w, placeholder='...').ljust(w)
@@ -507,6 +522,7 @@ def main():
                 print(f'Leyendo telemetria: tarea {number}/{len(tasks)}...', flush=True)
             arn = task.get('taskDefinitionArn')
             row = task_row(task, definitions.get(arn), now)
+            log_start, log_end = task_log_window(task, start, now)
             observations, problems = [], []
             containers = log_definitions.get(arn, [])
             for c in containers:
@@ -517,7 +533,7 @@ def main():
                             log_clients[c['region']] = session.client('logs', region_name=c['region'], config=config)
                         stream = f'{c["prefijo"]}/{c["nombre"]}/{row["tarea"]}'
                         observation.update(read_container_logs(log_clients[c['region']], c['grupo'], stream,
-                                                               start, now, args.max_eventos))
+                                                               log_start, log_end, args.max_eventos))
                         observation['estado'] = 'LEIDO'
                         if observation['truncado']:
                             observation['estado'] = 'TRUNCADO'
@@ -550,7 +566,8 @@ def main():
         print(f'\nTareas: {len(rows)}' + (' | ' + ' | '.join(f'{key}: {count}' for key, count in sorted(states.items())) if states else ''))
         print(f'Controles por tarea: {controls["OK"]} OK | {controls["AVISO"]} AVISO | {controls["FALLA"]} FALLA')
         print('Duraciones informativas, sin limites estandar. RUNNING/OK no demuestra avance ni calidad de prediccion.')
-        print('STOPPED es una captura reciente, no historial completo. Sigla segun evidencia; sin consultas a DynamoDB/S3.')
+        print('STOPPED: solo tareas visibles en ECS. Historial por streams en mapear_modelos_dependencias.py --historial-logs.')
+        print('End Script no prueba cierre global. Sigla segun evidencia; sin consultas a DynamoDB/S3.')
         print('CPU/memoria requieren series existentes de Container Insights por TaskId; SIN DATOS no significa cero consumo.')
         if not args.no_export:
             folder = Path(args.salida)/'inicio_progreso'/now.astimezone(BOGOTA).strftime('%Y-%m-%d/%H-%M-%S_%f')

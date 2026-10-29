@@ -130,3 +130,12 @@ https://docs.aws.amazon.com/AmazonECS/latest/developerguide/using_awslogs.html
 https://docs.aws.amazon.com/boto3/latest/reference/services/logs/paginator/FilterLogEvents.html
 https://docs.aws.amazon.com/boto3/latest/reference/services/cloudwatch/paginator/ListMetrics.html
 https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/Container-Insights-enhanced-observability-metrics-ECS.html
+
+
+ACTUALIZACION - LOGS DE TAREAS DETENIDAS E HISTORIAL POR STREAMS
+Los logs de STOPPED visibles se consultan entre creacion y parada ECS, no
+solo en la ventana global reciente. La ventana reciente sigue aplicando a
+tareas activas; los limites por contenedor siguen vigentes.
+El modo --historial-logs de mapear_modelos_dependencias.py descubre tareas
+desde streams incluso sin ListTasks. Ver ../6. Modelos utilizados y componentes/
+HISTORIAL-LOGS.txt. End Script reporta cierres de subunidad, no exito global.

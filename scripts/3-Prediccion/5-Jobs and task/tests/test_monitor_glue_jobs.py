@@ -23,8 +23,8 @@ def load(name, path):
     return module
 
 
-monitor = load('monitor_glue_jobs', BASE / 'Glue-Jobs/monitor_glue_jobs.py')
-upstream = load('monitor_procesos_upstream', BASE / 'Procesos-Upstream/monitor_procesos_upstream.py')
+monitor = load('monitor_glue_jobs', BASE / '4. Referencias, entrenamiento e informes/monitor_glue_jobs.py')
+upstream = load('monitor_procesos_upstream', BASE / '3. Preparación de datos/monitor_procesos_upstream.py')
 
 
 class SDKError(Exception):

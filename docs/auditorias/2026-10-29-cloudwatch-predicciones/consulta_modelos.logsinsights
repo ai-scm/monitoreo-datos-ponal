@@ -1,0 +1,15 @@
+fields @timestamp, @logStream, @message
+| parse @message /Version de Codigo:\s*(?<pnl_version>\S+)\s+Prediccion para:\s*(?<pnl_cad>[A-Z0-9]+)\s*-\s*(?<pnl_subunidad>\d+).*timeFrame:\s*(?<pnl_modalidad>\S+)/
+| parse @message /The best model to run the prediction is\s+(?<pnl_modelo>[A-Za-z0-9_]+)/
+| stats latest(pnl_cad) as cad_reportado, count_distinct(pnl_cad) as cad_distintos,
+        latest(pnl_modalidad) as modalidad_reportada, latest(pnl_version) as version_reportada,
+        count(*) as eventos, count(pnl_modelo) as selecciones,
+        sum(strcontains(@message, "The best model to run the prediction is")) as frases_seleccion,
+        sum(strcontains(@message, "Not enough records in the train data for")) as pocos_datos,
+        sum(strcontains(@message, "No predictions no validation data for any of the partitions")) as sin_validacion,
+        sum(strcontains(@message, "End Script!")) as cierres_reportados,
+        sum(strcontains(@message, "Traceback (most recent call last)")) as eventos_traceback,
+        sum(strcontains(@message, "NameError: name 'fnamegeojson' is not defined")) as error_fnamegeojson,
+        min(@timestamp) as primera_emision, max(@timestamp) as ultima_emision
+  by @logStream, pnl_modelo
+| sort ultima_emision desc

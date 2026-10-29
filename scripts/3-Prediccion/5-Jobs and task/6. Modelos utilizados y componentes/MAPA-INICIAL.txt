@@ -878,3 +878,12 @@ Los logs conservan la ventana global --ventana-minutos (default 60), no toda la
 vida de cada tarea. Una detenida puede aparecer en tareas.csv sin declaraciones
 de modelos en esa ventana. Ausencia de mensajes no significa que no uso modelos.
 Referencia: https://docs.aws.amazon.com/cli/latest/reference/ecs/describe-tasks.html
+
+
+ACTUALIZACION - LOGS DE TAREAS DETENIDAS E HISTORIAL POR STREAMS
+Los logs de STOPPED visibles se consultan entre creacion y parada ECS, no
+solo en la ventana global reciente. La ventana reciente sigue aplicando a
+tareas activas; los limites por contenedor siguen vigentes.
+El modo --historial-logs de mapear_modelos_dependencias.py descubre tareas
+desde streams incluso sin ListTasks. Ver ../6. Modelos utilizados y componentes/
+HISTORIAL-LOGS.txt. End Script reporta cierres de subunidad, no exito global.
