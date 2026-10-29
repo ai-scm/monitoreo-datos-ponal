@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Monitor manual upstream PONAL: ECS de limpieza, crawler y DynamoDB.
 
-Solo lectura AWS. No arranca tareas/crawlers/jobs ni lee items de DynamoDB.
-Una tabla y un CSV local con RESUMEN, DETALLE, CONTROL y CONTEXTO.
+Solo lectura del pipeline. No arranca tareas/crawlers/jobs ni lee items de DynamoDB.
+Una tabla y un CSV local/S3 con RESUMEN, DETALLE, CONTROL y CONTEXTO.
 Exit 0 consulta completa (puede haber avisos/fallos observados); 1 recurso ausente;
 2 argumentos; 3 lectura incompleta/bloqueo; 130 interrupcion.
 """
@@ -21,6 +21,30 @@ CLUSTER = 'pon-prod-xcrime-datacleaning-cluster'
 CRAWLER = 'pon-prod-xcrime-datacleaning-glue-crawler'
 TABLES = ('pon_prod_llamada_siglas_historico', 'pon_prod_comparendo_siglas_historico', 'pon_prod_delito_siglas_historico')
 BOGOTA = timezone(timedelta(hours=-5))
+REPORTS_BUCKET = 'pon-prod-ml-iapol'
+REPORTS_PREFIX = 'ValidationReports/03-MonitorProcesosUpstream/'
+
+
+def upload_csv_reports(session, config, folder):
+    """Publica solo los CSV de esta ejecucion; mantiene todos los archivos locales."""
+    files = sorted(folder.glob('*.csv'))
+    if not files:
+        return {}
+    # Las carpetas locales se crean con fecha y hora de Bogota.
+    datetime.strptime(folder.parent.name, '%Y-%m-%d')
+    datetime.strptime(folder.name, '%H-%M-%S_%f')
+    key_root = REPORTS_PREFIX + folder.parent.name + '/' + folder.name + '/'
+    s3 = session.client('s3', config=config)
+    locations = {}
+    for path in files:
+        key = key_root + path.name
+        with path.open('rb') as body:
+            s3.upload_fileobj(body, REPORTS_BUCKET, key,
+                              ExtraArgs={'ContentType': 'text/csv; charset=utf-8'})
+        locations[path.name] = 's3://' + REPORTS_BUCKET + '/' + key
+    print('[S3] CSV guardados en s3://' + REPORTS_BUCKET + '/' + key_root, flush=True)
+    return locations
+
 ERROR_MARKERS = ('AccessDeniedException', 'EntityNotFoundException', 'ResourceNotFoundException',
     'ThrottlingException', 'OutOfMemoryError', 'CannotPullContainerError',
     'CannotStartContainerError', 'ResourceInitializationError', 'ModuleNotFoundError',
@@ -325,6 +349,7 @@ def inspect(session, config, identity, args, errors):
     print('ECS: solo tareas aun visibles. Crawler: solo ultima ejecucion. SIN DATOS no equivale a cero.')
     print('FALLA/AVISO describen evidencia observada; INFO no certifica datos actualizados. Sin limites de duracion.')
     print(f'Informe: {report} | Filtrar tipo_registro=RESUMEN para la vista principal.')
+    upload_csv_reports(session, config, folder)
     return 3 if any(i['tipo'] == 'INCOMPLETO' for i in reader.issues) else 1 if reader.issues else 0
 
 

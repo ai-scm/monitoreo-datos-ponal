@@ -1,43 +1,72 @@
-Este es un monitor de auditoría del disparo semanal de predicciones en AWS (EventBridge → Lambda → ECS). Es solo lectura, no invoca ni modifica nada.
+PROGRAMACIÓN Y LANZAMIENTO
+=========================
 
-Propósito principal
-Verificar que el flujo programado semanal (xcrime_prediccion_siglas_unidades e informes_anticipaciones) se dispare correctamente y lance tareas ECS.
+Archivo: monitor_disparo_semanal.py
 
-Funcionalidades clave
-1. Mapeo EventBridge → Lambda
+PARA QUÉ SIRVE
 
-Consulta reglas en el bus default
-Lista targets (Lambdas) enlazados
-Valida DLQ, retry policy, estado de reglas
-2. Métricas de CloudWatch (últimos 8 días, por defecto)
+Revisa si hay evidencia de los disparos programados para iniciar las
+predicciones y los informes. También comprueba errores de las funciones
+encargadas de esos lanzamientos.
 
-EventBridge: invocaciones y fallos por regla
-Lambda: invocaciones, errores, throttles, drop de eventos asincronos, fallos en DLQ
-Duration máxima vs. timeout configurado
-3. Análisis de logs de Lambda
+QUÉ REVISA
 
-Lee eventos de la función "lanzadora" (pon-prod-xcrime-prediccion-launch-fargate)
-Busca llamadas RunTask explícitas a ECS
-Detecta:
-ARNs de tareas creadas (en respuesta RunTask)
-Errores y excepciones
-Fallos reportados en RunTask
-4. Dos modos
+- Las reglas xcrime_prediccion_siglas_unidades y generacion_informes_anticipaciones.
+- Sus horarios y las funciones Lambda que tienen como destino.
+- Cada disparo semanal esperado dentro de los últimos ocho días.
+- Invocaciones, errores, solicitudes limitadas y duración de las Lambdas.
+- Si hay configurado un mecanismo para conservar los fallos de entrega.
+- Evidencia de lanzamiento de tareas en los registros de la función lanzadora.
 
-Modo	Qué hace
---revisar-formatos	Muestrea hasta 6 eventos reales del informe anterior; analiza su estructura sin ejecutar
-Default	Inspección completa: reglas + Lambdas + métricas + logs
-5. Reportes CSV
-Un único informe_disparo_semanal.csv con filas filtradas por:
+Compara cada disparo con su propia ventana de observación, para que la actividad
+de otra semana no oculte un disparo sin evidencia.
 
-tipo_registro=RESUMEN — vista principal (reglas y Lambdas)
-tipo_registro=CONTROL — validaciones (OK/AVISO/INCOMPLETO/AUSENTE)
-tipo_registro=EVIDENCIA — eventos de log (ARNs, errores, etc.)
-tipo_registro=CONTEXTO — metadatos y configuración
-Importantes limitaciones (intencionadas)
-No certifica que la tarea ECS se lanzó; solo que RunTask fue llamado
-No ejecuta la regla ni invoca Lambda
-ARN mencionado ≠ tarea creada ≠ tarea en RUNNING
-Métricas sin causa: "SIN DATOS" ≠ fallo
-Logs acotados a 16 MiB, sin exportar mensajes crudos
-Exit codes: 0 (ok), 1 (falla encontrada), 3 (error AWS o lectura incompleta), 130 (interrución)
+CÓMO EJECUTARLO EN CLOUDSHELL
+
+  python3 "$HOME/monitor_disparo_semanal.py" \
+    --dias 8 \
+    --max-eventos 50000 \
+    --salida "$HOME/salida"
+
+QUÉ INFORME ENTREGA
+
+Genera informe_disparo_semanal.csv.
+
+En Excel, filtra la columna tipo_registro:
+
+  RESUMEN: vista principal de reglas, disparos esperados y funciones.
+  CONTROL: explicación de los avisos o problemas.
+  EVIDENCIA: referencias de lanzamiento encontradas en los registros.
+  CONTEXTO: período y configuración utilizados en la revisión.
+
+Destino S3:
+
+FECHA corresponde al día de ejecución en hora de Bogotá, aunque se revisen datos de un período anterior.
+  s3://pon-prod-ml-iapol/ValidationReports/02-MonitorDisparoSemanal/FECHA/HORA/
+
+Copia local:
+  $HOME/salida/disparo_semanal/FECHA/HORA/informe_disparo_semanal.csv
+
+CÓMO INTERPRETARLO
+
+Un disparo con INFO tiene evidencia de actividad de la regla.
+SIN EVIDENCIA genera AVISO cuando termina la ventana de observación y espera.
+PENDIENTE significa que todavía se está esperando evidencia.
+FALLA indica que se observaron invocaciones fallidas en la ventana del disparo.
+INCOMPLETO significa que no se pudo recuperar toda la información.
+
+Un aviso por falta de DLQ o destino de fallo señala que no está configurado un
+mecanismo para conservar errores de entrega; no significa que el disparo haya fallado.
+
+LÍMITES DEL RESULTADO
+
+- SIN DATOS no equivale a cero invocaciones ni demuestra una falla.
+- La actividad de Lambda puede incluir llamadas distintas del disparo semanal.
+- Una tarea mencionada en un registro no prueba que se haya creado o ejecutado.
+- No certifica que hayan arrancado todas las siglas esperadas ni que terminaran bien.
+- Usa la programación actual. Si cambió, no reconstruye el calendario anterior.
+- Los horarios se interpretan en UTC y los disparos esperados también se muestran
+  en hora de Bogotá. Programaciones no admitidas quedan NO EVALUADAS.
+
+El script no dispara reglas ni invoca funciones. Solo publica su informe.
+Si la subida a S3 falla, conserva el CSV local.

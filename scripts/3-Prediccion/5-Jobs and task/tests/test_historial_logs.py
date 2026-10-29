@@ -42,6 +42,12 @@ class SDKError(Exception):
         self.response = {'Error': {'Code': code, 'Message': 'NO_EXPORTAR_ERROR_SDK'}}
 
 
+class ReportS3:
+    """Solo escritura de informes; cualquier lectura de catalogo seria un error."""
+    def upload_fileobj(self, body, bucket, key, **kwargs):
+        self.uploads = getattr(self, 'uploads', []) + [(bucket, key, body.read())]
+
+
 def event(message, days=1):
     return dict(message=message, timestamp=int((NOW - timedelta(days=days)).timestamp()*1000))
 
@@ -109,10 +115,36 @@ class FakeECS:
                 'failures': [{'arn': t, 'reason': 'MISSING'} for t in tasks if t not in self.tasks]}
 
 
+class FakeInsights:
+    def __init__(self, responses):
+        self.responses = list(responses)
+        self.started = []
+        self.read = []
+
+    def start_query(self, **kwargs):
+        self.started.append(kwargs)
+        return {'queryId': 'query-' + str(len(self.started))}
+
+    def get_query_results(self, **kwargs):
+        self.read.append(kwargs)
+        result = self.responses.pop(0)
+        if isinstance(result, BaseException):
+            raise result
+        return result
+
+    def get_paginator(self, operation):
+        raise AssertionError('El modo agregado no pagina mensajes/streams: '+operation)
+
+
+def aggregate(task_id=TASK, **values):
+    values = dict({'@logStream': PREFIX+task_id}, **values)
+    return [{'field': k, 'value': str(v)} for k, v in values.items()]
+
+
 def arguments(**extra):
     data = dict(cluster='cluster', familia='predictor', region='us-east-1', dias_logs=8,
                 grupo_logs=None, prefijo_logs=PREFIX, max_streams=1000, max_eventos=1000, salida='salida',
-                cuenta='926162397524', encoding_entradas='utf-8-sig',
+                cuenta='926162397524', encoding_entradas='utf-8-sig', leer_eventos=True, timeout_consulta=180,
                 separador_entradas='auto', max_mib_entradas=5)
     data.update(extra)
     return SimpleNamespace(**data)
@@ -129,6 +161,181 @@ def task(task_id=TASK, **extra):
     return data
 
 
+class InsightsHistoryTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.args = arguments(salida=self.temp.name, leer_eventos=False)
+
+    def run_query(self, logs, now=NOW, deadline=0):
+        with redirect_stdout(io.StringIO()):
+            return models.history_query_result(logs, GROUP, {PREFIX}, self.args,
+                                               now, deadline, (SDKError,))
+
+    def complete(self, rows, **extra):
+        return dict(status='Complete', results=rows, statistics={'bytesScanned': 1000}, **extra)
+
+    def session(self, logs, ecs=None):
+        clients = {'ecs': ecs or FakeECS(), 'logs': logs, 's3': ReportS3()}
+        def client(name, **kwargs):
+            if name not in clients:
+                raise AssertionError('No se consulta '+name)
+            return clients[name]
+        return SimpleNamespace(client=client)
+
+    def test_collects_all_counts_with_one_query_and_no_event_download(self):
+        rows = [aggregate(cad_header='DECAU', cad_header_distintos=1, modalidad='HORA',
+                          modalidades_distintas=1, eventos=300000, cierres=2)]
+        for model, amount in [('Uniform', 65), ('KDE', 20), ('Conteo', 10), ('Auto Exitatory', 5)]:
+            rows.append(aggregate(pn_model=model, selecciones=amount, eventos=amount))
+        logs = FakeInsights([self.complete(rows)])
+        with redirect_stdout(io.StringIO()):
+            records, context = models.collect_aggregated_history(
+                self.session(logs), None, self.args, (SDKError,))
+        record, = records
+        self.assertEqual((record['sigla'], record['modalidad'], record['total_selecciones'],
+                          record['porcentaje_uniform_observado']), ('DECAU', 'HORA', 100, 65))
+        self.assertEqual(json.loads(record['selecciones_por_modelo'])['Auto Exitatory'], 5)
+        self.assertEqual(record['subunidades_con_cierre_explicito'], '')
+        self.assertEqual(len(logs.started), 1)
+        self.assertEqual(len(logs.read), 1)
+        self.assertEqual(context['lecturas_incompletas'], [])
+
+    def test_pending_query_is_recovered_with_same_id_and_original_window(self):
+        logs = FakeInsights([{'status': 'Running', 'results': [aggregate(eventos=999)]}, self.complete([])])
+        rows, first = self.run_query(logs)
+        self.assertEqual(rows, [])  # Running puede traer resultados parciales; no se presentan como finales.
+        self.assertEqual(first['estado'], 'Running')
+        rows, second = self.run_query(logs, now=NOW+timedelta(hours=2))
+        self.assertEqual((second['query_id'], second['desde_utc']),
+                         (first['query_id'], first['desde_utc']))
+        self.assertEqual(len(logs.started), 1)
+        self.assertEqual(logs.read[0], logs.read[1])
+
+    def test_successful_export_consumes_checkpoint_and_next_run_starts_fresh(self):
+        logs = FakeInsights([self.complete([aggregate(cad_header='METIB', eventos=5)]), self.complete([])])
+        with redirect_stdout(io.StringIO()):
+            self.assertEqual(models.inspect_log_history(self.session(logs), None, self.args, (SDKError,)), 0)
+        state_path, = Path(self.temp.name).rglob('consultas/*.json')
+        state = json.loads(state_path.read_text())
+        self.assertTrue(state['consumida'])
+        self.assertTrue(Path(state['informe']).is_file())
+        self.run_query(logs)
+        self.assertEqual(len(logs.started), 2)
+
+    def test_pending_does_not_report_success_or_consume_query(self):
+        logs = FakeInsights([{'status': 'Running'}])
+        # El runner recibe un presupuesto vencido luego de haber iniciado la consulta.
+        original = models.history_query_result
+        def run(*args, **kwargs):
+            args = list(args);args[5] = 0
+            return original(*args, **kwargs)
+        self.args.timeout_consulta = 180
+        with patch.object(models, 'history_query_result', side_effect=run), redirect_stdout(io.StringIO()):
+            code = models.inspect_log_history(self.session(logs), None, self.args, (SDKError,))
+        self.assertEqual(code, 3)
+        state_path, = Path(self.temp.name).rglob('consultas/*.json')
+        self.assertFalse(json.loads(state_path.read_text())['consumida'])
+
+    def test_sdk_failure_after_start_keeps_query_for_retry(self):
+        logs = FakeInsights([SDKError(), self.complete([])])
+        _, first = self.run_query(logs)
+        self.assertEqual(first['estado'], 'ERROR')
+        self.run_query(logs)
+        self.assertEqual(len(logs.started), 1)
+
+    def test_interrupt_saves_id_and_does_not_cancel_cloud_query(self):
+        logs = FakeInsights([KeyboardInterrupt(), self.complete([])])
+        _, first = self.run_query(logs)
+        self.assertTrue(first['interrumpida'])
+        self.run_query(logs)
+        self.assertEqual(len(logs.started), 1)
+
+    def test_terminal_failure_is_not_reported_or_recovered_forever(self):
+        logs = FakeInsights([{'status': 'Failed', 'results': [aggregate(eventos=999)]}, self.complete([])])
+        rows, info = self.run_query(logs)
+        self.assertEqual((rows, info['estado']), ([], 'Failed'))
+        self.run_query(logs)
+        self.assertEqual(len(logs.started), 2)
+
+    def test_expired_query_can_be_replaced_on_next_run(self):
+        logs = FakeInsights([SDKError('ResourceNotFoundException'), self.complete([])])
+        _, info = self.run_query(logs)
+        self.assertEqual(info['estado'], 'ERROR')
+        self.run_query(logs)
+        self.assertEqual(len(logs.started), 2)
+
+    def test_unknown_query_status_does_not_start_duplicate_scan(self):
+        logs = FakeInsights([{'status': 'Unknown'}, self.complete([])])
+        _, info = self.run_query(logs)
+        self.assertEqual(info['estado'], 'Unknown')
+        self.run_query(logs)
+        self.assertEqual(len(logs.started), 1)
+
+    def test_corrupt_checkpoint_does_not_silently_start_duplicate_query(self):
+        logs = FakeInsights([{'status': 'Running'}])
+        _, first = self.run_query(logs)
+        Path(first['archivo_estado']).write_text('{invalido')
+        _, second = self.run_query(logs)
+        self.assertEqual(second['estado'], 'ERROR')
+        self.assertEqual(len(logs.started), 1)
+
+    def test_lock_prevents_second_process_starting_same_query(self):
+        import fcntl
+        logs = FakeInsights([{'status': 'Running'}])
+        _, info = self.run_query(logs)
+        with Path(info['archivo_estado']).with_suffix('.lock').open('a') as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            _, second = self.run_query(logs)
+        self.assertEqual(second['estado'], 'PENDIENTE')
+        self.assertEqual(len(logs.started), 1)
+
+    def test_row_limit_or_next_page_is_partial_not_full_coverage(self):
+        for response in (self.complete([aggregate()]*10000),
+                         self.complete([aggregate()], nextToken='otra-pagina')):
+            with self.subTest(size=len(response['results'])):
+                logs = FakeInsights([response])
+                # Scope distinto para que las dos consultas simuladas sean independientes.
+                self.args.dias_logs += 1
+                _, info = self.run_query(logs)
+                self.assertTrue(info['limitada'])
+
+    def test_bad_or_unparsed_declaration_marks_counter_coverage_partial(self):
+        rows, issues = models.decode_history_aggregates([
+            aggregate(pn_model='ASIA'+'X'*16, selecciones=1),
+            aggregate(frases_seleccion=1, selecciones=0)], GROUP, 'us-east-1', {PREFIX})
+        self.assertEqual(rows[0]['log']['cobertura'], 'PARCIAL')
+        self.assertEqual(rows[0]['log']['seleccion'], {})
+        self.assertEqual(issues, [])
+
+    def test_training_and_dependency_errors_are_separate_from_model_denominator(self):
+        rows, _ = models.decode_history_aggregates([
+            aggregate(cad_field='MEBOG', cad_field_distintos=1, pn_insufficient='Counter',
+                      insuficientes=10, dependencia_0=2, indicios_error=2),
+            aggregate(pn_model='ModeloNuevo v2', selecciones=10),
+            aggregate(pn_model='Uniform', selecciones=5)], GROUP, 'us-east-1', {PREFIX})
+        log = rows[0]['log']
+        self.assertEqual(sum(log['seleccion'].values()), 15)
+        self.assertEqual(log['insuficientes'], {'Counter': 10})
+        self.assertEqual(log['errores_dependencia'], {'ModuleNotFoundError': 2})
+
+    def test_header_conflicts_cannot_be_hidden_by_latest_aggregation(self):
+        data, _ = models.decode_history_aggregates([
+            aggregate(cad_header='DECAU', cad_header_distintos=2, modalidad='HORA',
+                      modalidades_distintas=2)], GROUP, 'us-east-1', {PREFIX})
+        row = models.history_task_row({k: data[0][k] for k in ('tarea','grupo','region','stream')},
+                                     {}, {}, data[0]['log'])
+        self.assertEqual((row['sigla'], row['modalidad']), ('CONFLICTO', 'CONFLICTO'))
+
+    def test_report_write_failure_does_not_consume_query(self):
+        logs = FakeInsights([self.complete([aggregate(cad_header='MEBOG')])])
+        with patch.object(models, 'write_history_report', side_effect=OSError('disk full')):
+            with redirect_stdout(io.StringIO()), self.assertRaises(OSError):
+                models.inspect_log_history(self.session(logs), None, self.args, (SDKError,))
+        path, = Path(self.temp.name).rglob('consultas/*.json')
+        self.assertFalse(json.loads(path.read_text())['consumida'])
+
+
 class RealLogReaderTests(unittest.TestCase):
     """Formatos observados en CloudWatch y efecto sobre el informe final."""
 
@@ -139,12 +346,18 @@ class RealLogReaderTests(unittest.TestCase):
         return rows[0], context
 
     def test_observed_names_and_multiple_spaces_are_preserved(self):
-        for name in ('Uniform', 'KDE', 'Conteo', 'Counter', 'Auto Exitatory'):
+        for name in ('Uniform', 'KDE', 'KDE per Day Kernel size', 'Conteo', 'Conteo Por Hora', 'Counter', 'Auto Exitatory'):
             with self.subTest(name=name):
                 findings = models.inspect_event(
                     'The best model to run the prediction is  '+name+' - 5 - 19')
                 selected = [model for kind, model, _, _ in findings if kind == 'Seleccion reportada']
                 self.assertEqual(selected, [name])
+
+    def test_actual_conteo_por_hora_suffix_without_first_hyphen(self):
+        row, _ = self.report([REAL_HEADER,
+            'The best model to run the prediction is  Conteo Por Hora 0 - 20'])
+        self.assertEqual(json.loads(row['selecciones_por_modelo']), {'Conteo Por Hora': 1})
+        self.assertEqual(row['total_selecciones'], 1)
 
     def test_multiword_model_in_json_and_plain_selection(self):
         for message in (json.dumps({'selected_model': 'Auto Exitatory'}),
@@ -208,6 +421,10 @@ class RealLogReaderTests(unittest.TestCase):
     def test_header_quoted_in_another_message_does_not_attribute_cad(self):
         siglas, _ = models.history_labels('No se pudo leer la cabecera: '+REAL_HEADER)
         self.assertEqual(siglas, set())
+
+    def test_traceback_argument_placeholder_is_not_a_second_cad(self):
+        row, _ = self.report([REAL_HEADER, '    runPrediction(sigla=CAD, days=7)'])
+        self.assertEqual((row['sigla'], row['siglas_evidencia']), ('DECAU', 'DECAU'))
 
     def test_mapping_sample_uses_the_same_actual_header(self):
         logs = FakeLogs(events={PREFIX+TASK: [[event(REAL_HEADER)]]})
@@ -422,7 +639,7 @@ class HistoryTests(unittest.TestCase):
         rows, _, _ = self.collect([[event('CAD=DESAB')]], ecs, grupo_logs=GROUP)
         self.assertEqual(rows[0]['sigla'], 'DESAB')
 
-    def test_no_s3_ecr_or_task_list_dependency_and_no_raw_messages_in_reports(self):
+    def test_no_catalog_ecr_or_task_list_dependency_and_no_raw_messages_in_reports(self):
         logs = FakeLogs(events={PREFIX+TASK: [[event('CAD=DESAB token=NO_EXPORTAR_TOKEN')]]})
         clients = []
         def client(name, **kwargs):
@@ -431,6 +648,8 @@ class HistoryTests(unittest.TestCase):
                 return FakeECS()
             if name == 'logs':
                 return logs
+            if name == 's3':
+                return ReportS3()
             raise AssertionError(name)
         with tempfile.TemporaryDirectory() as temp, redirect_stdout(io.StringIO()):
             code = models.inspect_log_history(SimpleNamespace(client=client), None,
@@ -441,7 +660,7 @@ class HistoryTests(unittest.TestCase):
             with report.open(encoding='utf-8-sig') as handle:
                 row = next(csv.DictReader(handle))
         self.assertEqual(code, 0)
-        self.assertEqual(clients, ['ecs', 'logs'])
+        self.assertEqual(clients, ['ecs', 'logs', 's3'])
         self.assertNotIn('NO_EXPORTAR_TOKEN', contents)
         self.assertEqual(row['sigla'], 'DESAB')
 
@@ -520,10 +739,65 @@ class SiglaSummaryTests(unittest.TestCase):
         summary, = models.summarize_history_siglas([first, first, other])
         self.assertEqual((summary['tareas'], summary['streams'], summary['total_selecciones']), (1, 2, 5))
 
+    def test_uniform_task_is_visible_even_when_cad_percentage_is_mixed(self):
+        rows = [detail('MEPAS', TASK, 'RUNNING', {'Uniform': 10}, control='INFO'),
+                detail('MEPAS', SECOND_TASK, 'RUNNING', {'KDE': 30}, control='INFO')]
+        summary, = models.summarize_history_siglas(rows)
+        self.assertEqual((summary['tareas_100_uniform'], summary['porcentaje_uniform_observado']), (1, 25))
+        self.assertEqual(summary['control'], 'AVISO')
+        self.assertIn('1 tarea con 100% Uniform', summary['detalle'])
+
+    def test_uniform_task_is_counted_once_across_containers_and_duplicate_rows(self):
+        first = detail('METIB', TASK, selections={'Uniform': 2})
+        other = detail('METIB', TASK, selections={'Uniform': 3}, stream='other/container/'+TASK)
+        summary, = models.summarize_history_siglas([first, first, other])
+        self.assertEqual((summary['tareas'], summary['tareas_100_uniform'], summary['total_selecciones']), (1, 1, 5))
+
+    def test_mixed_models_across_streams_of_one_task_are_not_uniform_only(self):
+        rows = [detail('MEBOG', TASK, selections={'Uniform': 2}),
+                detail('MEBOG', TASK, selections={'KDE': 3}, stream='other/container/'+TASK)]
+        summary, = models.summarize_history_siglas(rows)
+        self.assertEqual(summary['tareas_100_uniform'], 0)
+
+    def test_task_without_selections_is_not_uniform_only(self):
+        summary, = models.summarize_history_siglas([detail('MEBOG', TASK)])
+        self.assertEqual(summary['tareas_100_uniform'], 0)
+
+    def test_uniform_only_observed_in_partial_read_keeps_coverage_warning(self):
+        summary, = models.summarize_history_siglas([
+            detail('MEBOG', TASK, selections={'Uniform': 3}, lectura_logs='PARCIAL')])
+        self.assertEqual((summary['tareas_100_uniform'], summary['lectura_logs'], summary['control']),
+                         (1, 'PARCIAL', 'AVISO'))
+        self.assertIn('selecciones observadas', summary['detalle'])
+
+    def test_uniform_task_count_is_exported_and_shown_in_console(self):
+        logs = FakeLogs(streams=[[PREFIX+TASK, PREFIX+SECOND_TASK]], events={
+            PREFIX+TASK: [[event('CAD=METIB'), event('The best model to run the prediction is Uniform - 0 - 1')]],
+            PREFIX+SECOND_TASK: [[event('CAD=METIB'), event('The best model to run the prediction is KDE - 0 - 1')]]})
+        session = SimpleNamespace(client=lambda name, **kwargs: {'ecs': FakeECS(), 'logs': logs, 's3': ReportS3()}[name])
+        output = io.StringIO()
+        with tempfile.TemporaryDirectory() as temp, redirect_stdout(output):
+            self.assertEqual(models.inspect_log_history(session, None, arguments(salida=temp), (SDKError,)), 0)
+            with next(Path(temp).rglob('*.csv')).open(encoding='utf-8-sig') as handle:
+                row = next(csv.DictReader(handle))
+        self.assertEqual((row['tareas_100_uniform'], row['porcentaje_uniform_observado']), ('1', '50.0'))
+        self.assertIn('Tareas 100%', output.getvalue())
+
 
     def test_unknown_sigla_is_not_arbitrarily_assigned(self):
         summaries = models.summarize_history_siglas([detail('SIN DATO', TASK, selections={'Uniform': 4})])
         self.assertEqual(summaries, [])
+
+    def test_startup_only_unknown_stream_does_not_make_known_counts_partial(self):
+        summary, = models.summarize_history_siglas([
+            detail('MEBOG', TASK, selections={'KDE': 2}), detail('SIN DATO', SECOND_TASK)])
+        self.assertEqual(summary['lectura_logs'], 'LEIDA')
+
+    def test_unassigned_model_counts_do_make_cad_coverage_partial(self):
+        summary, = models.summarize_history_siglas([
+            detail('MEBOG', TASK, selections={'KDE': 2}),
+            detail('SIN DATO', SECOND_TASK, selections={'Uniform': 3})])
+        self.assertEqual(summary['lectura_logs'], 'PARCIAL')
 
     def test_known_failure_survives_partial_discovery(self):
         row = detail('DESAB', TASK, control='FALLA')
@@ -536,7 +810,7 @@ class SiglaSummaryTests(unittest.TestCase):
         self.assertEqual((summary['activas_ecs'], summary['sin_estado_ecs']), (0, 1))
         self.assertEqual(summary['control'], 'AVISO')
 
-    def test_default_summary_collects_all_observed_states_without_s3(self):
+    def test_default_summary_collects_all_observed_states_without_s3_catalog(self):
         third = '2'*32
         logs = FakeLogs(streams=[[PREFIX+TASK, PREFIX+SECOND_TASK, PREFIX+third]], events={
             PREFIX+TASK: [[event('CAD=DESAB')]], PREFIX+SECOND_TASK: [[event('CAD=MEBOG')]],
@@ -548,9 +822,9 @@ class SiglaSummaryTests(unittest.TestCase):
         called = []
         def client(name, **kwargs):
             called.append(name)
-            if name not in ('ecs', 'logs'):
-                raise AssertionError('Este monitoreo no consulta catalogos ni S3: ' + name)
-            return {'ecs': ecs, 'logs': logs}[name]
+            if name not in ('ecs', 'logs', 's3'):
+                raise AssertionError('Servicio inesperado: ' + name)
+            return {'ecs': ecs, 'logs': logs, 's3': ReportS3()}[name]
         output = io.StringIO()
         with tempfile.TemporaryDirectory() as temp, redirect_stdout(output):
             code = models.inspect_log_history(SimpleNamespace(client=client), None,
@@ -564,7 +838,7 @@ class SiglaSummaryTests(unittest.TestCase):
         details = [row for row in records if row['tipo_registro'] == 'DETALLE_TAREA']
         self.assertEqual([row['sigla'] for row in summaries], ['DESAB', 'MEBOG', 'MEPAS'])
         self.assertEqual(len(details), 3)
-        self.assertEqual(called, ['ecs', 'logs'])
+        self.assertEqual(called, ['ecs', 'logs', 's3'])
         self.assertEqual(summaries[0]['activas_ecs'], '1')
         self.assertEqual(summaries[1]['detenidas_ecs'], '1')
         self.assertEqual(summaries[2]['sin_estado_ecs'], '1')
@@ -588,7 +862,7 @@ class SiglaSummaryTests(unittest.TestCase):
 
 
 class StreamStructureTests(unittest.TestCase):
-    class S3:
+    class S3(ReportS3):
         def __init__(self, data=None, error=False):
             self.data = (data if data is not None else
                 b'SIGLA_PAPA;SIGLA_FISICA;TIUN_CODIGO;UNIDAD_ID;UNDE_CONSECUTIVO\n'

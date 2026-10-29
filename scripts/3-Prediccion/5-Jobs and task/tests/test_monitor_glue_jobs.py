@@ -233,7 +233,7 @@ class GlueMonitorTests(unittest.TestCase):
             code = monitor.run_cli(session, None, monitor.parse_args(['--salida', temp]), (SDKError,))
             self.assertEqual(len(list(Path(temp).rglob('*.csv'))), 1)
         self.assertEqual(code, 0)
-        self.assertEqual(session.clients, ['sts', 'glue'])
+        self.assertEqual(session.clients, ['sts', 'glue', 's3'])
         self.assertEqual(len(session.glue.calls), 7)
 
 
@@ -249,6 +249,8 @@ class FakeSession:
             return SimpleNamespace(get_caller_identity=lambda: {'Account': self.account})
         if name == 'glue':
             return self.glue
+        if name == 's3':
+            return SimpleNamespace(upload_fileobj=lambda body, *args, **kwargs: body.read())
         raise AssertionError('Servicio no autorizado: ' + name)
 
 
@@ -285,7 +287,8 @@ class UpstreamRegressionTests(unittest.TestCase):
             def get_metric_statistics(self, **kwargs):
                 return {'Datapoints': []}
 
-        clients = {'ecs': ECS(), 'glue': CrawlerOnly(), 'dynamodb': DDB(), 'cloudwatch': CW()}
+        clients = {'ecs': ECS(), 'glue': CrawlerOnly(), 'dynamodb': DDB(), 'cloudwatch': CW(),
+                   's3': SimpleNamespace(upload_fileobj=lambda body, *args, **kwargs: body.read())}
         session = SimpleNamespace(client=lambda name, **kwargs: clients[name])
         with tempfile.TemporaryDirectory() as temp, redirect_stdout(io.StringIO()):
             args = argparse.Namespace(cluster=upstream.CLUSTER, crawler=upstream.CRAWLER,

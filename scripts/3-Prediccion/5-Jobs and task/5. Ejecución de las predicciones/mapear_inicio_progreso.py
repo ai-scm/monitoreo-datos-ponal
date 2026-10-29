@@ -2,12 +2,12 @@
 """Monitor ECS de inicio y ejecucion de predicciones (un solo archivo).
 
 CloudShell: python3 mapear_inicio_progreso.py
-Consulta ECS, STS y telemetria existente en CloudWatch. No modifica AWS ni lee S3.
+Consulta ECS, STS y CloudWatch. Solo escribe su CSV de monitoreo en S3; no lee predicciones.
 Los tiempos son informativos: no hay umbrales estandar de duracion por sigla.
 Incluye tareas con desiredStatus RUNNING (pueden estar PENDING) y STOPPED visibles.
 La captura de detenidas no es un historial completo. Busca sigla en parametros,
 etiquetas y referencias explicitas de logs, sin inferirla por el cluster compartido.
-Salida: tabla corta y tareas.csv/contexto.json locales en salida/inicio_progreso/.
+Salida: tareas.csv/contexto.json locales y tareas.csv en ValidationReports/05-MonitorInicioProgreso/.
 Logs RUNNING y metricas: ultimos 60 minutos. Logs STOPPED: vida de la tarea ECS.
 End Script es cierre reportado de subunidad, no prueba de finalizacion global.
 Exit: 0 sin FALLA (puede haber AVISO); 1 error confirmado de tarea/contenedor;
@@ -29,6 +29,30 @@ import textwrap
 DEFAULT_CLUSTER = 'pon-prod-xcrime-predicciones-cluster'
 DEFAULT_FAMILY = 'pon-prod-xcrime-prediccion-definition'
 BOGOTA = timezone(timedelta(hours=-5))
+REPORTS_BUCKET = 'pon-prod-ml-iapol'
+REPORTS_PREFIX = 'ValidationReports/05-MonitorInicioProgreso/'
+
+
+def upload_csv_reports(session, config, folder):
+    """Publica solo los CSV de esta ejecucion; mantiene todos los archivos locales."""
+    files = sorted(folder.glob('*.csv'))
+    if not files:
+        return {}
+    # Las carpetas locales se crean con fecha y hora de Bogota.
+    datetime.strptime(folder.parent.name, '%Y-%m-%d')
+    datetime.strptime(folder.name, '%H-%M-%S_%f')
+    key_root = REPORTS_PREFIX + folder.parent.name + '/' + folder.name + '/'
+    s3 = session.client('s3', config=config)
+    locations = {}
+    for path in files:
+        key = key_root + path.name
+        with path.open('rb') as body:
+            s3.upload_fileobj(body, REPORTS_BUCKET, key,
+                              ExtraArgs={'ContentType': 'text/csv; charset=utf-8'})
+        locations[path.name] = 's3://' + REPORTS_BUCKET + '/' + key
+    print('[S3] CSV guardados en s3://' + REPORTS_BUCKET + '/' + key_root, flush=True)
+    return locations
+
 RANK = {'OK': 0, 'AVISO': 1, 'FALLA': 2}
 
 
@@ -461,7 +485,7 @@ def main():
     parser.add_argument('--ventana-minutos', type=int, default=60, help='Ventana de logs/metricas, no umbral de demora (default: 60)')
     parser.add_argument('--max-eventos', type=int, default=1000, help='Eventos por contenedor en la ventana; truncamiento explicito')
     parser.add_argument('--salida', default='salida')
-    parser.add_argument('--no-export', action='store_true', help='No genera archivos locales')
+    parser.add_argument('--no-export', action='store_true', help='No genera archivos locales ni sube CSV a S3')
     parser.add_argument('--detallado', action='store_true')
     args = parser.parse_args()
     if not 1 <= args.max_tareas <= 10000:
@@ -587,6 +611,7 @@ def main():
                        'alcance': 'ECS y telemetria existente en ventana acotada. Avance solo si la aplicacion lo reporta; indicios de error no prueban fallo. No valida S3 ni solicitudes sin tarea, no conserva eventos ocurridos entre capturas.'}
             (folder/'contexto.json').write_text(json.dumps(context, ensure_ascii=False, indent=2, default=str), encoding='utf-8')
             print(f'Reportes locales: {folder}/tareas.csv y contexto.json')
+            upload_csv_reports(session, config, folder)
         if args.detallado:
             for row in rows:
                 print(json.dumps(row, ensure_ascii=False, indent=2))

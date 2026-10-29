@@ -3,7 +3,7 @@
 
 CloudShell: python3 mapear_modelos_dependencias.py
 Por defecto resumen por sigla identificada desde streams de logs y metadata ECS vinculada.
---por-tarea conserva el mapeo ECS/ECR anterior. Sin ECS Exec, RunTask ni escrituras AWS.
+--por-tarea conserva el mapeo ECS/ECR anterior. Sin ECS Exec ni RunTask; publica CSV en S3.
 --validar-entradas lee cabeceras; --validar-filas agrega conteos de dos entradas S3.
 --historial-logs descubre streams por tarea aunque ECS ya no la conserve.
 --mapear-streams cruza todas las siglas de la estructura S3 con sus streams identificados.
@@ -13,7 +13,11 @@ descarga capas temporales con presupuesto e inventaria archivos sin extraerlos.
 --probar-imports ejecuta solo imports en una copia Docker local, sin red ni ECS Exec.
 Referencias en configuracion/logs no prueban disponibilidad ni modelo elegido.
 Salida por sigla: historial_tareas.csv (RESUMEN_SIGLA/DETALLE_TAREA) y contexto_historial.json.
+--verificar-ciclo recupera el catalogo inicial y cruza creaciones RunTask por ARN
+con respuestas completas de Lambda; separa seleccion observada de finalizacion.
 Modo --por-tarea: mapa.csv, evidencias.csv y contexto.json en salida/modelos_dependencias/FECHA/HORA.
+Cada modo AWS sube sus CSV a ValidationReports/06-MonitorModelosDependencias/FECHA/HORA/.
+--desde-reportes conserva el analisis offline y sus salidas locales, sin acceso AWS.
 Exit: 0 sin diferencias confirmadas (puede haber pendientes); 1 diferencia estatica o falla ECS;
 2 argumentos; 3 lectura/comparacion incompleta; 130 Ctrl+C.
 """
@@ -62,8 +66,33 @@ except Exception as exc:
     sys.exit(1)
 '''
 BOGOTA = timezone(timedelta(hours=-5))
+REPORTS_BUCKET = 'pon-prod-ml-iapol'
+REPORTS_PREFIX = 'ValidationReports/06-MonitorModelosDependencias/'
+
+
+def upload_csv_reports(session, config, folder):
+    """Publica solo los CSV de esta ejecucion; mantiene todos los archivos locales."""
+    files = sorted(folder.glob('*.csv'))
+    if not files:
+        return {}
+    # Las carpetas locales se crean con fecha y hora de Bogota.
+    datetime.strptime(folder.parent.name, '%Y-%m-%d')
+    datetime.strptime(folder.name, '%H-%M-%S_%f')
+    key_root = REPORTS_PREFIX + folder.parent.name + '/' + folder.name + '/'
+    s3 = session.client('s3', config=config)
+    locations = {}
+    for path in files:
+        key = key_root + path.name
+        with path.open('rb') as body:
+            s3.upload_fileobj(body, REPORTS_BUCKET, key,
+                              ExtraArgs={'ContentType': 'text/csv; charset=utf-8'})
+        locations[path.name] = 's3://' + REPORTS_BUCKET + '/' + key
+    print('[S3] CSV guardados en s3://' + REPORTS_BUCKET + '/' + key_root, flush=True)
+    return locations
+
 # Nombres observados; Conteo y Counter se conservan separados, sin inferir alias.
-MODELS = ('Counter', 'Conteo', 'KDE', 'KDEPerDayKernelSize', 'SEEP', 'Uniform', 'Auto Exitatory')
+MODELS = ('Counter', 'Conteo', 'Conteo Por Hora', 'KDE', 'KDEPerDayKernelSize',
+          'KDE per Day Kernel size', 'SEEP', 'Uniform', 'Auto Exitatory')
 EXCLUDED_IMAGE_PREFIXES = ('opt/conda/pkgs/', 'opt/conda/share/doc/')
 DEFAULT_ENVIRONMENT = 'opt/conda/envs/predenv'
 DEFAULT_REQUIREMENTS = 'code/requirements.txt'
@@ -1363,7 +1392,7 @@ def canonical_model(value, allow_unknown=False):
 
 def reported_model(value):
     """El sufijo numerico observado no pertenece al nombre ni identifica unidad."""
-    name = re.sub(r'\s+-\s+\d+\s+-\s+\d+\s*$', '', value.strip())
+    name = re.sub(r'\s+(?:-\s+)?\d+\s+-\s+\d+\s*$', '', value.strip())
     return canonical_model(name, allow_unknown=True)
 
 
@@ -2068,6 +2097,7 @@ def validate_candidate_inputs(session, config, identity, args, error_types):
     if args.selector_unidades:
         write_selector_units(folder, rows[0])
     print(f'Reportes: {folder}/control_entradas.csv | contexto_entradas.json')
+    upload_csv_reports(session, config, folder)
     if any(r['estado'] == 'NO EVALUADO' or r['existencia'] != 'OK' or args.validar_filas and (r['cobertura_filas'] != 'LEIDA' or r['recurso'].endswith('/' + INPUT_KEYS[0]) and r['cobertura_desglose'] != 'LEIDA') or args.selector_unidades and r['recurso'].endswith('/' + INPUT_KEYS[0]) and r['cobertura_selector'] != 'LEIDA' for r in rows):
         return 3
     return 1 if any(r['estado'] == 'FALLA' for r in rows) else 0
@@ -2256,6 +2286,7 @@ def probe_image_imports(session, config, identity, args, aws_errors):
         print('[INCOMPLETO] '+issue)
     print('Prueba aislada de imports; no certifica el proceso activo ni todos los modelos o combinaciones de librerias.')
     print(f'Reportes: {folder}/imports.csv | contexto_imports.json')
+    upload_csv_reports(session, config, folder)
     return 3 if issues or counts['NO EVALUADO'] else 1 if counts['FALLA'] else 0
 
 
@@ -2269,7 +2300,7 @@ def history_labels(message):
             return
         value = value.strip().upper()
         if key in ('cad', 'sigla', 'siglafisica') and re.fullmatch(r'[A-Z][A-Z0-9]{2,11}', value):
-            if value not in ('NONE', 'NULL', 'UNKNOWN', 'TODAS', 'TODOS'):
+            if value not in ('NONE', 'NULL', 'UNKNOWN', 'TODAS', 'TODOS', 'CAD', 'SIGLA'):
                 siglas.add(value)
         if key in ('timeframe', 'modalidad') and value in ('HORA', 'TURNO'):
             modes.add(value)
@@ -2308,7 +2339,538 @@ def history_labels(message):
 def empty_history_log():
     return dict(eventos=0, seleccion=Counter(), insuficientes=Counter(), errores_dependencia=Counter(),
         siglas=set(), modalidades=set(), cierres=0, unidades_cierre=set(),
-        indicios_error=0, primero=None, ultimo=None, cobertura='LEIDA', error='')
+        indicios_error=0, errores_aplicacion=Counter(), primero=None, ultimo=None, cobertura='LEIDA', error='')
+
+
+LAUNCH_RULE = 'xcrime_prediccion_siglas_unidades'
+LAUNCH_FUNCTION = 'pon-prod-xcrime-prediccion-launch-fargate'
+# Perfil comprobado mediante inspeccion estatica de la lanzadora el 2026-10-29.
+# Un cambio de codigo exige revisar el selector; no adivinar el nuevo contrato.
+LAUNCH_CODE_SHA256 = 'cMZjIaOJZ6ogwg2J25Zyt3e8v///dFdOfLAqC9ELKWU='
+
+
+def catalog_at_cycle_start(s3, account, start, sdk_errors):
+    """Recupera la version vigente, sin restaurar ni modificar el catalogo S3."""
+    key = 'utilidades/siglas_fisicas.json'
+    info = dict(lectura='NO EVALUADO', versiones_leidas=0)
+    versions = []
+    try:
+        pages = s3.get_paginator('list_object_versions').paginate(Bucket='pon-prod-ml-iapol',
+            Prefix=key, ExpectedBucketOwner=account, PaginationConfig={'PageSize': 1000, 'MaxItems': 2001})
+        for page in pages:
+            for field in ('Versions', 'DeleteMarkers'):
+                for item in page.get(field, []):
+                    if item.get('Key') != key:
+                        continue
+                    info['versiones_leidas'] += 1
+                    if isinstance(item.get('LastModified'), datetime) and item['LastModified'] <= start:
+                        versions.append((item['LastModified'], field, item.get('VersionId')))
+        if info['versiones_leidas'] > 2000 or getattr(pages, 'resume_token', None):
+            return dict(info, detalle='Listado de versiones limitado; no se afirma cual estaba vigente')
+        if not versions:
+            return dict(info, detalle='Sin version conservada anterior al disparo')
+        newest = max(item[0] for item in versions)
+        candidates = [item for item in versions if item[0] == newest]
+        if len(candidates) != 1 or candidates[0][1] == 'DeleteMarkers':
+            return dict(info, detalle='Catalogo ausente o version temporal ambigua al inicio')
+        response = s3.get_object(Bucket='pon-prod-ml-iapol', Key=key,
+            VersionId=candidates[0][2], ExpectedBucketOwner=account)
+        with response['Body'] as body:
+            raw = body.read(1024*1024+1)
+        if len(raw) > 1024*1024:
+            return dict(info, detalle='Version historica supera el presupuesto de lectura')
+        cads = json.loads(raw.decode('utf-8-sig'))
+        if not isinstance(cads, list) or any(not isinstance(c, str) or not re.fullmatch(r'[A-Z][A-Z0-9]{2,11}', c) for c in cads):
+            return dict(info, detalle='Lista CAD historica no interpretable')
+        return dict(info, lectura='LEIDA', version=response.get('VersionId', candidates[0][2]),
+            modificado=newest.isoformat(), sha256=hashlib.sha256(raw).hexdigest(),
+            cads=sorted(set(cads)), entradas=len(cads), duplicados=len(cads)-len(set(cads)))
+    except sdk_errors as exc:
+        return dict(info, detalle=getattr(exc, 'response', {}).get('Error', {}).get('Code', type(exc).__name__))
+    except (ValueError, TypeError, UnicodeError):
+        return dict(info, detalle='No se pudo interpretar la version historica')
+
+
+def load_cycle_expectations(session, config, args, now, sdk_errors):
+    """Lee la seleccion ACTUAL de la lanzadora; nunca la presenta como contrato historico."""
+    info = dict(regla=LAUNCH_RULE, lectura='ERROR', configuracion_historica_confirmada=False,
+                limitaciones=['Actividad en logs no prueba un nuevo lanzamiento ni una prediccion terminada.',
+                              'Configuracion actual: no reconstruye cambios historicos del target, codigo o catalogo.'])
+    try:
+        events = session.client('events', config=config)
+        rule = events.describe_rule(Name=LAUNCH_RULE, EventBusName='default')
+        schedule = rule.get('ScheduleExpression', '')
+        match = re.fullmatch(r'cron\((\d{1,2}) (\d{1,2}) \? \* (SUN|MON|TUE|WED|THU|FRI|SAT) \*\)', schedule)
+        if not match or int(match[1]) > 59 or int(match[2]) > 23:
+            raise ValueError('Programacion no semanal simple; no se deduce un ciclo')
+        days = dict(SUN=6, MON=0, TUE=1, WED=2, THU=3, FRI=4, SAT=5)
+        start = now.astimezone(timezone.utc).replace(hour=int(match[2]), minute=int(match[1]), second=0, microsecond=0)
+        start -= timedelta(days=(start.weekday()-days[match[3]]) % 7)
+        if start > now:
+            start -= timedelta(days=7)
+        info.update(desde_utc=start.isoformat(), hasta_utc=now.isoformat(),
+                    programacion_utc=schedule, estado_regla=rule.get('State'))
+        targets = []
+        for page in events.get_paginator('list_targets_by_rule').paginate(Rule=LAUNCH_RULE, EventBusName='default'):
+            targets.extend(page.get('Targets', []))
+        arn = 'arn:aws:lambda:'+args.region+':'+args.cuenta+':function:'+LAUNCH_FUNCTION
+        target = [item for item in targets if item.get('Arn') == arn]
+        if len(target) != 1 or target[0].get('InputPath') or target[0].get('InputTransformer'):
+            raise ValueError('Target lanzadora no unico/sin calificador o entrada transformada; selector no evaluable')
+        payload = json.loads(target[0]['Input']) if target[0].get('Input') is not None else {}
+        if not isinstance(payload, dict):
+            raise ValueError('Entrada de la regla no es un objeto')
+        function = session.client('lambda', config=config).get_function_configuration(FunctionName=LAUNCH_FUNCTION)
+        info['codigo_sha256'] = function.get('CodeSha256', '')
+        info['codigo_modificado'] = function.get('LastModified', '')
+        info['grupo_logs_lanzadora'] = function.get('LoggingConfig', {}).get('LogGroup') or '/aws/lambda/'+LAUNCH_FUNCTION
+        if info['codigo_sha256'] != LAUNCH_CODE_SHA256:
+            raise ValueError('Codigo de lanzadora distinto del perfil revisado; revisar el selector antes de declarar CAD esperados')
+        if 'cads' in payload:
+            cads = payload['cads']
+            info['fuente_cads'] = 'Input.cads del target EventBridge actual'
+        else:
+            response = session.client('s3', config=config).get_object(Bucket='pon-prod-ml-iapol',
+                Key='utilidades/siglas_fisicas.json', ExpectedBucketOwner=args.cuenta)
+            with response['Body'] as body:
+                raw = body.read(1024*1024+1)
+            if len(raw) > 1024*1024:
+                raise ValueError('Catalogo mayor al presupuesto de 1 MiB')
+            cads = json.loads(raw.decode('utf-8-sig'))
+            info.update(fuente_cads='s3://pon-prod-ml-iapol/utilidades/siglas_fisicas.json',
+                version_catalogo=response.get('VersionId', ''), etag_catalogo=response.get('ETag', ''),
+                catalogo_modificado=response.get('LastModified').isoformat() if isinstance(response.get('LastModified'), datetime) else '')
+            info['catalogo_sha256_actual'] = hashlib.sha256(raw).hexdigest()
+            info['catalogo_inicio'] = catalog_at_cycle_start(session.client('s3', config=config), args.cuenta, start, sdk_errors)
+        if (not isinstance(cads, list) or len(cads) > 1000 or
+                any(not isinstance(cad, str) or not re.fullmatch(r'[A-Z][A-Z0-9]{2,11}', cad) for cad in cads)):
+            raise ValueError('Catalogo CAD no interpretable; no se descartan entradas silenciosamente')
+        modes = [payload['time_frame']] if 'time_frame' in payload else ['HORA', 'TURNO']
+        if any(mode not in ('HORA', 'TURNO') for mode in modes):
+            raise ValueError('Modalidad no contemplada en el perfil comprobado')
+        changes = []
+        for label, value in (('codigo', info.get('codigo_modificado')), ('catalogo', info.get('catalogo_modificado'))):
+            if value and datetime.fromisoformat(value).astimezone(timezone.utc) > start:
+                changes.append(label)
+        historical = info.get('catalogo_inicio', {})
+        current_cads = sorted(set(cads))
+        if historical.get('lectura') == 'LEIDA':
+            cads = historical['cads']
+            info['cads_actuales'] = current_cads
+            if historical['sha256'] == info.get('catalogo_sha256_actual') and 'catalogo' in changes:
+                changes.remove('catalogo')
+        info.update(lectura='LEIDA', cads=sorted(set(cads)), modalidades=modes,
+                    duplicados_catalogo=historical.get('duplicados', len(cads)-len(set(cads))), cambios_posteriores_al_disparo=changes,
+                    catalogo_inicio_confirmado=historical.get('lectura') == 'LEIDA',
+                    combinaciones_configuradas=len(set(cads))*len(modes))
+    except sdk_errors as exc:
+        info['detalle'] = 'Consulta incompleta: '+getattr(exc, 'response', {}).get('Error', {}).get('Code', type(exc).__name__)
+    except (ValueError, TypeError, KeyError, UnicodeError) as exc:
+        # Solo mensajes locales; no exportar payloads ni textos de errores de JSON.
+        info.update(lectura='NO EVALUADO', detalle=str(exc) if type(exc) is ValueError else 'Configuracion no interpretable')
+    return info
+
+
+def launch_json_records(events, task_events, start=None, end=None):
+    """Reconstruye documentos JSON completos por stream/invocacion; une solo por ARN exacto."""
+    states, found, seen = {}, {}, set()
+    info = dict(eventos=0, documentos=0, fragmentos_incompletos=0, conflictos=0, fechas_no_interpretables=0, tareas_fuera_ciclo=0)
+    for event in events:
+        key = (event.get('logStreamName', ''), event.get('eventId'))
+        if key[1] and key in seen:
+            continue
+        seen.add(key)
+        info['eventos'] += 1
+        message = str(event.get('message', ''))
+        state = states.setdefault(key[0], dict(buffer='', request=''))
+        # Los formatos JSON de Lambda pueden envolver el mensaje de la aplicacion.
+        try:
+            wrapper = json.loads(message)
+        except (ValueError, TypeError, RecursionError):
+            wrapper = None
+        if isinstance(wrapper, dict) and isinstance(wrapper.get('message'), str):
+            message = wrapper['message']
+            request = wrapper.get('requestId')
+            if isinstance(request, str) and re.fullmatch(r'[A-Za-z0-9-]{1,100}', request):
+                if state['request'] and state['request'] != request and state['buffer']:
+                    info['fragmentos_incompletos'] += 1
+                    state['buffer'] = ''
+                state['request'] = request
+        start_marker = re.match(r'^START RequestId:\s*([A-Za-z0-9-]{1,100})\b', message)
+        if start_marker or message.startswith(('END RequestId:', 'REPORT RequestId:')):
+            info['fragmentos_incompletos'] += int(bool(state['buffer']))
+            state.update(buffer='', request=start_marker[1] if start_marker else '')
+            continue
+        if not state['buffer']:
+            if not message.strip().startswith('{'):
+                continue
+            state['buffer'] = message.strip()
+        else:
+            state['buffer'] += '\n' + message.strip()
+        if len(state['buffer']) > 1024*1024:
+            info['fragmentos_incompletos'] += 1
+            state['buffer'] = ''
+            continue
+        try:
+            data = json.loads(state['buffer'])
+        except RecursionError:
+            info['fragmentos_incompletos'] += 1
+            state['buffer'] = ''
+            continue
+        except ValueError:
+            continue
+        state['buffer'] = ''
+        info['documentos'] += 1
+        if not state['request'] or not isinstance(data, dict):
+            continue
+        metadata = data.get('ResponseMetadata')
+        if not isinstance(metadata, dict) or metadata.get('HTTPStatusCode') != 200:
+            continue
+        for task in data.get('tasks', []) if isinstance(data.get('tasks'), list) else []:
+            if not isinstance(task, dict) or task.get('taskArn') not in task_events:
+                continue
+            labels = {'CAD': set(), 'TIME_FRAME': set()}
+            overrides = task.get('overrides')
+            containers = overrides.get('containerOverrides') if isinstance(overrides, dict) else None
+            if not isinstance(containers, list):
+                continue
+            for container in containers:
+                if not isinstance(container, dict):
+                    continue
+                for env in container.get('environment', []) if isinstance(container.get('environment'), list) else []:
+                    if isinstance(env, dict) and env.get('name') in labels and isinstance(env.get('value'), str):
+                        labels[env['name']].add(env['value'])
+            if any(len(values) != 1 for values in labels.values()):
+                continue
+            cad, mode = next(iter(labels['CAD'])), next(iter(labels['TIME_FRAME']))
+            if not re.fullmatch(r'[A-Z][A-Z0-9]{2,11}', cad) or mode not in ('HORA', 'TURNO'):
+                continue
+            arn = task['taskArn']
+            try:
+                created = datetime.fromisoformat(task.get('createdAt', ''))
+                if created.tzinfo is None:
+                    raise ValueError('Creacion sin zona')
+            except (ValueError, TypeError):
+                info['fechas_no_interpretables'] += 1
+                continue
+            if start is not None and created < start or end is not None and created >= end:
+                info['tareas_fuera_ciclo'] += 1
+                continue
+            record = dict(sigla=cad, modalidad=mode, tarea=arn.rsplit('/', 1)[-1], task_arn=arn,
+                creacion_api=created.astimezone(timezone.utc).isoformat(),
+                instante_evento_runtask=task_events[arn]['instante'], evento_cloudtrail=task_events[arn]['evento'],
+                evento_lambda=event.get('eventId', ''),
+                solicitud_lambda=hashlib.sha256(state['request'].encode()).hexdigest()[:12])
+            if arn in found and (found[arn]['sigla'], found[arn]['modalidad']) != (cad, mode):
+                info['conflictos'] += 1
+                found[arn]['sigla'] = 'CONFLICTO'
+            else:
+                found[arn] = record
+    info['fragmentos_incompletos'] += sum(bool(state['buffer']) for state in states.values())
+    return [r for r in found.values() if r['sigla'] != 'CONFLICTO'], info
+
+
+def read_cycle_launches(session, config, args, expectation, sdk_errors):
+    """CloudTrail confirma RunTask; JSON completo de Lambda identifica CAD/modalidad."""
+    start = datetime.fromisoformat(expectation['desde_utc'])
+    end = min(datetime.fromisoformat(expectation['hasta_utc']), start+timedelta(hours=1))
+    info = dict(lectura='LEIDA', desde_utc=start.isoformat(), hasta_utc=end.isoformat(),
+        metodo='ARN exacto entre CloudTrail RunTask y respuesta JSON de Lambda', registros=[],
+        eventos_cloudtrail=0, tareas_api=0, errores_api=0, limites=[])
+    tasks = {}
+    try:
+        trail = session.client('cloudtrail', config=config)
+        pages = trail.get_paginator('lookup_events').paginate(
+            LookupAttributes=[{'AttributeKey': 'EventName', 'AttributeValue': 'RunTask'}],
+            StartTime=start, EndTime=end, PaginationConfig={'PageSize': 50, 'MaxItems': 2001})
+        for page in pages:
+            for event in page.get('Events', []):
+                info['eventos_cloudtrail'] += 1
+                raw = json.loads(event.get('CloudTrailEvent', '{}'))
+                request, response = raw.get('requestParameters') or {}, raw.get('responseElements') or {}
+                if (request.get('cluster', '').rsplit('/', 1)[-1] != args.cluster or
+                        raw.get('userIdentity', {}).get('arn', '').rsplit('/', 1)[-1] != LAUNCH_FUNCTION):
+                    continue
+                definition = request.get('taskDefinition', '').rsplit('/', 1)[-1].split(':')[0]
+                if definition != args.familia.rsplit('/', 1)[-1].split(':')[0]:
+                    continue
+                info['errores_api'] += int(bool(raw.get('errorCode'))) + len(response.get('failures', []))
+                for task in response.get('tasks', []) if isinstance(response.get('tasks'), list) else []:
+                    arn = task.get('taskArn', '') if isinstance(task, dict) else ''
+                    prefix = 'arn:aws:ecs:'+args.region+':'+args.cuenta+':task/'+args.cluster+'/'
+                    if arn.startswith(prefix) and re.fullmatch(r'[a-f0-9]{32}', arn[len(prefix):]):
+                        tasks[arn] = dict(evento=event['EventId'], instante=event['EventTime'].isoformat())
+        if info['eventos_cloudtrail'] > 2000 or getattr(pages, 'resume_token', None):
+            info['limites'].append('Listado CloudTrail limitado a 2000 eventos')
+    except sdk_errors as exc:
+        info['limites'].append('CloudTrail: '+getattr(exc, 'response', {}).get('Error', {}).get('Code', type(exc).__name__))
+    except (ValueError, TypeError, KeyError):
+        info['limites'].append('Evento CloudTrail no interpretable')
+    info['tareas_api'] = len(tasks)
+    if not tasks:
+        info.update(lectura='INCOMPLETO', detalle='No hay ARN RunTask confirmables en la ventana de lanzamiento')
+        return info
+    events, size = [], 0
+    try:
+        logs = session.client('logs', config=config)
+        pages = logs.get_paginator('filter_log_events').paginate(
+            logGroupName=expectation['grupo_logs_lanzadora'], startTime=int(start.timestamp()*1000),
+            endTime=int(end.timestamp()*1000), PaginationConfig={'PageSize': 10000, 'MaxItems': 50001})
+        limited = False
+        for page in pages:
+            for event in page.get('events', []):
+                size += len(str(event.get('message', '')).encode('utf-8'))
+                if len(events) >= 50000 or size > 16*1024**2:
+                    limited = True
+                    break
+                events.append(event)
+            if limited:
+                break
+        if limited:
+            info['limites'].append('Logs Lambda limitados a 50000 eventos/16 MiB')
+    except sdk_errors as exc:
+        info['limites'].append('Logs Lambda: '+getattr(exc, 'response', {}).get('Error', {}).get('Code', type(exc).__name__))
+    records, parsed = launch_json_records(events, tasks, start, end)
+    info.update(registros=records, lectura_json=parsed, tareas_asociadas=len(records))
+    if info['limites'] or len(records) != len(tasks) or parsed['fragmentos_incompletos'] or parsed['conflictos']:
+        info['lectura'] = 'INCOMPLETO'
+    return info
+
+
+def associate_launches(rows, records):
+    """Atribucion historica solo desde una asociacion explicita y verificada por ARN."""
+    indexed = {record['tarea']: record for record in records}
+    for row in rows:
+        record = indexed.get(row['tarea'])
+        if not record:
+            continue
+        for field in ('sigla', 'modalidad'):
+            old = row[field]
+            row[field] = record[field] if old == 'SIN DATO' else old if old == record[field] else 'CONFLICTO'
+        row.update(creacion_api=record['creacion_api'], evento_cloudtrail=record['evento_cloudtrail'],
+            evento_lambda=record['evento_lambda'], sigla_fuente='; '.join(filter(None, [row.get('sigla_fuente', ''), 'Lambda JSON + CloudTrail'])))
+        if row['sigla'] not in ('SIN DATO', 'CONFLICTO'):
+            row['siglas_evidencia'] = row['sigla']
+            row['detalle'] = '; '.join(note for note in row.get('detalle', '').split('; ') if note != 'Sigla sin atribucion unica')
+        if row['sigla'] == 'CONFLICTO' or row['modalidad'] == 'CONFLICTO':
+            row['detalle'] += '; Conflicto entre evidencia de lanzamiento y registros de tarea'
+            if row['control'] != 'FALLA':
+                row['control'] = 'AVISO'
+    return rows
+
+
+def evaluate_cycle_coverage(rows, expectation, incomplete=False, launches=None):
+    """Ausencia de actividad != fallo probado; distingue actividad de arranque ECS confirmado."""
+    if expectation.get('lectura') != 'LEIDA':
+        return []
+    start, end = (datetime.fromisoformat(expectation[key]) for key in ('desde_utc', 'hasta_utc'))
+    uncertain = incomplete or any(row['sigla'] in ('SIN DATO', 'CONFLICTO') for row in rows)
+    result = []
+    launch_records = (launches or {}).get('registros', [])
+    for cad in expectation['cads']:
+        for mode in expectation['modalidades']:
+            selected = [r for r in rows if r['sigla'] == cad and r['modalidad'] == mode]
+            tasks = {(r['region'], r['tarea']) for r in selected}
+            starts = {(r['region'], r['tarea']) for r in selected if r.get('inicio_ecs') and
+                      start <= datetime.fromisoformat(r['inicio_ecs']) <= end}
+            created = {r['tarea'] for r in launch_records if r['sigla'] == cad and r['modalidad'] == mode}
+            modeled = {(r['region'], r['tarea']) for r in selected if int(r.get('total_selecciones') or 0) > 0}
+            initial_modeled = created & {task for _, task in modeled}
+            partial = uncertain or any(r['lectura_logs'] != 'LEIDA' for r in selected)
+            unknown_mode = any(r['sigla'] == cad and r['modalidad'] in ('SIN DATO', 'CONFLICTO') for r in rows)
+            detail = ('Actividad observada; no confirma nuevo lanzamiento ni finalizacion' if tasks else
+                      'SIN ACTIVIDAD OBSERVADA para CAD/modalidad de la configuracion actual')
+            if expectation.get('cambios_posteriores_al_disparo'):
+                detail += '; codigo/catalogo cambiaron despues del disparo: no certifica expectativa historica'
+            state = 'INCOMPLETO' if (partial or unknown_mode) and not tasks else 'INFO' if tasks else 'AVISO'
+            if launches is not None:
+                # Actividad de otra tarea del mismo CAD no completa la del disparo inicial.
+                state = ('AVISO' if len(initial_modeled) < len(created) or len(created) > 1 else 'INFO') if created else 'AVISO'
+                if partial or unknown_mode or launches['lectura'] != 'LEIDA':
+                    state = 'INCOMPLETO'
+                detail = ('Creacion confirmada por ARN en CloudTrail y JSON de Lambda' if created else 'SIN CREACION CONFIRMADA')
+                if created - initial_modeled:
+                    detail += '; tareas iniciales sin selecciones de modelo observadas; no confirma falla ni finalizacion'
+                if len(created) > 1:
+                    detail += '; multiples tareas para CAD/modalidad en la ventana inicial'
+            result.append(dict(sigla=cad, modalidad=mode, tareas_con_actividad=len(tasks),
+                tareas_creadas_confirmadas=len(created), tareas_con_selecciones=len(modeled),
+                tareas_iniciales_con_selecciones=len(initial_modeled),
+                tareas_iniciales_sin_selecciones=len(created-initial_modeled),
+                arranques_ecs_confirmados=len(starts), desde_ciclo=start.isoformat(), hasta_ciclo=end.isoformat(),
+                version_catalogo_inicio=expectation.get('catalogo_inicio', {}).get('version', ''),
+                lectura_logs='PARCIAL' if partial or unknown_mode else 'LEIDA',
+                control=state,
+                detalle=detail))
+    return result
+
+
+def history_insights_query(prefixes):
+    """Agrega en AWS por stream/modelo; no descarga mensajes de negocio."""
+    model_name = r'[A-Za-z][A-Za-z0-9_.+-]*(?:[ \t]+[A-Za-z0-9][A-Za-z0-9_.+-]*){0,7}'
+    line = r'(?im)^\s*(?:\[(?:INFO|DEBUG|WARNING|WARN)\]\s*)?'
+    filters = ' or '.join('@logStream like /^' + re.escape(p).replace('/', r'\/') + '/' for p in sorted(prefixes))
+    relevant = (r'''Version de C[oó]digo:|The best model to run the prediction is|Not enough records in the train data for|End\s+Script\s*!|Traceback \(most recent call last\)|\b[\w.]*(?:Error|Exception):|\b(?:ERROR|FATAL|CRITICAL)\b|selected_model|chosen_model|modelo_seleccionado|modelo_elegido|modelo seleccionado|modelo elegido|selected model|chosen model|\b(?:CAD|sigla|sigla_fisica)['"]?\s*[:=]|Environment variables starting with AWS_''' +
+                '|' + '|'.join(ERRORS))
+    parts = [
+        'fields @timestamp, @logStream, @message', 'filter ' + filters,
+        # Filtrar ruido antes de jsonParse/parse; el escaneo fisico depende de AWS.
+        'filter @message like /(?i)' + relevant + '/',
+        'fields jsonParse(@message) as pn_json',
+        r'parse @message /(?im)^\s*(?:\[(?:INFO|DEBUG|WARNING|WARN)\]\s*)?Version de C[oó]digo:\s*\S+\s+Predicci[oó]n para:\s*(?<pn_cad_header>[A-Z][A-Z0-9]{2,11})\s*-\s*\d+\s+en la fecha:/',
+        r'''parse @message /(?i)\b(?:CAD|sigla(?:_fisica)?)['"]?\s*[:=]\s*['"]?(?<pn_cad_field>(?!CAD\b|SIGLA\b|NONE\b|NULL\b|UNKNOWN\b|TODAS\b|TODOS\b)[A-Z][A-Z0-9]{2,11})(?=[\s'",;}\]]|$)/''',
+        r'''parse @message /(?i)\b(?:time_?frame|modalidad)['"]?\s*[:=]\s*['"]?(?<pn_mode>HORA|TURNO)(?=[\s'",;}\]]|$)/''',
+        'parse @message /' + line + r'The best model to run the prediction is\s+(?<pn_best>' + model_name + r')\s+(?:-\s+)?\d+\s+-\s+\d+\s*$/',
+        'parse @message /' + line + r'The best model to run the prediction is\s+(?<pn_plain>' + model_name + r')\s*$/',
+        'parse @message /' + line + r'(?:modelo seleccionado|modelo elegido|selected model|chosen model)\s*[:=]\s*(?<pn_text>' + model_name + r')\s*$/',
+        'parse @message /' + line + r'Not enough records in the train data for\s+(?<pn_insufficient>' + model_name + r')\s*$/',
+        r'parse @message /(?m)^\s*(?<pn_exception>[A-Za-z_]\w*(?:Error|Exception)):/',
+        'fields coalesce(pn_best, pn_plain, pn_text, pn_json.selected_model, pn_json.chosen_model, pn_json.modelo_seleccionado, pn_json.modelo_elegido) as pn_model',
+    ]
+    stats = [
+        'latest(pn_cad_header) as cad_header', 'count_distinct(pn_cad_header) as cad_header_distintos',
+        'latest(pn_cad_field) as cad_field', 'count_distinct(pn_cad_field) as cad_field_distintos',
+        'latest(pn_mode) as modalidad', 'count_distinct(pn_mode) as modalidades_distintas',
+        'count(*) as eventos', 'count(pn_model) as selecciones', 'count(pn_insufficient) as insuficientes',
+        'sum(strcontains(@message, "The best model to run the prediction is")) as frases_seleccion',
+        'sum(strcontains(@message, "End Script!")) as cierres',
+        r'''sum(if(@message like /(?:^|\s|\[)(?:ERROR|FATAL|CRITICAL)(?:\]|\s*[:|]|\s)|Traceback \(most recent call last\)|(?m)^\s*[\w.]+(?:Error|Exception):/ or toupper(coalesce(pn_json.level, pn_json.levelname, pn_json.severity, "")) in ["ERROR", "FATAL", "CRITICAL"], 1, 0)) as indicios_error''',
+        'min(toMillis(@timestamp)) as primero', 'max(toMillis(@timestamp)) as ultimo',
+    ]
+    for index, error in enumerate(ERRORS):
+        stats.append(r'sum(if(@message like /(^|[^A-Za-z0-9_])' + error +
+                     r'($|[^A-Za-z0-9_])/, 1, 0)) as dependencia_' + str(index))
+    return '\n| '.join(parts + ['stats ' + ',\n    '.join(stats) + ' by @logStream, pn_model, pn_insufficient, pn_exception'])
+
+
+def decode_history_aggregates(results, group, region, prefixes, partial=False):
+    """Une filas agregadas del mismo stream, sin inventar CAD ni estados ECS."""
+    by_stream, issues = {}, []
+    for cells in results:
+        row = {cell['field']: cell.get('value', '') for cell in cells}
+        stream = row.get('@logStream', '')
+        prefix = next((p for p in prefixes if stream.startswith(p)), None)
+        if not prefix or not re.fullmatch(r'[a-fA-F0-9]{32}|[a-fA-F0-9]{8}(?:-[a-fA-F0-9]{4}){3}-[a-fA-F0-9]{12}', stream[len(prefix):]):
+            issues.append('Fila agregada omitida: stream sin taskId ECS interpretable')
+            continue
+        item = by_stream.setdefault(stream, dict(tarea=stream[len(prefix):], stream=stream,
+            grupo=group, region=region, log=empty_history_log()))
+        log = item['log']
+        count = lambda field: int(float(row.get(field) or 0))
+        log['eventos'] += count('eventos')
+        log['cierres'] += count('cierres')
+        log['indicios_error'] += count('indicios_error')
+        exception = row.get('pn_exception', '')
+        if re.fullmatch(r'[A-Za-z_]\w{0,79}(?:Error|Exception)', exception):
+            log['errores_aplicacion'][exception] += count('eventos')
+        log['subunidades_cierre_evaluadas'] = False
+        for field, key in (('pn_model', 'seleccion'), ('pn_insufficient', 'insuficientes')):
+            model = canonical_model(row.get(field), allow_unknown=True)
+            amount = count('selecciones' if key == 'seleccion' else 'insuficientes')
+            if model:
+                log[key][model] += amount
+            elif amount:
+                log['cobertura'] = 'PARCIAL'
+                log['error'] = 'Nombre de modelo no interpretable; revisar formato'
+        if count('frases_seleccion') > count('selecciones'):
+            log['cobertura'] = 'PARCIAL'
+            log['error'] = 'Hay declaraciones de seleccion sin formato interpretable'
+        for index, error in enumerate(ERRORS):
+            if count('dependencia_' + str(index)):
+                log['errores_dependencia'][error] += count('dependencia_' + str(index))
+        for field in ('cad_header', 'cad_field'):
+            labels, _ = history_labels(json.dumps({'CAD': row.get(field)}))
+            log['siglas'].update(labels)
+            if count(field + '_distintos') > 1:
+                log['conflicto_sigla'] = True
+        _, modes = history_labels(json.dumps({'modalidad': row.get('modalidad')}))
+        log['modalidades'].update(modes)
+        if count('modalidades_distintas') > 1:
+            log['conflicto_modalidad'] = True
+        for field, compare in (('primero', min), ('ultimo', max)):
+            if row.get(field):
+                value = count(field)
+                log[field] = value if log[field] is None else compare(log[field], value)
+        if partial:
+            log['cobertura'] = 'PARCIAL'
+    return list(by_stream.values()), issues
+
+
+def history_query_result(logs, group, prefixes, args, now, deadline, sdk_errors, region=None):
+    """Guarda queryId antes de esperar. Una nueva sesion recupera la consulta."""
+    import fcntl
+    query = history_insights_query(prefixes)
+    scope = dict(cuenta=args.cuenta, region=region or args.region, cluster=args.cluster, familia=args.familia,
+                 grupo=group, prefijos=sorted(prefixes), dias=args.dias_logs, consulta=query)
+    cycle = getattr(args, 'ciclo_desde_utc', None)
+    if cycle:
+        scope['ciclo_desde_utc'] = cycle
+    key = hashlib.sha256(json.dumps(scope, sort_keys=True).encode()).hexdigest()[:20]
+    folder = Path(args.salida).expanduser()/'modelos_dependencias'/'consultas'
+    folder.mkdir(parents=True, exist_ok=True)
+    path = folder/(key + '.json')
+    info = dict(grupo=group, archivo_estado=str(path), estado='PENDIENTE', query_id='')
+    with path.with_suffix('.lock').open('a') as lock:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            info['detalle'] = 'Otra ejecucion esta esperando esta consulta; ver archivo de estado'
+            return [], info
+        state = {}
+        if path.exists():
+            try:
+                state = json.loads(path.read_text(encoding='utf-8'))
+                if not isinstance(state, dict):
+                    raise ValueError('Estado de consulta no es un objeto')
+            except (ValueError, TypeError):
+                info.update(estado='ERROR', detalle='Estado local no interpretable; se conserva para evitar iniciar una consulta duplicada')
+                return [], info
+        if state.get('scope') != scope or state.get('consumida'):
+            state = dict(scope=scope, desde=int(datetime.fromisoformat(cycle).timestamp()) if cycle else int((now-timedelta(days=args.dias_logs)).timestamp()),
+                         hasta=int(now.timestamp()), consumida=False)
+            atomic_mapping_text(path, json.dumps(state))
+        info.update(desde_utc=datetime.fromtimestamp(state['desde'], timezone.utc).isoformat(),
+                    hasta_utc=datetime.fromtimestamp(state['hasta'], timezone.utc).isoformat())
+        try:
+            if not state.get('query_id'):
+                state['query_id'] = logs.start_query(logGroupName=group, queryString=query,
+                    startTime=state['desde'], endTime=state['hasta'], limit=10000)['queryId']
+                print('Consulta agregada iniciada: ' + state['query_id'], flush=True)
+                atomic_mapping_text(path, json.dumps(state))
+            else:
+                print('Recuperando consulta: ' + state['query_id'], flush=True)
+            info['query_id'] = state['query_id']
+            while True:
+                response = logs.get_query_results(queryId=state['query_id'])
+                status = response.get('status', 'Unknown')
+                info.update(estado=status, estadisticas=response.get('statistics', {}))
+                state['estado'] = status
+                atomic_mapping_text(path, json.dumps(state))
+                if status == 'Complete':
+                    info['limitada'] = bool(response.get('nextToken')) or len(response.get('results', [])) >= 10000
+                    return response.get('results', []), info
+                if status not in ('Running', 'Scheduled'):
+                    info['detalle'] = 'La consulta no termino correctamente; revisar queryId en CloudWatch'
+                    # Unknown no confirma fin: conservar ID para no duplicar trabajo.
+                    state['consumida'] = status in ('Failed', 'Cancelled', 'Timeout')
+                    atomic_mapping_text(path, json.dumps(state))
+                    return [], info
+                if time.monotonic() >= deadline:
+                    info['detalle'] = 'Sigue en CloudWatch; repetir el comando recupera el mismo queryId'
+                    return [], info
+                print('CloudWatch: ' + status + '; calculando conteos...', flush=True)
+                time.sleep(min(3, max(0, deadline-time.monotonic())))
+        except KeyboardInterrupt:
+            info.update(estado='PENDIENTE', interrumpida=True,
+                        detalle='Espera interrumpida; consulta conservada en AWS para recuperarla')
+            return [], info
+        except sdk_errors as exc:
+            code = getattr(exc, 'response', {}).get('Error', {}).get('Code', type(exc).__name__)
+            info.update(estado='ERROR', detalle='CloudWatch: ' + code)
+            if code == 'ResourceNotFoundException':
+                state['consumida'] = True
+                atomic_mapping_text(path, json.dumps(state))
+            return [], info
 
 
 def history_log_summary(logs, group, stream, start, end, limit, sdk_errors):
@@ -2332,6 +2894,8 @@ def history_log_summary(logs, group, stream, start, end, limit, sdk_errors):
                     seen.add(event_id)
                 result['eventos'] += 1
                 message = str(event.get('message', ''))
+                result['errores_aplicacion'].update(set(re.findall(
+                    r'(?m)^\s*([A-Za-z_]\w{0,79}(?:Error|Exception)):', message)))
                 siglas, modes = history_labels(message)
                 result['siglas'].update(siglas)
                 result['modalidades'].update(modes)
@@ -2469,8 +3033,8 @@ def history_task_row(candidate, task, definition, logs, metadata_error=False):
     direct = set(siglas)
     siglas.update(logs['siglas'])
     modes.update(logs['modalidades'])
-    label = next(iter(siglas)) if len(siglas) == 1 else 'CONFLICTO' if siglas else 'SIN DATO'
-    mode = next(iter(modes)) if len(modes) == 1 else 'CONFLICTO' if modes else 'SIN DATO'
+    label = 'CONFLICTO' if logs.get('conflicto_sigla') or len(siglas) > 1 else next(iter(siglas)) if siglas else 'SIN DATO'
+    mode = 'CONFLICTO' if logs.get('conflicto_modalidad') or len(modes) > 1 else next(iter(modes)) if modes else 'SIN DATO'
     state = task.get('lastStatus', 'NO DISPONIBLE')
     total = sum(logs['seleccion'].values())
     uniform = logs['seleccion']['Uniform']
@@ -2519,17 +3083,18 @@ def history_task_row(candidate, task, definition, logs, metadata_error=False):
         stop_code=task.get('stopCode', ''), motivo_parada=sanitize_message(stopped_reason),
         primera_emision=event_instant(logs['primero']), ultima_emision=event_instant(logs['ultimo']),
         finalizacion=closure, cierres_reportados=logs['cierres'],
-        subunidades_con_cierre_explicito=len(logs['unidades_cierre']),
+        subunidades_con_cierre_explicito=len(logs['unidades_cierre']) if logs.get('subunidades_cierre_evaluadas', True) else '',
         selecciones_por_modelo=json.dumps(dict(sorted(logs['seleccion'].items()))),
         total_selecciones=total, uniform=uniform, porcentaje_uniform_observado=round(100*uniform/total, 2) if total else '',
         avisos_datos_insuficientes=json.dumps(dict(sorted(logs['insuficientes'].items()))),
         indicios_error=logs['indicios_error'], errores_dependencia=json.dumps(dict(logs['errores_dependencia'])),
+        errores_aplicacion=json.dumps(dict(logs.get('errores_aplicacion', {}))),
         eventos_leidos=logs['eventos'], lectura_logs=logs['cobertura'], error_lectura=logs['error'],
         control='FALLA' if failure else 'AVISO' if notices else 'INFO', detalle='; '.join(notices))
 
 
 def collect_log_history(ecs, client_for_region, args, now, sdk_errors,
-                        mapping_state=None, deadline=None, progress=None):
+                        mapping_state=None, deadline=None, progress=None, aggregated_logs=None):
     """Descubrimiento independiente de ListTasks; no ejecuta ECS/ECR/S3."""
     start = now - timedelta(days=args.dias_logs)
     targets, candidates, issues = set(), [], []
@@ -2537,7 +3102,10 @@ def collect_log_history(ecs, client_for_region, args, now, sdk_errors,
         if progress is not None:
             progress(message, rows)
     notify('Descubriendo grupos y streams...', [])
-    if args.grupo_logs:
+    if aggregated_logs is not None:
+        candidates = [{key: item[key] for key in ('tarea', 'stream', 'grupo', 'region')}
+                      for item in aggregated_logs]
+    elif args.grupo_logs:
         targets.add((args.region, args.grupo_logs, args.prefijo_logs.rstrip('/') + '/'))
     else:
         definition = ecs.describe_task_definition(taskDefinition=args.familia)['taskDefinition']
@@ -2547,7 +3115,7 @@ def collect_log_history(ecs, client_for_region, args, now, sdk_errors,
             if log.get('logDriver') == 'awslogs' and options.get('awslogs-group') and options.get('awslogs-stream-prefix'):
                 targets.add((options.get('awslogs-region', args.region), options['awslogs-group'],
                              options['awslogs-stream-prefix'].rstrip('/') + '/' + container['name'] + '/'))
-    if not targets:
+    if not targets and aggregated_logs is None:
         issues.append('No se encontro un grupo/prefijo awslogs; usar --grupo-logs con el nombre completo')
     grouped = {}
     for region, group, prefix in sorted(targets):
@@ -2595,6 +3163,7 @@ def collect_log_history(ecs, client_for_region, args, now, sdk_errors,
             return (0, '') if cached else (1, '') if saved is None else (2, saved.get('consultada_utc', ''))
         candidates.sort(key=priority)
     rows, omitted, pending = [], 0, 0
+    aggregates = {(item['region'], item['grupo'], item['stream']): item['log'] for item in aggregated_logs or []}
     for number, candidate in enumerate(candidates, 1):
         task = tasks.get(candidate['tarea'], {})
         task_family = task.get('taskDefinitionArn', '').rsplit('/', 1)[-1].rsplit(':', 1)[0]
@@ -2606,7 +3175,11 @@ def collect_log_history(ecs, client_for_region, args, now, sdk_errors,
         # Solo la revision exacta observada en ECS sirve para defaults historicos.
         definition = definitions.get(task.get('taskDefinitionArn'), {})
         cache_source = ''
-        if mapping_state is None:
+        if aggregated_logs is not None:
+            log = aggregates[(candidate['region'], candidate['grupo'], candidate['stream'])]
+            if log['cobertura'] != 'LEIDA':
+                issues.append(candidate['tarea'][:12] + ': lectura agregada ' + log['cobertura'] + '; ' + log['error'])
+        elif mapping_state is None:
             log = history_log_summary(client_for_region(candidate['region']), candidate['grupo'], candidate['stream'],
                                       start, now, args.max_eventos, sdk_errors)
             if not log['eventos'] and log['cobertura'] == 'LEIDA' and not task:
@@ -2669,6 +3242,7 @@ def summarize_history_siglas(rows, incomplete=False):
     """Una fila por sigla, sin filtrar por RUNNING ni duplicar tareas por stream."""
     labels = {row['sigla'] for row in rows if row['sigla'] not in ('SIN DATO', 'CONFLICTO')}
     unresolved = [row for row in rows if row['sigla'] in ('SIN DATO', 'CONFLICTO')]
+    unassigned_counts = any(row['total_selecciones'] or row['lectura_logs'] != 'LEIDA' for row in unresolved)
     result = []
     for sigla in sorted(labels):
         selected, seen = [], set()
@@ -2690,23 +3264,45 @@ def summarize_history_siglas(rows, incomplete=False):
                 active += 1
             else:
                 unknown += 1
-        models, insufficient, dependencies = Counter(), Counter(), Counter()
+        models, insufficient, dependencies, exceptions = Counter(), Counter(), Counter(), Counter()
+        models_by_task = {}
         for row in selected:
-            models.update(json.loads(row['selecciones_por_modelo']))
+            task_models = json.loads(row['selecciones_por_modelo'])
+            models.update(task_models)
+            task_key = (row.get('region', ''), row['tarea'])
+            models_by_task.setdefault(task_key, Counter()).update(task_models)
             insufficient.update(json.loads(row['avisos_datos_insuficientes']))
             dependencies.update(json.loads(row['errores_dependencia']))
+            exceptions.update(json.loads(row.get('errores_aplicacion', '{}')))
         total = sum(models.values())
         uniform = models['Uniform']
-        coverage = ('PARCIAL' if incomplete or unresolved or any(row['lectura_logs'] != 'LEIDA' for row in selected) else 'LEIDA')
+        uniform_tasks = sum(sum(counts.values()) > 0 and sum(counts.values()) == counts['Uniform']
+                            for counts in models_by_task.values())
+        coverage = ('PARCIAL' if incomplete or unassigned_counts or any(row['lectura_logs'] != 'LEIDA' for row in selected) else 'LEIDA')
         control = ('FALLA' if any(row['control'] == 'FALLA' for row in selected) else 'AVISO'
-                   if unknown or coverage != 'LEIDA' or any(row['control'] == 'AVISO' for row in selected) else 'INFO')
+                   if uniform_tasks or unknown or coverage != 'LEIDA' or any(row['control'] == 'AVISO' for row in selected) else 'INFO')
         notes = []
         if unknown:
             notes.append('Tareas recuperadas de logs sin estado ECS; finalizacion no confirmada')
         if total and uniform == total:
             notes.append('100% Uniform observado; no prueba toda la prediccion si la cobertura es parcial')
+        if uniform_tasks:
+            notes.append(f'{uniform_tasks} {"tarea" if uniform_tasks == 1 else "tareas"} con 100% Uniform en las selecciones observadas')
         if unresolved:
             notes.append('Hay streams sin sigla unica; detalle conservado sin asignarlos arbitrariamente')
+        reasons = []
+        if any(row['control'] == 'FALLA' for row in selected):
+            reasons.append('FALLA_ECS')
+        if exceptions or sum(row['indicios_error'] for row in selected):
+            reasons.append('ERROR_APLICACION_REPORTADO' if exceptions else 'INDICIOS_ERROR_LOG')
+        if uniform_tasks:
+            reasons.append('TAREAS_SOLO_UNIFORM')
+        if insufficient:
+            reasons.append('DATOS_INSUFICIENTES')
+        if coverage != 'LEIDA':
+            reasons.append('LECTURA_INCOMPLETA')
+        if unknown:
+            reasons.append('SIN_METADATA_ECS_HISTORICA')
         starts = [row['inicio_ecs'] for row in selected if row['inicio_ecs']]
         ends = [row['fin_ecs'] for row in selected if row['fin_ecs']]
         result.append(dict(sigla=sigla, tareas=len(tasks), activas_ecs=active, detenidas_ecs=stopped, sin_estado_ecs=unknown,
@@ -2716,17 +3312,19 @@ def summarize_history_siglas(rows, incomplete=False):
             selecciones_por_modelo=json.dumps(dict(sorted(models.items()))),
             total_selecciones=total, uniform=uniform,
             porcentaje_uniform_observado=round(100*uniform/total, 2) if total else '',
+            tareas_100_uniform=uniform_tasks,
             avisos_datos_insuficientes=json.dumps(dict(sorted(insufficient.items()))),
             indicios_error=sum(row['indicios_error'] for row in selected),
             errores_dependencia=json.dumps(dict(sorted(dependencies.items()))),
+            errores_aplicacion=json.dumps(dict(sorted(exceptions.items()))), motivos_aviso=','.join(reasons),
             cierres_reportados=sum(row['cierres_reportados'] for row in selected),
             streams=len(selected), lectura_logs=coverage, control=control, detalle='; '.join(notes)))
     return result
 
 
-def write_history_report(folder, rows, summaries):
+def write_history_report(folder, rows, summaries, cycle_rows=(), launch_rows=(), cycle_controls=()):
     """Un solo CSV: resumen por sigla y detalle trazable por tarea/stream."""
-    fields = list(dict.fromkeys(['tipo_registro'] + [key for row in summaries + rows for key in row]))
+    fields = list(dict.fromkeys(['tipo_registro'] + [key for row in summaries + rows + list(cycle_rows) + list(launch_rows) + list(cycle_controls) for key in row]))
     if len(fields) == 1:
         fields += ['sigla', 'tarea', 'estado_ecs', 'lectura_logs', 'control']
     path = folder/'historial_tareas.csv'
@@ -2735,10 +3333,15 @@ def write_history_report(folder, rows, summaries):
         writer.writeheader()
         writer.writerows(dict(tipo_registro='RESUMEN_SIGLA', **row) for row in summaries)
         writer.writerows(dict(tipo_registro='DETALLE_TAREA', **row) for row in rows)
+        writer.writerows(dict(tipo_registro='COBERTURA_CICLO', **row) for row in cycle_rows)
+        writer.writerows(dict(tipo_registro='LANZAMIENTO_CICLO', **row) for row in launch_rows)
+        writer.writerows(dict(tipo_registro='CONTROL_CICLO', **row) for row in cycle_controls)
     return path
 
 
 def collect_history_from_session(session, config, args, sdk_errors, **options):
+    if options.get('mapping_state') is None and not getattr(args, 'leer_eventos', False):
+        return collect_aggregated_history(session, config, args, sdk_errors)
     clients = {}
     def client_for_region(region):
         if region not in clients:
@@ -2746,6 +3349,61 @@ def collect_history_from_session(session, config, args, sdk_errors, **options):
         return clients[region]
     return collect_log_history(session.client('ecs', config=config), client_for_region,
                                args, datetime.now(timezone.utc), sdk_errors, **options)
+
+
+def collect_aggregated_history(session, config, args, sdk_errors):
+    """Una consulta por grupo; sin listar ni leer los mensajes de cada stream."""
+    now = datetime.now(timezone.utc)
+    deadline = time.monotonic() + getattr(args, 'timeout_consulta', 180)
+    ecs = session.client('ecs', config=config)
+    targets = {}
+    if args.grupo_logs:
+        targets[(args.region, args.grupo_logs)] = {args.prefijo_logs.rstrip('/') + '/'}
+    else:
+        definition = ecs.describe_task_definition(taskDefinition=args.familia)['taskDefinition']
+        for container in definition.get('containerDefinitions', []):
+            log = container.get('logConfiguration', {})
+            opts = log.get('options', {})
+            if log.get('logDriver') == 'awslogs' and opts.get('awslogs-group') and opts.get('awslogs-stream-prefix'):
+                key = (opts.get('awslogs-region', args.region), opts['awslogs-group'])
+                targets.setdefault(key, set()).add(opts['awslogs-stream-prefix'].rstrip('/')+'/'+container['name']+'/')
+    aggregated, queries, issues = [], [], []
+    if not targets:
+        issues.append('No se encontro grupo/prefijo awslogs; configurar --grupo-logs')
+    clients = {}
+    for (region, group), prefixes in sorted(targets.items()):
+        if time.monotonic() >= deadline:
+            issues.append('Presupuesto de espera agotado; quedan grupos sin consultar')
+            break
+        if region not in clients:
+            clients[region] = session.client('logs', region_name=region, config=config)
+        results, info = history_query_result(clients[region], group, prefixes, args, now, deadline, sdk_errors, region)
+        queries.append(info)
+        if info['estado'] != 'Complete':
+            issues.append(group + ': ' + info['estado'] + '; ' + info.get('detalle', 'sin resultado final'))
+            if info.get('interrumpida'):
+                break
+            continue
+        print('Consulta terminada: ' + str(len(results)) + ' filas agregadas recibidas.', flush=True)
+        if info['limitada']:
+            issues.append(group + ': limite de filas agregadas; acotar --dias-logs para cobertura completa')
+        records, errors = decode_history_aggregates(results, group, region, prefixes, info['limitada'])
+        aggregated.extend(records)
+        issues.extend(errors)
+    rows, context = collect_log_history(ecs, lambda region: clients[region], args, now,
+        sdk_errors, deadline=deadline, aggregated_logs=aggregated)
+    context.update(metodo='Logs Insights; agregacion en AWS', consultas=queries,
+                   interrumpido=any(q.get('interrumpida') for q in queries),
+                   alcance_conteos='Declaraciones agregadas por stream/modelo; no solicitudes unicas',
+                   alcance_eventos='eventos_leidos cuenta eventos relevantes del filtro, no todos los mensajes del grupo',
+                   subunidades_con_cierre='No se calcula cardinalidad por subunidad en el modo agregado')
+    windows = {(q['desde_utc'], q['hasta_utc']) for q in queries if q.get('desde_utc')}
+    if len(windows) == 1:
+        context['desde_utc'], context['hasta_utc'] = next(iter(windows))
+    elif len(windows) > 1:
+        issues.append('Grupos con ventanas de consulta diferentes; revisar consultas en el contexto')
+    context['lecturas_incompletas'] = issues + context['lecturas_incompletas']
+    return rows, context
 
 
 def read_stream_structure_siglas(s3, args):
@@ -2906,50 +3564,130 @@ def inspect_stream_mapping(session, config, args, sdk_errors):
         print('[INCOMPLETO] ' + issue)
     print(f'Informe: {path} | contexto_streams.json')
     print(f'Cache: {cache_path}; repetir el comando continua sin releer asociaciones confirmadas.')
+    upload_csv_reports(session, config, folder)
     return 130 if interrupted else 3 if context['lecturas_incompletas'] else 0
 
 
 def inspect_log_history(session, config, args, sdk_errors):
-    print(f'MONITOREO POR SIGLA | {args.cluster} | Ultimos {args.dias_logs} dias | Solo lectura', flush=True)
+    period = 'Ciclo semanal' if getattr(args, 'verificar_ciclo', False) else f'Ultimos {args.dias_logs} dias'
+    print(f'MONITOREO POR SIGLA | {args.cluster} | {period} | Solo lectura', flush=True)
+    if not getattr(args, 'leer_eventos', False):
+        print('CloudWatch calcula los conteos; solo se recuperan filas agregadas.', flush=True)
+        print('Si se desconecta la terminal, repetir el comando recupera la consulta pendiente.', flush=True)
     now = datetime.now(timezone.utc)
-    rows, context = collect_history_from_session(session, config, args, sdk_errors)
+    expectation = None
+    if getattr(args, 'verificar_ciclo', False):
+        expectation = load_cycle_expectations(session, config, args, now, sdk_errors)
+        if expectation.get('lectura') == 'LEIDA':
+            args.ciclo_desde_utc = expectation['desde_utc']
+            reference = 'catalogo vigente al inicio' if expectation.get('catalogo_inicio_confirmado') else 'selector actual de la lanzadora'
+            print('Comparando el ciclo desde '+expectation['desde_utc']+' con '+reference+'.', flush=True)
+    if expectation is not None and expectation['lectura'] != 'LEIDA':
+        # No lanzar un escaneo amplio si el selector solicitado no pudo verificarse.
+        rows, context = [], dict(captura_utc=now.isoformat(), hasta_utc=now.isoformat(),
+            streams_candidatos=0, tareas_distintas=0, lecturas_incompletas=[])
+    else:
+        rows, context = collect_history_from_session(session, config, args, sdk_errors)
+    cycle_rows = []
+    cycle_controls = []
+    launches = None
+    if expectation is not None:
+        # Una consulta reanudada conserva su captura original; no usar un fin mas reciente.
+        if context.get('hasta_utc'):
+            expectation['hasta_utc'] = context['hasta_utc']
+        context['expectativa_ciclo'] = expectation
+        if expectation['lectura'] == 'LEIDA':
+            print('Verificando lanzamientos: CloudTrail y documentos JSON de Lambda...', flush=True)
+            launches = read_cycle_launches(session, config, args, expectation, sdk_errors)
+            context['lanzamientos_ciclo'] = launches
+            rows = associate_launches(rows, launches['registros'])
+            if launches['lectura'] != 'LEIDA':
+                cycle_controls.append(dict(control='INCOMPLETO', detalle='Lectura de lanzamientos parcial; revisar limites en contexto'))
+            if launches.get('errores_api'):
+                cycle_controls.append(dict(control='FALLA', errores_api=launches['errores_api'],
+                    detalle='Fallos de API observados en la ventana de lanzamiento; sin atribucion CAD si no hay evidencia'))
+            if not expectation.get('catalogo_inicio_confirmado'):
+                cycle_controls.append(dict(control='INCOMPLETO', detalle='No se confirmo el catalogo vigente al inicio; comparacion con selector actual'))
+        cycle_rows = evaluate_cycle_coverage(rows, expectation, bool(context['lecturas_incompletas']), launches)
+        if expectation['lectura'] != 'LEIDA':
+            context['lecturas_incompletas'].append('Cobertura CAD: '+expectation.get('detalle', expectation['lectura']))
     context['universo_siglas'] = dict(fuente='Streams de logs y metadata ECS vinculada',
         alcance='Solo siglas identificadas en la evidencia disponible; no permite detectar las nunca observadas',
         catalogo_externo=False)
+    if expectation is not None:
+        context['universo_siglas'].update(catalogo_externo=True,
+            fuente='Logs y metadata ECS; asociaciones por ARN con Lambda y CloudTrail',
+            alcance='Resumen de siglas observadas y contraste CAD/modalidad con catalogo inicial cuando se recupera')
     summaries = summarize_history_siglas(rows, incomplete=bool(context['lecturas_incompletas']))
     columns = ('sigla', 'tareas', 'activas_ecs', 'detenidas_ecs', 'sin_estado_ecs',
                'selecciones_por_modelo', 'total_selecciones', 'porcentaje_uniform_observado',
-               'avisos_datos_insuficientes', 'indicios_error', 'lectura_logs', 'control')
-    widths = (12, 6, 7, 8, 8, 26, 7, 10, 22, 7, 13, 7)
+               'tareas_100_uniform', 'avisos_datos_insuficientes', 'indicios_error', 'lectura_logs', 'control')
+    widths = (12, 6, 7, 8, 8, 26, 7, 10, 14, 22, 7, 13, 7)
     def render(values):
         cells = [textwrap.wrap(str(value), width=width, break_on_hyphens=False) or ['-']
                  for value, width in zip(values, widths)]
         for index in range(max(map(len, cells))):
             print(' | '.join((cell[index] if index < len(cell) else '').ljust(width)
                              for cell, width in zip(cells, widths)))
-    render(('Sigla', 'Tareas', 'Activas', 'Detenidas', 'Sin ECS', 'Modelos (logs)', 'Total', '% Uniform*', 'Pocos datos (logs)', 'Errores', 'Lectura', 'Control'))
+    render(('Sigla', 'Tareas', 'Activas', 'Detenidas', 'Sin ECS', 'Modelos (logs)', 'Total', '% Uniform*', 'Tareas 100% Uniform*', 'Pocos datos (logs)', 'Errores', 'Lectura', 'Control'))
     print('-+-'.join('-'*width for width in widths))
     for row in summaries:
         values = [row[name] for name in columns]
-        values[5] = '; '.join(f'{model}:{count}' for model, count in json.loads(row['selecciones_por_modelo']).items())
-        values[8] = '; '.join(f'{model}:{count}' for model, count in json.loads(row['avisos_datos_insuficientes']).items())
+        for field in ('selecciones_por_modelo', 'avisos_datos_insuficientes'):
+            values[columns.index(field)] = '; '.join(f'{model}:{count}' for model, count in json.loads(row[field]).items())
         render(values)
-    folder = Path(args.salida)/'modelos_dependencias'/now.astimezone(BOGOTA).strftime('%Y-%m-%d/%H-%M-%S_%f')
+    folder = Path(args.salida).expanduser()/'modelos_dependencias'/now.astimezone(BOGOTA).strftime('%Y-%m-%d/%H-%M-%S_%f')
     folder.mkdir(parents=True, exist_ok=True)
-    path = write_history_report(folder, rows, summaries)
+    path = write_history_report(folder, rows, summaries, cycle_rows, (launches or {}).get('registros', []), cycle_controls)
     context['siglas_resumidas'] = len(summaries)
     context['streams_sin_sigla_unica'] = sum(row['sigla'] in ('SIN DATO', 'CONFLICTO') for row in rows)
     context['configuracion'] = vars(args)
     (folder/'contexto_historial.json').write_text(json.dumps(context, ensure_ascii=False, indent=2), encoding='utf-8')
-    print('* Porcentaje sobre declaraciones observadas, no solicitudes. Detenida no equivale a prediccion validada.')
+    # Conservar queryId sin consumir si falla la publicacion, para reintentar sin otro escaneo.
+    upload_csv_reports(session, config, folder)
+    for query in context.get('consultas', []):
+        if query['estado'] == 'Complete':
+            state_path = Path(query['archivo_estado'])
+            state = json.loads(state_path.read_text(encoding='utf-8'))
+            state.update(consumida=True, informe=str(path))
+            atomic_mapping_text(state_path, json.dumps(state))
+        print('Consulta: ' + (query['query_id'] or 'PENDIENTE') + ' | ' + query['estado'], flush=True)
+        if query.get('desde_utc'):
+            print('Ventana UTC de consulta: ' + query['desde_utc'] + ' a ' + query['hasta_utc'], flush=True)
+    print('* Porcentaje y tareas 100% Uniform sobre selecciones observadas. Detenida no equivale a prediccion validada.')
     print('Incluye activas, detenidas y recuperadas desde logs. Sin ECS no significa finalizada.')
-    print('Alcance: siglas identificadas en la evidencia disponible; sin catalogo S3. Las nunca observadas no se pueden detectar.')
+    if expectation is None:
+        print('Alcance: siglas identificadas en la evidencia disponible; sin catalogo S3. Las nunca observadas no se pueden detectar.')
     print(f'Siglas: {len(summaries)} | Streams sin sigla unica: {context["streams_sin_sigla_unica"]}; conservados en DETALLE_TAREA.')
     print(f'Streams candidatos: {context["streams_candidatos"]} | Tareas con evidencia: {context["tareas_distintas"]}')
     for issue in context['lecturas_incompletas']:
         print('[INCOMPLETO] ' + issue)
     print(f'Informe: {path} | Filtrar tipo_registro=RESUMEN_SIGLA; detalle en el mismo CSV.')
-    return 3 if context['lecturas_incompletas'] else 1 if any(r['control'] == 'FALLA' for r in rows) else 0
+    if expectation is not None:
+        for item in cycle_controls:
+            print('['+item['control']+'] '+item['detalle'])
+        if expectation['lectura'] != 'LEIDA':
+            print('Cobertura CAD/modalidad: NO EVALUADA; '+expectation.get('detalle', expectation['lectura']))
+        else:
+            missing = [r for r in cycle_rows if not r['tareas_con_actividad']]
+            print(f'Cobertura CAD/modalidad: {len(cycle_rows)-len(missing)}/{len(cycle_rows)} con actividad; '
+                  f'{len(missing)} sin actividad observada. Detalle: tipo_registro=COBERTURA_CICLO en el mismo CSV.')
+            if missing:
+                print('Sin actividad identificada: '+', '.join(r['sigla']+'/'+r['modalidad'] for r in missing[:20])+
+                      ('; resto en CSV' if len(missing) > 20 else ''))
+        if launches is not None:
+            confirmed = sum(r['tareas_creadas_confirmadas'] > 0 for r in cycle_rows)
+            modeled = sum(r['tareas_iniciales_con_selecciones'] > 0 for r in cycle_rows)
+            print(f'Lanzamientos confirmados: {confirmed}/{len(cycle_rows)} combinaciones CAD/modalidad. Con selecciones de tareas iniciales: {modeled}/{len(cycle_rows)}.')
+            print('Creacion de tarea no confirma ejecucion terminada ni resultado valido. Evidencia en LANZAMIENTO_CICLO del mismo CSV.')
+            if launches['lectura'] != 'LEIDA':
+                print('[INCOMPLETO] Evidencia de lanzamiento parcial; revisar contexto y COBERTURA_CICLO.')
+        print('La cobertura usa el catalogo de inicio cuando se pudo recuperar; no reconstruye toda la configuracion historica.')
+        if expectation.get('cambios_posteriores_al_disparo'):
+            print('AVISO: cambios posteriores al disparo en '+', '.join(expectation['cambios_posteriores_al_disparo'])+'.')
+    return (130 if context.get('interrumpido') else
+            3 if context['lecturas_incompletas'] or any(r['control'] == 'INCOMPLETO' for r in cycle_rows+cycle_controls) else
+            1 if any(r['control'] == 'FALLA' for r in rows+cycle_controls) else 0)
 
 
 def main():
@@ -2964,14 +3702,18 @@ def main():
     view.add_argument('--historial-logs', action='store_true', help='Resumen por siglas observadas: historial ECS/Logs (modo predeterminado, sin catalogo S3)')
     view.add_argument('--por-tarea', action='store_true', help='Mapeo anterior por tarea ECS; inspecciones opcionales conservan su modo')
     view.add_argument('--mapear-streams', action='store_true', help='Tabla CAD/stream para todas las SIGLA_PAPA de la estructura actual S3')
+    parser.add_argument('--leer-eventos', action='store_true', help='Diagnostico lento: historial mensaje por mensaje; por defecto se agregan conteos en CloudWatch')
+    parser.add_argument('--timeout-consulta', type=int, default=180, help='Espera tecnica del modo agregado: 10..900 s; guarda queryId para reanudar, no es limite del predictor')
     parser.add_argument('--max-segundos-mapeo', type=int, default=180, help='Presupuesto tecnico del mapa entre llamadas AWS: 10..900 s; no es umbral de prediccion')
     parser.add_argument('--reiniciar-mapeo', action='store_true', help='Ignora asociaciones guardadas del mapa y las vuelve a consultar')
     parser.add_argument('--dias-logs', type=int, default=30, help='Ventana historica: 1..30 dias; default 30, sujeto a retencion; no es un SLA')
-    parser.add_argument('--max-streams', type=int, default=1000, help='Maximo de streams examinados por grupo, orden reciente; 1..10000')
+    parser.add_argument('--verificar-ciclo', action='store_true',
+                        help='Comprueba el ciclo desde el disparo: catalogo S3 inicial, creaciones CloudTrail/Lambda y selecciones por CAD/modalidad; no certifica finalizacion')
+    parser.add_argument('--max-streams', type=int, default=1000, help='Limite para --mapear-streams/--leer-eventos; el modo agregado consulta la ventana completa del grupo')
     parser.add_argument('--grupo-logs', help='Nombre completo del grupo; sin el flag se descubre desde la familia ECS')
     parser.add_argument('--prefijo-logs', default='pon-prod-xcrime-prediccion/pon-prod-prediccion/', help='Prefijo completo con contenedor, para --grupo-logs')
     parser.add_argument('--ventana-minutos', type=int, default=60)
-    parser.add_argument('--max-eventos', type=int, help='Default mapa: 200 muestreados; historial: 100000; por tarea: 500 filtrados')
+    parser.add_argument('--max-eventos', type=int, help='Solo lectura por eventos: mapa 200; --leer-eventos 100000; por tarea 500. No limita el modo agregado')
     parser.add_argument('--muestras', type=int, default=3, help='Muestras saneadas por tipo/modelo/motivo; 0 desactiva muestras')
     parser.add_argument('--sin-logs', action='store_true')
     parser.add_argument('--probar-imports', action='store_true', help='Prueba imports en copia Docker local de digests observados; sin ECS Exec ni ejecutar la aplicacion')
@@ -3008,6 +3750,12 @@ def main():
         args.historial_logs = True
     if args.max_eventos is None:
         args.max_eventos = 200 if args.mapear_streams else 100000 if args.historial_logs else 500
+    if args.verificar_ciclo and (not args.historial_logs or args.leer_eventos):
+        parser.error('--verificar-ciclo requiere historial agregado; no combinar con inspecciones, mapa ni --leer-eventos')
+    if not 10 <= args.timeout_consulta <= 900:
+        parser.error('--timeout-consulta: 10..900')
+    if args.leer_eventos and not args.historial_logs:
+        parser.error('--leer-eventos requiere el modo historial; no combinar con mapa ni inspecciones')
     if not 10 <= args.max_segundos_mapeo <= 900:
         parser.error('--max-segundos-mapeo: 10..900')
     if args.reiniciar_mapeo and not args.mapear_streams:
@@ -3341,6 +4089,7 @@ def main():
             print(f'Inspeccion local: {folder}/paquetes.csv | archivos_imagen.csv')
         if args.mapear_arranque:
             print(f'Arranque local: {folder}/arranque.csv')
+        upload_csv_reports(session, config, folder)
         return 3 if issues else dependency_exit
     except (ClientError, BotoCoreError, OSError, ValueError, csv.Error) as exc:
         print(f'[BLOQUEADO] {type(exc).__name__}: {exc}', file=sys.stderr)

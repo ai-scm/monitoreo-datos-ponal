@@ -1,119 +1,126 @@
-Este script consulta modelos reportados por tareas de predicción y dispone de modos de auditoría de imagen y dependencias. No modifica AWS. La prueba opcional de imports ejecuta librerías en una copia Docker local.
+MODELOS UTILIZADOS Y COMPONENTES
+================================
 
-LECTOR ACTUALIZADO - 29 DE OCTUBRE DE 2026
-Reconoce los nombres completos reportados, incluidos Conteo y Auto Exitatory.
-Counter y Conteo se conservan separados: no se supone que sean equivalentes.
-Una declaracion explicita con un nombre nuevo valido tambien se cuenta con
-su nombre; las simples menciones y avisos de entrenamiento no son selecciones.
-El filtro de consulta incluye las frases/campos de seleccion, ademas del
-catalogo conocido, para no excluir nombres nuevos antes de analizarlos.
+Archivo: mapear_modelos_dependencias.py
 
-Reconoce CAD desde la cabecera real, por ejemplo:
-  Version de Codigo: v3.2.14 Prediccion para: DECAU - 26709 ... timeFrame: HORA
-Esto sirve para historial y para --mapear-streams aunque ECS ya no conserve
-la tarea. Evidencias contradictorias siguen marcadas como CONFLICTO.
-Los numeros del sufijo del modelo no se interpretan como unidad/proceso.
+PARA QUÉ SIRVE
 
-El porcentaje Uniform usa TODAS las selecciones recuperadas como denominador.
-Ejemplo: Uniform=1, KDE=1, Conteo=1, Auto Exitatory=1 => total=4; Uniform=25%.
-El resumen por CAD suma declaraciones de sus streams; no promedia porcentajes.
-Una lectura limitada sigue siendo PARCIAL y no certifica toda la prediccion.
-La correccion del lector no convierte la lectura del historial en una consulta
-agregada de Logs Insights; --max-eventos sigue limitando eventos por stream.
+Ayuda a ver qué modelos reporta cada sigla y cuánto se está utilizando Uniform.
+También reúne avisos de pocos datos y errores de la aplicación.
 
-Tras subir esta version del mismo archivo a CloudShell, una revision acotada:
-  python3 ~/mapear_modelos_dependencias.py --dias-logs 7
-Conserva la tabla por CAD y el unico historial_tareas.csv con resumen/detalle.
+Lee los registros de ejecución conservados en CloudWatch. Por eso puede
+recuperar evidencia de tareas que ya no aparecen en ECS, además de las activas.
 
-Tabla de todas las siglas de estructura y sus streams
-  python3 ~/mapear_modelos_dependencias.py --mapear-streams
-Lee SIGLA_PAPA de la estructura actual S3 y cruza sus CAD con la evidencia
-ECS/logs. Imprime Sigla/CAD | Stream, sin filtro por una sigla de ejemplo.
-Repite CAD cuando hay varios streams y muestra SIN STREAM ASOCIADO cuando
-no hay una relacion confirmada. Exporta mapa_siglas_streams.csv y contexto.
-Este modo explicito usa S3; el resumen predeterminado conserva su fuente de logs.
-El mapa usa CAD de ECS/cache y muestras de hasta 200 mensajes, sin analizar modelos.
-Presupuesto por pasada: --max-segundos-mapeo 180; guarda CSV y cache mientras avanza.
-Repetirlo continua con las asociaciones guardadas. --reiniciar-mapeo las ignora.
-Para ejecutarlo en segundo plano:
-  nohup python3 -u ~/mapear_modelos_dependencias.py --mapear-streams > ~/mapa_streams.log 2>&1 &
-  tail -f ~/mapa_streams.log
-Ver HISTORIAL-LOGS.txt para limites, reanudacion y el permiso logs:GetLogEvents.
+QUÉ REVISA CON EL COMANDO RECOMENDADO
 
-Monitoreo de siglas observadas (modo predeterminado)
-  python3 ~/mapear_modelos_dependencias.py
-Una fila por sigla identificada desde streams conservados y metadata ECS vinculada.
-Incluye activas, detenidas y recuperadas de logs, sin filtro por RUNNING.
-No lee catalogos ni estructura nacional S3. Las nunca observadas no se identifican.
-Por defecto revisa 30 dias, sujeto a la retencion; --dias-logs 8 acota la ventana.
-El porcentaje Uniform usa el total de selecciones observadas de la sigla.
+- Selecciones reportadas por modelo y sigla.
+- Total de selecciones observadas y porcentaje de Uniform.
+- Cantidad de tareas cuyas selecciones observadas son todas Uniform.
+- Avisos de datos insuficientes y clases de error reportadas.
+- Creaciones de tareas confirmadas por CAD y modalidad HORA/TURNO, comparadas
+  con el catálogo que estaba vigente al inicio del ciclo cuando se puede recuperar.
+- Combinaciones con tareas creadas que todavía no tienen selecciones observadas.
 
-Historial por streams (sin depender de tareas visibles en ECS)
-  python3 ~/mapear_modelos_dependencias.py --historial-logs --dias-logs 8 --max-eventos 100000
-Genera una tabla por sigla y un historial_tareas.csv con RESUMEN_SIGLA y
-DETALLE_TAREA. El detalle incluye sigla, modalidad cuando hay
-evidencia explícita, estado/códigos ECS recuperables, cierres End Script,
-selecciones por modelo, total y porcentaje Uniform observado, pocos datos y
-errores. Sin S3/ECR ni mensajes completos. No confunde cierre de subunidad
-con éxito global. Ver HISTORIAL-LOGS.txt para cobertura, límites y permisos.
---por-tarea conserva el mapeo anterior.
+Recupera la versión inicial del catálogo y cruza el historial de lanzamiento
+con respuestas completas de la función Lambda. La relación se confirma por el
+identificador de la misma tarea en ambas fuentes; no se deduce por el orden de
+los mensajes. No requiere subir un Excel.
 
-Modos de inspección (se ejecutan por separado del historial)
+CÓMO EJECUTARLO EN CLOUDSHELL
 
-Propósito principal
-Mapear modelos de predicción, dependencias Python y operaciones de archivo en la imagen Docker del predictor:
+  python3 "$HOME/mapear_modelos_dependencias.py" \
+    --verificar-ciclo \
+    --salida "$HOME/salida"
 
-Cluster: pon-prod-xcrime-predicciones-cluster
-Familia: pon-prod-xcrime-prediccion-definition
-Funcionalidades clave
-1. Inspección de imagen Docker (ECR)
+Para consultar solamente las siglas observadas en los últimos siete días,
+sin contrastarlas con el catálogo de lanzamiento:
 
-Descarga capas sin extraerlas (presupuesto de 8 GB descomprimido)
-Inventaría archivos sin ejecutar nada
-Detecta:
-Metadata de paquetes Python (METADATA, PKG-INFO)
-Manifiestos (requirements.txt, pyproject.toml, setup.cfg)
-Código Python de la aplicación
-Archivos de datos (CSV, GeoJSON)
-2. Validación de dependencias
+  python3 "$HOME/mapear_modelos_dependencias.py" \
+    --dias-logs 7 \
+    --salida "$HOME/salida"
 
-Compara requirements.txt extraído vs. metadata en el entorno
-Verifica versiones fijadas
-Detecta inconsistencias estáticas (no ejecuta imports)
-Controles por digest y entorno objetivo
-3. Análisis estático de código
+Sin opciones, el resumen revisa los últimos 30 días, sujeto a la conservación
+de los registros.
 
-Parse AST sin ejecutar código
-Detecta operaciones de archivo:
-Lecturas: pandas.read_csv(), geopandas.read_file(), numpy.load()
-Escrituras: to_csv(), to_file(), S3 get_object()/put_object()
-Archivos: open(), download_file(), upload_file()
-Rastreo de referencias a S3, rutas estáticas vs. dinámicas
-Identificación de clases de modelo declaradas (Counter, KDE, SEEP, Uniform)
-4. Rastreo de columnas CSV
+QUÉ INFORME ENTREGA
 
-Propaga origen de CSV en AST
-Detecta qué columnas se leen/usan
-No ejecuta, solo analiza estructura de código
-5. Reportes locales
+Genera un único historial_tareas.csv. En Excel, filtra tipo_registro:
 
-mapa.csv — inventario estático
-evidencias.csv — referencias encontradas
-contexto.json — metadatos y limitaciones
-Limitaciones importantes
-La inspección estática NO certifica ejecución. El historial separa metadata ECS de declaraciones de logs.
-NO valida modelos actualizados o en uso
-El análisis AST no ejecuta código. --probar-imports es un modo independiente con ejecución Docker local.
-NO resuelve dinámicas — exec(), importlib.import_module() dinámico, despacho por nombre
-Referencias ≠ disponibilidad — archivo mencionado puede no existir
-Ramas no resueltas — if/else ambiguas
-Imports en paquetes vendorizados pueden no detectarse
-Límites de cobertura: 100k nodos, 2k referencias, 4 niveles de recursión
-Opciones de validación
---validar-entradas — lee cabeceras de CSV
---validar-filas — valida conteos de dos CSVs en S3
---inspeccionar-imagen — descarga capas ECR (más lento)
---probar-imports — ejecuta imports en Docker local (sin red)
-Exit codes: 0 (sin diferencias), 1 (diferencia estática encontrada), 2 (args inválidos), 3 (lectura incompleta), 130 (interrupción)
+  RESUMEN_SIGLA: una fila por sigla con tareas, modelos, Uniform y avisos.
+  DETALLE_TAREA: evidencia por tarea y stream, que es su canal de registros.
+  COBERTURA_CICLO: comparación CAD/modalidad; aparece con --verificar-ciclo.
+  LANZAMIENTO_CICLO: evidencia de creación de cada tarea confirmada.
+  CONTROL_CICLO: problemas de lectura o errores del lanzamiento, si se encuentran.
 
-Caso de uso: auditoría pre-predicción de dependencias Python y operaciones de archivo, sin ejecutar código.
+Destino S3:
+
+FECHA corresponde al día de ejecución en hora de Bogotá, aunque se revisen datos de un período anterior.
+  s3://pon-prod-ml-iapol/ValidationReports/06-MonitorModelosDependencias/FECHA/HORA/
+
+Copia local:
+  $HOME/salida/modelos_dependencias/FECHA/HORA/historial_tareas.csv
+
+CÓMO LEER UNIFORM Y LOS AVISOS
+
+El porcentaje se calcula sobre selecciones observadas en los registros.
+Por ejemplo, 65 selecciones Uniform de 100 selecciones totales representan 65%.
+Los nombres completos de los modelos se mantienen separados.
+
+"Tareas 100% Uniform" cuenta tareas distintas con al menos una selección y
+únicamente Uniform en lo observado. Una tarea sin selecciones no entra en ese
+conteo. Una sigla puede tener una tarea solo Uniform aunque su porcentaje global
+sea menor a 100%.
+
+Los motivos del aviso distinguen uso exclusivo de Uniform, datos insuficientes,
+errores de aplicación, lectura incompleta y falta de información histórica de ECS.
+Los errores agrupados, como NameError, cuentan eventos; no predicciones fallidas únicas.
+Un aviso de pocos datos para un modelo tampoco mide toda la calidad de los datos.
+
+CÓMO LEER LA COBERTURA DEL CICLO
+
+Consulta por separado las tareas creadas confirmadas, las que tienen selecciones
+de modelo y los arranques que ECS permite verificar. Una tarea puede estar creada
+y tener cero selecciones observadas: genera una señal para revisar, no una falla
+confirmada de lanzamiento. Varias tareas para el mismo CAD/modalidad también se avisan.
+
+Las columnas tareas_iniciales_con_selecciones y tareas_iniciales_sin_selecciones
+siguen los identificadores del lanzamiento inicial. Así, otra tarea del mismo CAD
+ejecutada después no oculta la falta de selecciones de una tarea inicial.
+La columna tareas_con_selecciones incluye toda la actividad observada del período.
+
+Se comprueban creaciones de la primera hora del ciclo; esa ventana de búsqueda no
+es un tiempo máximo para terminar la predicción. El análisis de modelos cubre el
+período completo desde el disparo hasta la captura.
+
+Para conocer la lista inicial se leen las versiones conservadas del catálogo S3.
+Una nueva versión con el mismo contenido no se considera un cambio de CAD.
+Si no se puede recuperar la referencia inicial, queda explícita la limitación.
+La configuración de la lanzadora puede haber cambiado después: la cobertura
+de tareas creadas no reconstruye toda la historia de configuración.
+
+Esta comprobación necesita acceso al historial CloudTrail, los registros de la
+Lambda y las versiones del catálogo. Si faltan permisos o evidencia, se informa
+INCOMPLETO. Si cambia la lógica de selección y no puede comprobarse, queda NO EVALUADO.
+
+LÍMITES DEL RESULTADO
+
+- Las selecciones son declaraciones en logs, no solicitudes ni predicciones únicas.
+- Uniform no demuestra por sí solo un modelo de respaldo ni un fallo final.
+- Con una lectura parcial, 100% Uniform describe solo lo que se logró observar.
+- Sin información histórica de ECS no se confirma inicio, fin ni salida de la tarea.
+- Actividad de una tarea antigua no prueba que haya ocurrido un nuevo lanzamiento.
+- Los registros conservados no equivalen a un historial ilimitado.
+- No valida los archivos finales de predicción.
+
+SI LA CONSULTA SE INTERRUMPE
+
+Conserva $HOME/salida y repite el mismo comando. El monitor guarda información
+para recuperar consultas pendientes. Si falla la subida a S3, también conserva
+la consulta para reintentar sin repetir el escaneo de logs.
+
+OTRAS REVISIONES DISPONIBLES
+
+El mismo archivo tiene opciones para revisar imagen, versiones de dependencias
+y archivos auxiliares. Se ejecutan por separado, pueden tardar y generar más CSV.
+Consulta --help para verlas; no son necesarias para el resumen habitual.
+--desde-reportes conserva su análisis local sin consultas ni subidas a AWS.
