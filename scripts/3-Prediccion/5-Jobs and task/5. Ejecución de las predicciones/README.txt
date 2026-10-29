@@ -61,6 +61,18 @@ Empieza por sigla, estado ECS, tiempos, estado del control y motivo.
 STOPPED puede corresponder a un cierre normal, un error o una interrupción.
 El código de salida y el motivo ayudan a distinguirlos.
 
+Este script ya cubre el cierre técnico: parada registrada, hora de fin,
+salidas de los contenedores esenciales y motivo. Los códigos faltantes o una
+interrupción generan aviso; un error esencial genera falla.
+Una salida cero indica cierre sin error ECS; los archivos producidos se revisan
+después con el validador de resultados de predicción en S3.
+
+Para preparar un resumen semanal hay que conservar las capturas de cierre
+durante el ciclo. Si una tarea dejó de estar disponible antes de consultarla,
+su código de salida no se puede reconstruir a partir del silencio de sus logs.
+Esta necesidad de conservar evidencia pertenece a la operación del monitoreo;
+no requiere construir otro script de finalización.
+
 LÍMITES DEL RESULTADO
 
 - RUNNING u OK no demuestran avance real ni una predicción correcta.

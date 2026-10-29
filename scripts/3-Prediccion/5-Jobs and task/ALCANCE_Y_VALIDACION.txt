@@ -4,7 +4,7 @@ Objetivo de esta revision: cerrar cobertura funcional de los siete monitores
 manuales antes del despliegue. La cantidad de archivos no mide el cumplimiento.
 No incluye resultados S3, implementacion Lambda, notificaciones, estado semanal
 duradero, imports reales ni asociacion por proceso/unidad. No se crean servicios
-ni se modifican recursos productivos.
+ni se altera el pipeline productivo; solo se publican informes de monitoreo.
 
 CONTROLES ACORDADOS Y ESTADO REAL
 Control                      Responsable                    Estado y limite actual
@@ -28,7 +28,8 @@ Jobs de referencia,           monitor_glue_jobs              Funcional: siete jo
 entrenamiento e informes                                    tiempos, errores, cobertura y
                                                             fallos dentro de la ventana.
 ECS predicciones              mapear_inicio_progreso         Funcional: estado, tiempos,
-                                                            salidas esenciales y telemetria.
+                                                            cierre tecnico, salidas
+                                                            esenciales y telemetria.
                                                             Sin duracion maxima estandar.
 Modelos por CAD e historia    mapear_modelos_dependencias    Funcional: logs conservados,
                                                             modelos, Uniform y pocos datos.
@@ -66,12 +67,16 @@ CRITERIOS DE CIERRE
 VERIFICACION LOCAL
   python3 -B -m unittest discover -s 'scripts/3-Prediccion/5-Jobs and task/tests'
 Clientes simulados; sin boto3, Docker, credenciales ni llamadas AWS.
-169 pruebas superadas en esta revision: Glue, ECS/logs, parser de modelos,
+176 pruebas superadas en esta revision: Glue, ECS/logs, parser de modelos,
 consulta/reanudacion, disparos ausentes, permisos denegados, evidencia parcial,
 selector cambiado, CAD/modalidad sin actividad, excepciones y controles temporales.
 Incluyen catalogo versionado, borrado previo al ciclo, reconstruccion de JSON por
 invocacion Lambda, respuestas idempotentes de tareas antiguas, campos sensibles
 excluidos y conservacion del estado INCOMPLETO aun con lanzamientos confirmados.
+El cierre tecnico ECS se verifica ademas con salida esencial cero, salida no
+cero, codigos ausentes, salida no esencial, interrupcion, solicitud de parada
+todavia RUNNING y esencialidad no confirmada. Una lectura parcial de logs no
+oculta la falla esencial observada.
 La exportacion de datos de entrada se verifica con dos CSV: resumen y controles
 integrados en general.csv, detalle en diario.csv; copias locales/S3 equivalentes,
 controles globales conservados y cabeceras presentes aun sin registros.
@@ -127,12 +132,39 @@ Cuenta 926162397524, us-east-1. Sin ejecutar predicciones ni modificar recursos.
 - Crawler pon-prod-probabilidadDelito: fuente probabilidadDelito/, sin Schedule
   ni LastCrawl. No confirma productor, consumidor ni frecuencia.
 
-LO QUE AUN NO PUEDE CERTIFICARSE COMO 100%
+COMPROBACION ADICIONAL DEL CIERRE TECNICO - 2026-10-29
+- El control de finalizacion tecnica ya esta implementado en el monitor ECS.
+  La validacion de archivos de prediccion corresponde al validador S3 existente.
+- Se consultaron directamente las 112 tareas iniciales mediante DescribeTasks:
+  1 RUNNING y 111 MISSING. MISSING no equivale a terminada ni a fallida.
+- Tarea activa: DECAU / HORA / 810efd04b6cf4ac7bdd85c4eea2496e5.
+  El monitor ECS volvio a observarla RUNNING el 2026-10-29 a las 16:02 Bogota.
+- Se revisaron las 80 reglas del bus default; 30 tienen patron de eventos.
+  La unica con fuente compatible con ECS filtra startedBy="AWS Step Functions".
+  No se encontro un destino de historial de las paradas de las 111 tareas.
+  EventBridge: cero archives enumerados, sin truncamiento.
+- CloudTrail desde el inicio del ciclo: 100 eventos StopTask, ninguno de las
+  tareas iniciales; cero SubmitTaskStateChange. Una solicitud de parada no se
+  habria usado como confirmacion de que una tarea termino.
+- Se enumeraron 927 grupos de logs, sin truncamiento. El grupo performance
+  de este cluster tiene retencion de un dia; la muestra leida contiene metricas
+  de Cluster, sin salidas de contenedores. No se usa como prueba de cierre.
+- Informe ECS publicado en ValidationReports/05-MonitorInicioProgreso/
+  2026-10-29/16-02-47_242481/tareas.csv, bucket pon-prod-ml-iapol.
+  Esta ejecucion devolvio 3 por el limite de 10000 eventos de logs; la consulta
+  ECS si confirma RUNNING. Hubo 594 indicios de error en esa lectura parcial;
+  no son 594 predicciones fallidas ni una prueba de bloqueo.
+- No se consultaron los archivos de resultados de prediccion en S3.
+
+PENDIENTE FUNCIONAL Y LIMITES DE CERTIFICACION
 1. El criterio funcional de actualidad de probabilidaddelito, que sigue sin
    confirmar. Se necesita informacion del responsable funcional/productor.
-2. La finalizacion completa del ciclo y el resultado de cada tarea: la creacion
-   se confirmo para 110/110 combinaciones, pero falta estado historico ECS de
-   muchas tareas y una seguia RUNNING en la captura. No se infiere exito de ellas.
+2. Evidencia historica del ciclo: no es un control pendiente de construir.
+   La finalizacion ya la comprueba el monitor ECS cuando la tarea es visible.
+   De las 112 tareas iniciales, 111 ya no conservan estado consultable y una
+   seguia RUNNING. No se certifica retrospectivamente el cierre de ese ciclo.
+   Conservar los eventos/capturas de parada para el resumen semanal corresponde
+   a la implementacion operativa posterior, que aun no se ha desplegado.
 3. Toda la configuracion historica: se recuperaron catalogo inicial y evidencia
    de lanzamientos; no las versiones de codigo/targets que no se conservaron.
 4. Exito integral de los resultados: excluido expresamente de esta revision.
