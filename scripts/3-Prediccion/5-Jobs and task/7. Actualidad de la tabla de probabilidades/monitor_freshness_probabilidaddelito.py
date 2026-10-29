@@ -3,6 +3,7 @@
 
 Sin opciones: consulta esquema Glue; no ejecuta Athena ni declara datos vigentes.
 --ejecutar requiere columna, significado de fecha y periodo explicitamente indicados.
+--revisar-fuente-s3 consulta metadata de los objetos de la ubicacion Glue; sin Athena.
 Un unico CSV local. No modifica datos de origen; Athena escribe resultados internos.
 """
 import argparse
@@ -31,6 +32,8 @@ LIMITS = [
     'Fecha objetivo puede ser futura; no se confunde con fecha de generacion o ingestion.',
     'No valida archivos de prediccion, contenido de informes ni ejecuciones de jobs.',
     'Sin alertas automaticas. Un CSV local; Athena puede escribir intermediarios S3.',
+    'LastModified S3 prueba modificacion del objeto; no fecha de negocio, generacion del contenido ni actualizacion completa.',
+    'Objetos S3 candidatos son referencias por nombre/tamano; no se confirma que Athena los consuma ni se lee contenido.',
 ]
 
 
@@ -61,6 +64,10 @@ def parse_args():
     mode = p.add_mutually_exclusive_group()
     mode.add_argument('--ejecutar', action='store_true', help='Ejecutar un SELECT agregado en Athena')
     mode.add_argument('--solo-sql', action='store_true', help='Guardar SQL en el CSV sin ejecutarlo')
+    mode.add_argument('--revisar-fuente-s3', action='store_true',
+                      help='Listar metadata de objetos bajo la ubicacion Glue, sin leer contenido ni ejecutar Athena')
+    p.add_argument('--max-objetos', type=int, default=10000, help='Limite de objetos S3 listados: 1..1000000; default 10000')
+    p.add_argument('--listado-completo', action='store_true', help='Agotar paginas S3; ignora --max-objetos')
     p.add_argument('--workgroup', default=os.getenv('ATHENA_WORKGROUP', 'primary'))
     p.add_argument('--output-s3', default=os.getenv('ATHENA_OUTPUT_S3') or OUTPUT_S3,
                    help='Raiz para intermediarios Athena; se agrega fecha/hora/_athena/')
@@ -74,6 +81,12 @@ def parse_args():
         p.error('Indicar --desde y --hasta juntos, en orden cronologico')
     if not 1 <= a.timeout <= 3600:
         p.error('--timeout debe estar entre 1 y 3600')
+    if not 1 <= a.max_objetos <= 1000000:
+        p.error('--max-objetos debe estar entre 1 y 1000000')
+    if a.listado_completo and not a.revisar_fuente_s3:
+        p.error('--listado-completo requiere --revisar-fuente-s3')
+    if a.revisar_fuente_s3 and any((a.fecha, a.tipo_fecha, a.desde, a.hasta, a.formato_fecha)):
+        p.error('La revision S3 solo observa metadata; no admite opciones de fecha de datos')
     for value in (a.database, a.tabla, a.fecha, a.workgroup):
         if value is not None and (not value.strip() or len(value) > 255 or any(c in value for c in '\n\r\t')):
             p.error('Nombres no vacios de hasta 255 caracteres, sin saltos de linea')
@@ -217,6 +230,85 @@ def error_code(exc):
     return getattr(exc, 'response', {}).get('Error', {}).get('Code', type(exc).__name__)
 
 
+def review_s3(s3, table, a, resource, rows, context):
+    location = table.get('StorageDescriptor', {}).get('Location') or ''
+    uri = urlsplit(location)
+    if uri.scheme != 's3' or not uri.netloc or uri.query or uri.fragment or not uri.path.endswith('/') or uri.path == '/':
+        raise ReadBlocked('Ubicacion Glue no es una carpeta S3 explicita; confirmar antes de listar')
+    prefix = uri.path.lstrip('/')
+    limit = None if a.listado_completo else a.max_objetos
+    pagination = {'PageSize': 1000}
+    if limit is not None:
+        pagination['MaxItems'] = limit+1
+    context['fuente_s3'] = info = dict(ubicacion=location, lectura='INCOMPLETA',
+        limite=limit, truncado=False, objetos=0, tecnicos=0, candidatos_vacios=0,
+        candidatos_con_contenido=0, bytes_candidatos=0, metadata_invalida=0,
+        primera_modificacion=None, ultima_modificacion=None, ultimos_observados=[])
+    recent, seen = [], set()
+    pages = s3.get_paginator('list_objects_v2').paginate(Bucket=uri.netloc,
+        Prefix=prefix, ExpectedBucketOwner=a.cuenta, PaginationConfig=pagination)
+    objects = (obj for page in pages for obj in page.get('Contents', []))
+    for index, obj in enumerate(objects):
+        if limit is not None and index >= limit:
+            info['truncado'] = True
+            break
+        key, size, changed = obj.get('Key'), obj.get('Size'), obj.get('LastModified')
+        if not isinstance(key, str) or not key.startswith(prefix) or key in seen:
+            raise ReadBlocked('Clave S3 inesperada o repetida; listado no confirmado completo')
+        seen.add(key)
+        info['objetos'] += 1
+        relative = key[len(prefix):]
+        technical = key.endswith('/') or any(part.startswith(('_', '.')) for part in relative.split('/') if part)
+        valid_size = isinstance(size, int) and not isinstance(size, bool) and size >= 0
+        valid_time = isinstance(changed, datetime) and changed.tzinfo is not None and changed.utcoffset() is not None
+        valid = valid_size and valid_time
+        changed_text = changed.astimezone(BOGOTA).isoformat() if valid_time else None
+        category = 'METADATA_NO_EVALUABLE' if not valid else 'TECNICO' if technical else 'CANDIDATO_VACIO' if size == 0 else 'CANDIDATO_CON_CONTENIDO'
+        rows.append(dict(tipo_registro='OBJETO_S3', recurso=location, campo=key, tipo=category,
+                         resultado=changed_text or 'Fecha no interpretable', control='INFO' if valid else 'INCOMPLETO',
+                         valor=json.dumps(dict(bytes=size if valid_size else None, modificado=changed_text))))
+        if not valid:
+            info['metadata_invalida'] += 1
+            continue
+        if technical:
+            info['tecnicos'] += 1
+        elif size == 0:
+            info['candidatos_vacios'] += 1
+        else:
+            info['candidatos_con_contenido'] += 1
+            info['bytes_candidatos'] += size
+            utc = changed.astimezone(timezone.utc)
+            first = info['primera_modificacion']
+            last = info['ultima_modificacion']
+            info['primera_modificacion'] = min(first, utc) if first else utc
+            info['ultima_modificacion'] = max(last, utc) if last else utc
+            recent.append((utc, key, size))
+            recent.sort(reverse=True)
+            del recent[5:]
+            # Mantener evidencia util incluso si una pagina posterior falla.
+            info['ultimos_observados'] = [dict(clave=k, bytes=b, modificado=t.astimezone(BOGOTA).isoformat()) for t, k, b in recent]
+    complete = not info['truncado'] and not info['metadata_invalida']
+    info['lectura'] = 'LEIDA' if complete else 'INCOMPLETA'
+    state = 'INFO' if complete else 'INCOMPLETO'
+    def summary(field, result, control=state):
+        rows.append(dict(tipo_registro='RESUMEN', recurso=resource, campo=field, resultado=result, control=control))
+    summary('Fuente S3', location)
+    summary('Cobertura listado S3', f'{info["objetos"]} objetos; '+('paginas agotadas' if complete else 'lectura parcial'))
+    summary('Candidatos con contenido', f'{info["candidatos_con_contenido"]} objetos; {info["bytes_candidatos"]} bytes')
+    summary('Vacios / tecnicos', f'{info["candidatos_vacios"]} candidatos vacios; {info["tecnicos"]} objetos tecnicos')
+    last = info['ultima_modificacion']
+    summary('Ultima modificacion observada', last.astimezone(BOGOTA).isoformat() if last else 'Sin candidatos no vacios con fecha valida')
+    for index, item in enumerate(info['ultimos_observados'], 1):
+        summary(f'Objeto reciente observado #{index}', item['modificado']+' | '+item['clave'][len(prefix):])
+    if not info['candidatos_con_contenido']:
+        rows.append(dict(tipo_registro='CONTROL', recurso=resource, campo='Contenido fuente',
+                         resultado='No se observaron candidatos no vacios; no se leyeron filas',
+                         control='AVISO' if complete else 'INCOMPLETO'))
+    rows.append(dict(tipo_registro='CONTROL', recurso=resource, campo='Actualidad de los datos',
+                     resultado='LastModified no confirma periodo del contenido; frecuencia de actualizacion no confirmada',
+                     control='NO EVALUADO'))
+
+
 def write_report(folder, rows, context):
     folder.mkdir(parents=True, exist_ok=True)
     path = folder/'informe_freshness_probabilidaddelito.csv'
@@ -266,7 +358,11 @@ def inspect(session, config, a, errors):
                                actualizacion_metadata=table.get('UpdateTime'), particiones=table.get('PartitionKeys', []))
         rows.append(dict(tipo_registro='RESUMEN', recurso=resource, campo='Tabla Glue', resultado='ENCONTRADA: '+resource, control='INFO'))
         rows.extend(schema_rows(table, resource))
-        if a.ejecutar or a.solo_sql:
+        if a.revisar_fuente_s3:
+            review_s3(session.client('s3', config=config), table, a, resource, rows, context)
+            # Observar archivos no sustituye el control del periodo de los datos.
+            code = 3
+        elif a.ejecutar or a.solo_sql:
             sql = build_sql(a, table)
             rows.append(dict(tipo_registro='SQL', recurso=resource, campo='SELECT agregado', valor=sql))
             if a.solo_sql:
@@ -300,8 +396,8 @@ def inspect(session, config, a, errors):
         code = 3
     report = write_report(Path(a.salida).expanduser()/'freshness_probabilidaddelito'/run_folder, rows, context)
     print(f'PERIODO DE DATOS | {resource} | {a.region}')
-    print_table(rows)
-    print('Metadata no prueba datos actuales. Presencia en periodo no prueba cobertura de todas las unidades.')
+    print_table([r for r in rows if not a.revisar_fuente_s3 or r['tipo_registro'] != 'ESQUEMA'])
+    print('Metadata/LastModified no prueban periodo del contenido. Presencia no prueba cobertura de todas las unidades.')
     print(f'Informe: {report}')
     if code:
         return code

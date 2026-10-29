@@ -1,0 +1,4 @@
+Documentacion preservada antes de la unificacion del 28-oct-2026.
+Sus comandos/rutas describen versiones previas, no son la guia actual.
+Los .py anteriores estan en Git, no se duplican en esta carpeta.
+Guia vigente: ../../README.txt y ../../ALCANCE-Y-PRUEBA.txt.
