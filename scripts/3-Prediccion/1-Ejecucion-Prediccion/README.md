@@ -20,10 +20,23 @@ Prediccion/
 │   ├── 07_GUIA_OPERACIONES.md              operación y mantenimiento
 │   ├── 08_deploy.sh                        script de deployment
 │   └── README.md                           visión general de la solución
-└── script s3/
-    ├── validar_todas_siglas v1.py
-    └── validar_todas_siglas v2.py
+├── script s3/
+│   ├── validar_todas_siglas v1.py
+│   └── validar_todas_siglas v2.py
+└── mapa-predicciones/
+    ├── validacion-secad/                   validación de las capas SECAD del mapa (ver su README)
+    ├── validacion-rnmc/                    validación de las capas RNMC del mapa (ver su README)
+    ├── validacion-gescov-antecedentes/     validación de Planes GESCOV y Antecedentes (ver su README)
+    └── validacion-fuentes-internas/        validación de las fuentes internas: Gescov, MTRS, SIEDCO, SIMEP, SIRAP, IRIS P1
 ```
+
+> `mapa-predicciones/` es la excepción a "aquí no hay monitores": scripts de **solo lectura sobre
+> Athena y el historial de Glue**, por ahora para correr en local, que validan por sigla y unidad los
+> datos de las capas del mapa. `validacion-secad`: Riñas, Hurto violento y homicidio, Hurto general.
+> `validacion-rnmc`: Riñas, Incautaciones, Mediaciones in situ y en sala, Comportamientos contrarios a
+> la convivencia. `validacion-gescov-antecedentes`: Planes Gescov Programados y Antecedentes (Personas,
+> Vehículos, IMEI, y sus versiones "solo positivos"). `validacion-fuentes-internas`: los GeoJSON de Fuentes Internas
+> (Gescov, MTRS, SIEDCO I/II/III, SIMEP, SIRAP, IRIS P1). Las tres últimas reutilizan el motor de `validacion-secad`.
 
 ## Qué propone
 
