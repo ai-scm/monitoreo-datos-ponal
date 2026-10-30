@@ -26,7 +26,8 @@ Prediccion/
 └── mapa-predicciones/
     ├── validacion-secad/                   validación de las capas SECAD del mapa (ver su README)
     ├── validacion-rnmc/                    validación de las capas RNMC del mapa (ver su README)
-    └── validacion-gescov-antecedentes/     validación de Planes GESCOV y Antecedentes (ver su README)
+    ├── validacion-gescov-antecedentes/     validación de Planes GESCOV y Antecedentes (ver su README)
+    └── validacion-fuentes-internas/        validación de las fuentes internas: Gescov, MTRS, SIEDCO, SIMEP, SIRAP, IRIS P1
 ```
 
 > `mapa-predicciones/` es la excepción a "aquí no hay monitores": scripts de **solo lectura sobre
@@ -34,7 +35,8 @@ Prediccion/
 > datos de las capas del mapa. `validacion-secad`: Riñas, Hurto violento y homicidio, Hurto general.
 > `validacion-rnmc`: Riñas, Incautaciones, Mediaciones in situ y en sala, Comportamientos contrarios a
 > la convivencia. `validacion-gescov-antecedentes`: Planes Gescov Programados y Antecedentes (Personas,
-> Vehículos, IMEI, y sus versiones "solo positivos"). Las dos últimas reutilizan el motor de `validacion-secad`.
+> Vehículos, IMEI, y sus versiones "solo positivos"). `validacion-fuentes-internas`: los GeoJSON de Fuentes Internas
+> (Gescov, MTRS, SIEDCO I/II/III, SIMEP, SIRAP, IRIS P1). Las tres últimas reutilizan el motor de `validacion-secad`.
 
 ## Qué propone
 

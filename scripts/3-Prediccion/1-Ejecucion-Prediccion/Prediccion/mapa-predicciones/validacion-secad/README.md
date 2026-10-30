@@ -10,13 +10,14 @@ correr en local por ahora.
 | SECAD: Hurto violento y homicidio (`secad-hurtos-violento-y-homicidio`) | `capa_11` |
 | SECAD: Hurto general (`secad-hurtos-general`) | `capa_12` |
 
-> **Estado:** 41 pruebas sin AWS y **ejecutado contra producción el 2026-10-28** (cuenta
+> **Estado:** 52 pruebas sin AWS y **ejecutado contra producción el 2026-10-28** (cuenta
 > `926162397524`): esquema, catálogo y consultas funcionan; una corrida completa de las 54 siglas
 > escanea ~2 MiB. Lo que esa corrida confirmó o corrigió está en "Supuestos" y "Cómo se alimentan
 > las capas".
 
 > `secad_comun.py` y `validar_secad.py` son también el motor de [`../validacion-rnmc`](../validacion-rnmc/README.md) y
-> [`../validacion-gescov-antecedentes`](../validacion-gescov-antecedentes/README.md); cambios en sus funciones públicas (`analizar`, `imprimir`, `construir_sql`, `Arbol`) deben probarse en ambas carpetas.
+> [`../validacion-gescov-antecedentes`](../validacion-gescov-antecedentes/README.md) y
+> [`../validacion-fuentes-internas`](../validacion-fuentes-internas/README.md); cambios en sus funciones públicas (`analizar`, `imprimir`, `construir_sql`, `Arbol`) deben probarse en ambas carpetas.
 
 ## Qué valida y por qué así
 
@@ -95,6 +96,11 @@ tener casos en una semana.
 | `COORD_INVALIDA` | coordenadas nulas o fuera de lon −82…−66 / lat −5…15 (el BFF las descarta) | AVISO |
 | `HORA_INVALIDA` / `HORA_FUTURA` | `hora_caso` nula/ilegible, o > 24 h en el futuro | AVISO |
 | `DESFASE_PARTICION` | `hora_caso` cae en un día distinto al de su partición | AVISO |
+
+Opciones del motor que usan las otras carpetas (SECAD no las activa): `dias_atipicos(…, por_dia_semana, rezago)` compara
+cada día nacional con la mediana de los mismos días de la semana (mínimo 3) y puede dejar fuera los últimos días, y
+`analizar(…, rezago={capa: días})` no cuenta esos últimos días en la racha final ni en los días sin datos. Sirven para
+fuentes con ciclo semanal o que se registran con atraso (SIMEP, SIEDCO); sin ellas todo se comporta como se describe arriba.
 
 `puntos` cuenta pares (`hora_caso`, coordenadas) distintos con coordenadas válidas, que es como
 el front deja un punto por llamada, así que se acerca a lo que se dibuja. `filas` es lo que hay
@@ -175,3 +181,4 @@ python -m unittest discover -s tests -v
 | `validar_secad.py` | Validador: SQL por capa, rollup por árbol, reglas, informe y CSV |
 | `secad_comun.py` | Sesión AWS, cliente Athena, catálogo y árbol de unidades |
 | `tests/test_secad.py` | Pruebas sin AWS |
+| `informes/` | Informe de causas de las novedades (2026-10-29) y su diagnóstico fila por fila |

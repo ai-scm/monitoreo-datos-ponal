@@ -208,11 +208,14 @@ def pct(parte, todo):
     return round(100 * parte / todo, 2) if todo else 0.0
 
 
-def metricas(serie, v):
+def metricas(serie, v, rezago=0):
+    """`rezago`: ultimos dias de la ventana que la fuente registra con atraso; cuentan en los totales pero no en la racha
+    final ni en los dias sin datos (aun no tienen por que estar completos)."""
     w, b = total(serie, v.dias), total(serie, v.base)
+    evaluados = v.dias[:max(len(v.dias) - rezago, 0)] if rezago > 0 else v.dias
     con_datos = [d for d in v.dias if d in serie and serie[d].filas > 0]
     racha = 0
-    for d in reversed(v.dias):
+    for d in reversed(evaluados):
         if d in con_datos:
             break
         racha += 1
@@ -221,7 +224,7 @@ def metricas(serie, v):
         filas=w.filas, llamadas=w.llamadas, puntos=w.puntos, filas_base=b.filas, puntos_base=b.puntos,
         var_pct=round(100 * (w.puntos - b.puntos) / b.puntos, 1) if b.puntos else None,
         dias_ventana=len(v.dias), dias_base=len(v.base), dias_con_datos=len(con_datos),
-        dias_sin_datos=[d for d in v.dias if d not in con_datos], racha_final=racha, ultima_hora_caso=ultima,
+        dias_sin_datos=[d for d in evaluados if d not in con_datos], racha_final=racha, ultima_hora_caso=ultima,
         coord_invalida=w.coord_invalida, coord_invalida_pct=pct(w.coord_invalida, w.filas),
         hora_invalida=w.hora_invalida, hora_invalida_pct=pct(w.hora_invalida, w.filas),
         hora_futura=w.hora_futura, desfase=w.desfase, desfase_pct=pct(w.desfase, w.filas))
@@ -299,9 +302,13 @@ def causa_sin_unidad(codigo, sigla, arbol):
     return 'codigo ajeno'
 
 
-def analizar(obs, arbol, v, u, capas, siglas=None, tablas=None):
-    """obs[capa] = {sigla: {codigo_unidad: {dia: Acum}}}. Devuelve (filas_siglas, filas_unidades, novedades)."""
+def analizar(obs, arbol, v, u, capas, siglas=None, tablas=None, solo_sigla=(), avisar_sin_unidad=True, rezago=None):
+    """obs[capa] = {sigla: {codigo_unidad: {dia: Acum}}}. Devuelve (filas_siglas, filas_unidades, novedades).
+    solo_sigla: capas que no traen unidad (se evaluan solo por sigla). avisar_sin_unidad=False omite UNIDAD_NO_ASIGNADA
+    (para capas donde el mapa ubica por coordenadas y la unidad de los datos es solo una aproximacion).
+    rezago: {capa: dias} ultimos dias de la ventana que la fuente registra con atraso (ver `metricas`)."""
     ids = list(capas)
+    rezago = rezago or {}
     tablas = tablas or {c: t for c, (t, _) in sc.CAPAS.items()}  # capa -> nombre de la tabla/vista que se muestra
     observadas = {s for c in ids for s in obs.get(c, {})}
     esperadas = arbol.siglas_con_territorio() if arbol else set()
@@ -340,7 +347,7 @@ def analizar(obs, arbol, v, u, capas, siglas=None, tablas=None):
         por_capa = {}
         for capa in ids:
             codigos = obs.get(capa, {}).get(sigla, {})
-            m = metricas(combinar(codigos.values()), v)
+            m = metricas(combinar(codigos.values()), v, rezago.get(capa, 0))
             h = evaluar(m, 'SIGLA', u)
             if arbol and sigla not in esperadas:  # sigla sin territorio (direcciones, escuelas...): nunca es FALLA
                 h = [(c, AVISO if e == FALLA else e, msg) for c, e, msg in h]
@@ -355,7 +362,7 @@ def analizar(obs, arbol, v, u, capas, siglas=None, tablas=None):
                     causa = causa_sin_unidad(cod, sigla, arbol)
                     causas[causa] = causas.get(causa, 0) + f
             pct_sin = pct(sin_unidad, m['filas'])
-            if pct_sin > u.max_invalidos_pct:
+            if avisar_sin_unidad and capa not in solo_sigla and pct_sin > u.max_invalidos_pct:
                 top = ', '.join(f'{c or "<vacio>"}({f})' for f, c in sorted(ejemplos, reverse=True)[:3])
                 por_causa = '; '.join(f'{k}: {n}' for k, n in sorted(causas.items(), key=lambda kv: -kv[1]))
                 h.append(('UNIDAD_NO_ASIGNADA', AVISO, f'{sin_unidad} filas ({pct_sin}%) sin unidad visible en esta sigla ({por_causa}); '
@@ -393,7 +400,8 @@ def analizar(obs, arbol, v, u, capas, siglas=None, tablas=None):
                         if c not in SIN_CODIGO and (not siglas or s in siglas)})
         evaluar_unidades = [(sc.Unidad(c, '(sin catalogo)', s), 0) for s, c in pares]
 
-    for un, nivel_arbol in evaluar_unidades:
+    capas_unidad = [c for c in ids if c not in solo_sigla]
+    for un, nivel_arbol in (evaluar_unidades if capas_unidad else []):
         if not arbol:
             ids_pedidos = [un.id]
         elif arbol.es_sigla_completa(un.id):
@@ -401,13 +409,13 @@ def analizar(obs, arbol, v, u, capas, siglas=None, tablas=None):
         else:
             ids_pedidos = arbol.ids_con_descendientes(un.id)
         resumen = {}
-        for capa in ids:
+        for capa in capas_unidad:
             codigos = obs.get(capa, {}).get(un.sigla, {})
             if ids_pedidos is None:  # el mapa pide solo por sigla: entran todas las filas, incluidas las sin unidad
                 serie = combinar(codigos.values())
             else:
                 serie = combinar(codigos[i] for i in ids_pedidos if i in codigos)
-            m = metricas(serie, v)
+            m = metricas(serie, v, rezago.get(capa, 0))
             h = evaluar(m, 'UNIDAD', u)
             propia = total(codigos.get(un.id, {}), v.dias).filas
             fila = dict(sigla=un.sigla, unidad_id=un.id, unidad=un.nombre, tipo=un.tipo, nivel_arbol=nivel_arbol, padre_id=un.padre,
@@ -420,7 +428,7 @@ def analizar(obs, arbol, v, u, capas, siglas=None, tablas=None):
             registrar('UNIDAD', dict(sigla=un.sigla, unidad_id=un.id, unidad=un.nombre, tipo=un.tipo), capa, h,
                       dict(sigla_sin_datos=fila['sigla_sin_datos']))
         if all(f == 0 for f in resumen.values()):
-            sigla_vacia = all(filas_sigla_capa.get((un.sigla, c), 0) == 0 for c in ids)
+            sigla_vacia = all(filas_sigla_capa.get((un.sigla, c), 0) == 0 for c in capas_unidad)
             registrar('UNIDAD', dict(sigla=un.sigla, unidad_id=un.id, unidad=un.nombre, tipo=un.tipo), 'TODAS',
                       [('SIN_DATOS_EN_TODAS_LAS_CAPAS', AVISO, 'la unidad (con sus descendientes) no tiene filas en ninguna capa SECAD en la ventana')],
                       dict(sigla_sin_datos='SI' if sigla_vacia else '', contexto=contexto_unidad(un.sigla)))
@@ -451,37 +459,55 @@ def filas_diario(obs, arbol, v, tablas=None):
     return filas
 
 
-def dias_atipicos(obs, v, capas, umbral=0.4, min_mediana=30):
-    """Dias de la ventana con menos de `umbral` veces la mediana diaria nacional (ventana y ventana previa)."""
+DIAS_SEMANA = ('lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo')
+MIN_MISMO_DIA_SEMANA = 3
+
+
+def dias_atipicos(obs, v, capas, umbral=0.4, min_mediana=30, por_dia_semana=False, rezago=0):
+    """Dias de la ventana con menos de `umbral` veces la mediana diaria nacional (ventana y ventana previa).
+
+    `por_dia_semana`: compara cada dia con la mediana de los mismos dias de la semana (si hay al menos 3), para capas con ciclo
+    semanal (SIMEP baja en fines de semana). `rezago`: ultimos dias de la ventana que no se evaluan ni entran en la mediana
+    porque la fuente los registra con atraso y siempre estan incompletos (SIEDCO); un entero o {capa: dias}."""
     novedades = []
     for capa in capas:
+        n_rez = rezago.get(capa, 0) if isinstance(rezago, dict) else rezago
+        excluidos = set(v.dias[max(len(v.dias) - n_rez, 0):]) if n_rez > 0 else set()
         por_dia = {}
         for por_codigo in obs.get(capa, {}).values():
             for serie in por_codigo.values():
                 for dia, a in serie.items():
                     if dia in v.base or dia in v.dias:
                         por_dia[dia] = por_dia.get(dia, 0) + a.filas
-        valores = [por_dia.get(d, 0) for d in v.base + v.dias]
-        mediana = statistics.median(valores) if valores else 0
-        if mediana < min_mediana:
-            continue
+        valores = {d: por_dia.get(d, 0) for d in v.base + v.dias if d not in excluidos}
+        mediana = statistics.median(valores.values()) if valores else 0
         for d in v.dias:
+            if d in excluidos:
+                continue
             n = por_dia.get(d, 0)
-            if n < umbral * mediana:
-                novedades.append(dict(nivel='NACIONAL', estado=AVISO, sigla='', unidad_id='', unidad='', tipo='', capa=capa,
-                                      codigo='DIA_ATIPICO',
-                                      mensaje=f'el {d} tiene {n} filas en todo el pais, {round(100 * n / mediana)}% de la mediana diaria ({round(mediana)}) '
-                                              f'de los {len(valores)} dias revisados',
-                                      contexto='volumen nacional; revisar si la fuente dejo de reportar ese dia', sigla_sin_datos=''))
+            referencia = f'de la mediana diaria ({round(mediana)}) de los {len(valores)} dias revisados'
+            esperado = mediana
+            if por_dia_semana:
+                dow = date.fromisoformat(d).weekday()
+                mismos = [x for k, x in valores.items() if date.fromisoformat(k).weekday() == dow]
+                if len(mismos) >= MIN_MISMO_DIA_SEMANA:
+                    esperado = statistics.median(mismos)
+                    referencia = f'de la mediana de los {DIAS_SEMANA[dow]} ({round(esperado)}) de los {len(mismos)} revisados'
+            if esperado < min_mediana or n >= umbral * esperado:
+                continue
+            novedades.append(dict(nivel='NACIONAL', estado=AVISO, sigla='', unidad_id='', unidad='', tipo='', capa=capa,
+                                  codigo='DIA_ATIPICO',
+                                  mensaje=f'el {d} tiene {n} filas en todo el pais, {round(100 * n / esperado)}% {referencia}',
+                                  contexto='volumen nacional; revisar si la fuente dejo de reportar ese dia', sigla_sin_datos=''))
     return novedades
 
 
-def marcar_sin_sigla(filas_siglas, novedades, sin_siglas, que='hechos', codigo='HECHOS_SIN_SIGLA', sin='sigla ni cuadrante'):
+def marcar_sin_sigla(filas_siglas, novedades, sin_siglas, que='hechos', codigo='HECHOS_SIN_SIGLA', sin='sigla ni cuadrante',
+                     consecuencia='no se les puede asignar unidad y el mapa, que filtra por sigla, no los muestra'):
     """Filas sin sigla (o con una sigla artefacto como 'NO HA') no son una 'sigla fuera de catalogo': el mapa, que
     filtra por sigla, no puede mostrarlas. Se reemplazan los hallazgos genericos por uno propio."""
     def mensaje(n):
-        return (f'{n} {que} sin {sin} en la ventana: no se les puede asignar unidad y el mapa, '
-                'que filtra por sigla, no los muestra')
+        return f'{n} {que} sin {sin} en la ventana: {consecuencia}'
 
     for f in filas_siglas:
         if f['sigla'] in sin_siglas and f['filas']:

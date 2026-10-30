@@ -184,6 +184,24 @@ class ReglasEvaluar(unittest.TestCase):
         largo = {**semana(14, 21, 1)}  # 6 dias seguidos sin datos con ese ritmo si lo son
         self.assertIn('RACHA_SIN_DATOS', self.codigos(largo, nivel='UNIDAD'))
 
+    def test_rezago_no_cuenta_en_la_racha_final_pero_si_en_los_totales(self):
+        datos = {**semana(14, 25, 10), '2026-10-26': 3}       # 26 con datos parciales, 27 sin datos
+        sin = vs.metricas(serie(datos), V)
+        con = vs.metricas(serie({**semana(14, 25, 10)}), V, rezago=2)
+        self.assertEqual((sin['racha_final'], con['racha_final']), (1, 0))
+        self.assertEqual(con['dias_sin_datos'], [])
+        self.assertEqual(con['filas'], 50)      # los totales siguen siendo los de toda la ventana
+        self.assertEqual(vs.metricas(serie({**semana(14, 25, 10)}), V, rezago=1)['racha_final'], 1)
+        self.assertEqual(vs.metricas(serie({**semana(14, 25, 10)}), V, rezago=0)['racha_final'], 2)
+
+    def test_rezago_en_analizar_evita_la_racha_de_la_sigla_y_de_la_unidad(self):
+        obs = {'x': {'MEXX': {'103': serie(semana(14, 25, 10))}}}      # 26 y 27 sin datos
+        tablas = {'x': 'tabla_x'}
+        for rezago, esperado in ((None, True), ({'x': 2}, False), ({'otra': 2}, True)):
+            _, _, nov = vs.analizar(obs, arbol(), V, U, ['x'], None, tablas, rezago=rezago)
+            hay = any(n['codigo'] == 'RACHA_SIN_DATOS' and n['sigla'] == 'MEXX' for n in nov)
+            self.assertEqual(hay, esperado, rezago)
+
     def test_racha_de_poco_volumen_es_aviso_si_no_alcanza_el_umbral_de_falla(self):
         datos = {**semana(14, 25, 4)}  # ~4 filas/dia, 2 dias sin datos: se esperaban ~8
         h = vs.evaluar(vs.metricas(serie(datos), V), 'SIGLA', vs.Umbrales(min_esperado_falla=10))
@@ -307,6 +325,19 @@ class Analisis(unittest.TestCase):
         self.assertIn('CAIDA_A_CERO', zzz['codigos'])
         self.assertFalse([n for n in nov if n['sigla'] == 'ZZZ' and n['estado'] == vs.FALLA])
 
+    def test_capa_solo_sigla_no_genera_filas_de_unidad_ni_aviso_de_unidad(self):
+        obs = {'secad-rinas': {'MEXX': {'': serie(semana(14, 27, 6))}}}  # sin unidad en los datos
+        siglas, unidades, nov = vs.analizar(obs, arbol(), V, U, ['secad-rinas'], solo_sigla=('secad-rinas',))
+        self.assertTrue(siglas)
+        self.assertEqual(unidades, [])
+        self.assertNotIn('UNIDAD_NO_ASIGNADA', {n['codigo'] for n in nov})
+
+    def test_avisar_sin_unidad_false_omite_solo_ese_aviso(self):
+        obs = {'secad-rinas': {'MEXX': {'': serie(semana(14, 27, 6))}}}
+        _, unidades, nov = vs.analizar(obs, arbol(), V, U, ['secad-rinas'], avisar_sin_unidad=False)
+        self.assertNotIn('UNIDAD_NO_ASIGNADA', {n['codigo'] for n in nov})
+        self.assertTrue(unidades)  # las unidades se siguen evaluando
+
     def test_sigla_fuera_del_catalogo(self):
         siglas, _, nov = self.correr()
         zzz = next(f for f in siglas if f['sigla'] == 'ZZZ' and f['capa'] == 'secad-rinas')
@@ -328,6 +359,68 @@ class Analisis(unittest.TestCase):
         filas = vs.filas_diario(self.datos(), arbol(), V)
         cat = {(f['sigla'], f['codigo_unidad']): f['en_catalogo'] for f in filas}
         self.assertEqual((cat[('MEXX', '103')], cat[('MEXX', '0')], cat[('ZZZ', '900')]), ('SI', 'SIN_CODIGO', 'NO'))
+
+
+class DiasAtipicos(unittest.TestCase):
+    """Volumen nacional por dia: con ciclo semanal (SIMEP) y con rezago de la fuente (SIEDCO)."""
+    V14 = vs.calcular_ventana(datetime(2026, 10, 29, 9), 14, date(2026, 10, 28))   # 28 dias, miercoles 2026-10-28 el ultimo
+
+    def obs(self, por_dia):
+        return {'x': {'MEXX': {'1': {d: vs.Acum(filas=n, puntos=n) for d, n in por_dia.items()}}}}
+
+    def semanal(self, entre_semana, fin_de_semana):
+        return {d: fin_de_semana if date.fromisoformat(d).weekday() >= 5 else entre_semana for d in self.V14.base + self.V14.dias}
+
+    def test_ciclo_semanal_sin_opcion_marca_los_fines_de_semana(self):
+        nov = vs.dias_atipicos(self.obs(self.semanal(100, 5)), self.V14, ['x'])
+        self.assertEqual({n['codigo'] for n in nov}, {'DIA_ATIPICO'})
+        self.assertEqual(len(nov), 4)    # 2 sabados y 2 domingos de la ventana
+
+    def test_ciclo_semanal_por_dia_de_semana_no_marca_el_fin_de_semana_normal(self):
+        self.assertEqual(vs.dias_atipicos(self.obs(self.semanal(100, 5)), self.V14, ['x'], por_dia_semana=True), [])
+        self.assertEqual(vs.dias_atipicos(self.obs(self.semanal(100, 60)), self.V14, ['x'], por_dia_semana=True), [])
+
+    def test_por_dia_de_semana_si_marca_un_dia_que_cae_contra_los_suyos(self):
+        por_dia = self.semanal(100, 60)
+        sabado = next(d for d in self.V14.dias if date.fromisoformat(d).weekday() == 5)
+        por_dia[sabado] = 10
+        nov = vs.dias_atipicos(self.obs(por_dia), self.V14, ['x'], por_dia_semana=True)
+        self.assertEqual([n['mensaje'].split()[1] for n in nov], [sabado])
+        self.assertIn('mediana de los sabado (60)', nov[0]['mensaje'])
+        self.assertEqual(len(vs.dias_atipicos(self.obs(por_dia), self.V14, ['x'])), 1)    # igual lo marca la mediana global
+
+    def test_por_dia_de_semana_con_pocas_muestras_usa_la_mediana_global(self):
+        v = vs.calcular_ventana(datetime(2026, 10, 28, 9), 5, date(2026, 10, 27))   # 10 dias: 1 o 2 por dia de la semana
+        por_dia = {d: 100 for d in v.base + v.dias}
+        por_dia[v.dias[2]] = 20
+        nov = vs.dias_atipicos(self.obs(por_dia), v, ['x'], por_dia_semana=True)
+        self.assertEqual(len(nov), 1)
+        self.assertIn('mediana diaria (100)', nov[0]['mensaje'])
+
+    def test_rezago_no_evalua_los_ultimos_dias(self):
+        por_dia = {d: 100 for d in self.V14.base + self.V14.dias}
+        por_dia[self.V14.dias[-1]], por_dia[self.V14.dias[-2]] = 2, 30
+        self.assertEqual([n['mensaje'].split()[1] for n in vs.dias_atipicos(self.obs(por_dia), self.V14, ['x'])],
+                         [self.V14.dias[-2], self.V14.dias[-1]])
+        for rezago in (2, {'x': 2}):
+            self.assertEqual(vs.dias_atipicos(self.obs(por_dia), self.V14, ['x'], rezago=rezago), [])
+        # con rezago de un dia solo se libra el ultimo
+        self.assertEqual([n['mensaje'].split()[1] for n in vs.dias_atipicos(self.obs(por_dia), self.V14, ['x'], rezago=1)],
+                         [self.V14.dias[-2]])
+
+    def test_rezago_por_capa_y_fuera_de_rango(self):
+        por_dia = {d: 100 for d in self.V14.base + self.V14.dias}
+        por_dia[self.V14.dias[-1]] = 2
+        self.assertEqual(len(vs.dias_atipicos(self.obs(por_dia), self.V14, ['x'], rezago={'otra': 2})), 1)
+        self.assertEqual(vs.dias_atipicos(self.obs(por_dia), self.V14, ['x'], rezago=99), [])    # mas que la ventana: no evalua nada
+
+    def test_el_rezago_tampoco_baja_la_mediana(self):
+        por_dia = {d: 100 for d in self.V14.base + self.V14.dias[:-2]}
+        por_dia.update({self.V14.dias[-2]: 0, self.V14.dias[-1]: 0})
+        por_dia[self.V14.dias[3]] = 30
+        nov = vs.dias_atipicos(self.obs(por_dia), self.V14, ['x'], rezago=2)
+        self.assertEqual([n['mensaje'].split()[1] for n in nov], [self.V14.dias[3]])
+        self.assertIn('(100)', nov[0]['mensaje'])
 
 
 class Parseo(unittest.TestCase):
