@@ -4,7 +4,7 @@
 Sin opciones: consulta esquema Glue; no ejecuta Athena ni declara datos vigentes.
 --ejecutar requiere columna, significado de fecha y periodo explicitamente indicados.
 --revisar-fuente-s3 consulta metadata de los objetos de la ubicacion Glue; sin Athena.
-Un unico CSV local. No modifica datos de origen; Athena escribe resultados internos.
+Un unico CSV local y copia S3. No modifica datos de origen; Athena escribe resultados internos.
 """
 import argparse
 import csv
@@ -20,7 +20,31 @@ import uuid
 
 
 BOGOTA = timezone(timedelta(hours=-5))
-OUTPUT_S3 = 's3://pon-prod-ml-iapol/ValidationReports/FreshnessProbabilidaddelito/'
+REPORTS_BUCKET = 'pon-prod-ml-iapol'
+REPORTS_PREFIX = 'ValidationReports/07-MonitorFreshnessProbabilidaddelito/'
+
+
+def upload_csv_reports(session, config, folder):
+    """Publica solo los CSV de esta ejecucion; mantiene todos los archivos locales."""
+    files = sorted(folder.glob('*.csv'))
+    if not files:
+        return {}
+    # Las carpetas locales se crean con fecha y hora de Bogota.
+    datetime.strptime(folder.parent.name, '%Y-%m-%d')
+    datetime.strptime(folder.name, '%H-%M-%S_%f')
+    key_root = REPORTS_PREFIX + folder.parent.name + '/' + folder.name + '/'
+    s3 = session.client('s3', config=config)
+    locations = {}
+    for path in files:
+        key = key_root + path.name
+        with path.open('rb') as body:
+            s3.upload_fileobj(body, REPORTS_BUCKET, key,
+                              ExtraArgs={'ContentType': 'text/csv; charset=utf-8'})
+        locations[path.name] = 's3://' + REPORTS_BUCKET + '/' + key
+    print('[S3] CSV guardados en s3://' + REPORTS_BUCKET + '/' + key_root, flush=True)
+    return locations
+
+OUTPUT_S3 = 's3://' + REPORTS_BUCKET + '/' + REPORTS_PREFIX
 FIELDS = ('total', 'fechas_no_interpretables', 'primera_fecha', 'ultima_fecha',
           'registros_periodo', 'dias_con_datos', 'primera_fecha_periodo', 'ultima_fecha_periodo')
 LIMITS = [
@@ -31,7 +55,7 @@ LIMITS = [
     'Presencia en periodo no certifica cobertura de todas las siglas/unidades/dias ni calidad de prediccion.',
     'Fecha objetivo puede ser futura; no se confunde con fecha de generacion o ingestion.',
     'No valida archivos de prediccion, contenido de informes ni ejecuciones de jobs.',
-    'Sin alertas automaticas. Un CSV local; Athena puede escribir intermediarios S3.',
+    'Sin alertas automaticas. Un CSV local y copia en ValidationReports/07-MonitorFreshnessProbabilidaddelito/; Athena puede escribir intermediarios S3.',
     'LastModified S3 prueba modificacion del objeto; no fecha de negocio, generacion del contenido ni actualizacion completa.',
     'Objetos S3 candidatos son referencias por nombre/tamano; no se confirma que Athena los consuma ni se lee contenido.',
 ]
@@ -399,6 +423,7 @@ def inspect(session, config, a, errors):
     print_table([r for r in rows if not a.revisar_fuente_s3 or r['tipo_registro'] != 'ESQUEMA'])
     print('Metadata/LastModified no prueban periodo del contenido. Presencia no prueba cobertura de todas las unidades.')
     print(f'Informe: {report}')
+    upload_csv_reports(session, config, report.parent)
     if code:
         return code
     controls = {r.get('control') for r in rows}

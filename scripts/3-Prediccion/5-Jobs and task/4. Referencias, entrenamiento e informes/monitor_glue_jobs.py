@@ -2,8 +2,8 @@
 """Monitor de jobs Glue de referencia, entrenamiento e informes; solo lectura.
 
 CloudShell: python3 ~/monitor_glue_jobs.py --historial-completo
-Un informe_glue_jobs.csv con RESUMEN/DETALLE/CONTROL/CONTEXTO.
-No ejecuta jobs, modifica AWS ni envia alertas. No requiere otros archivos locales.
+Un informe_glue_jobs.csv local/S3 con RESUMEN/DETALLE/CONTROL/CONTEXTO.
+No ejecuta ni modifica jobs. Solo escribe sus CSV en S3. No envia alertas ni requiere otros .py.
 Exit: 0 lectura completa sin fallas; 1 FALLA/AUSENTE; 2 argumentos;
 3 cobertura parcial/error; 130 interrupcion. FALLA y cobertura son independientes.
 """
@@ -34,6 +34,30 @@ GROUPS = {
     },
 }
 BOGOTA = timezone(timedelta(hours=-5))
+REPORTS_BUCKET = 'pon-prod-ml-iapol'
+REPORTS_PREFIX = 'ValidationReports/04-MonitorGlueJobs/'
+
+
+def upload_csv_reports(session, config, folder):
+    """Publica solo los CSV de esta ejecucion; mantiene todos los archivos locales."""
+    files = sorted(folder.glob('*.csv'))
+    if not files:
+        return {}
+    # Las carpetas locales se crean con fecha y hora de Bogota.
+    datetime.strptime(folder.parent.name, '%Y-%m-%d')
+    datetime.strptime(folder.name, '%H-%M-%S_%f')
+    key_root = REPORTS_PREFIX + folder.parent.name + '/' + folder.name + '/'
+    s3 = session.client('s3', config=config)
+    locations = {}
+    for path in files:
+        key = key_root + path.name
+        with path.open('rb') as body:
+            s3.upload_fileobj(body, REPORTS_BUCKET, key,
+                              ExtraArgs={'ContentType': 'text/csv; charset=utf-8'})
+        locations[path.name] = 's3://' + REPORTS_BUCKET + '/' + key
+    print('[S3] CSV guardados en s3://' + REPORTS_BUCKET + '/' + key_root, flush=True)
+    return locations
+
 FAILURES = {'FAILED', 'TIMEOUT', 'ERROR', 'EXPIRED'}
 ACTIVE = {'STARTING', 'RUNNING', 'WAITING', 'STOPPING'}
 TERMINAL = FAILURES | {'SUCCEEDED', 'STOPPED'}
@@ -373,6 +397,7 @@ def run_cli(session, config, args, sdk_errors):
     print('Control: fallas de la ventana. Cobertura: integridad de lectura; parcial no oculta fallas conocidas.')
     print('SUCCEEDED no certifica datos/modelos/informes. Sin calendario esperado ni envio automatico de alertas.')
     print(f'Informe: {path} | Filtrar tipo_registro=RESUMEN para la vista principal.')
+    upload_csv_reports(session, config, folder)
     return exit_code(report)
 
 

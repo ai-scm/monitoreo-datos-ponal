@@ -1,0 +1,175 @@
+ALCANCE Y EVIDENCIA DE VALIDACION - 2026-10-29
+==========================================
+Objetivo de esta revision: cerrar cobertura funcional de los siete monitores
+manuales antes del despliegue. La cantidad de archivos no mide el cumplimiento.
+No incluye resultados S3, implementacion Lambda, notificaciones, estado semanal
+duradero, imports reales ni asociacion por proceso/unidad. No se crean servicios
+ni se altera el pipeline productivo; solo se publican informes de monitoreo.
+
+CONTROLES ACORDADOS Y ESTADO REAL
+Control                      Responsable                    Estado y limite actual
+---------------------------- ------------------------------ --------------------------------
+Volumen/recencia/calidad      monitor_datos_entrada          Funcional en alcance observado:
+de entradas                                                 15 contra 15 dias, diario, por BD.
+                                                            No detecta unidades nunca vistas
+                                                            sin referencia esperada. Fechas
+                                                            excluidas por filtro: NO EVALUADO.
+EventBridge: disparos y       monitor_disparo_semanal        Funcional; ahora comprueba cada
+fallos                                                      disparo semanal del cron actual.
+                                                            Ausencia de evidencia genera
+                                                            aviso, no fallo demostrado.
+Lambda: errores, limites,     monitor_disparo_semanal        Funcional: metricas, timeout y
+duracion, manejo de fallos                                   configuracion DLQ/OnFailure.
+                                                            No prueba causalidad end-to-end.
+ECS limpieza, crawler y       monitor_procesos_upstream      Funcional para tareas visibles,
+DynamoDB                                                    LastCrawl y metricas de limites;
+                                                            no es historia completa.
+Jobs de referencia,           monitor_glue_jobs              Funcional: siete jobs, estados,
+entrenamiento e informes                                    tiempos, errores, cobertura y
+                                                            fallos dentro de la ventana.
+ECS predicciones              mapear_inicio_progreso         Funcional: estado, tiempos,
+                                                            cierre tecnico, salidas
+                                                            esenciales y telemetria.
+                                                            Sin duracion maxima estandar.
+Modelos por CAD e historia    mapear_modelos_dependencias    Funcional: logs conservados,
+                                                            modelos, Uniform y pocos datos.
+                                                            Error de aplicacion y metadata
+                                                            ausente se distinguen en CSV.
+CAD/modalidad desde inicio    mapear_modelos_dependencias    Catalogo inicial recuperado y
+                                                            lanzamientos confirmados por ARN.
+                                                            Separa tareas iniciales con/sin
+                                                            selecciones de modelos. No prueba
+                                                            finalizacion ni resultados.
+Actualidad de                 monitor_freshness_             BLOQUEO FUNCIONAL: uso y
+probabilidaddelito            probabilidaddelito             frecuencia sin confirmar por
+                                                            el usuario. Mantener NO EVALUADO.
+
+CRITERIOS DE CIERRE
+- Una falla observada sigue visible aunque otra lectura sea parcial.
+- Un permiso denegado, resultado truncado o metadata ausente no se convierten
+  en cero eventos, tarea terminada ni estado sano.
+- Un disparo sin evidencia se compara con SU propia ventana. Actividad de otro
+  disparo no lo completa. Cron no soportado queda NO EVALUADO.
+- Una tarea antigua que emite logs no confirma un nuevo lanzamiento semanal.
+- El contraste CAD/modalidad se hace con el selector de la lanzadora, no con
+  todas las filas de la estructura ni con nombres inventados desde el stream.
+- El selector actual no se usa como prueba historica si codigo/catalogo cambiaron.
+- La version inicial del catalogo se comprueba en el historial S3. Las respuestas
+  completas de Lambda se cruzan con CloudTrail por ARN exacto de tarea.
+- Otra tarea del mismo CAD no completa la evidencia de una tarea inicial.
+  La primera hora es una ventana de busqueda de lanzamientos, no un SLA de duracion.
+- Uniform se calcula sobre selecciones observadas; cero selecciones no es 100%.
+  Las tareas se deduplican. Uniform no se equipara a fallback ni a fallo final.
+- End Script y salida cero no demuestran resultado validado.
+- probabilidaddelito solo puede cerrarse cuando se confirme su uso y criterio
+  temporal, o se acuerde expresamente retirarla. No se retira unilateralmente.
+
+VERIFICACION LOCAL
+  python3 -B -m unittest discover -s 'scripts/3-Prediccion/5-Jobs and task/tests'
+Clientes simulados; sin boto3, Docker, credenciales ni llamadas AWS.
+176 pruebas superadas en esta revision: Glue, ECS/logs, parser de modelos,
+consulta/reanudacion, disparos ausentes, permisos denegados, evidencia parcial,
+selector cambiado, CAD/modalidad sin actividad, excepciones y controles temporales.
+Incluyen catalogo versionado, borrado previo al ciclo, reconstruccion de JSON por
+invocacion Lambda, respuestas idempotentes de tareas antiguas, campos sensibles
+excluidos y conservacion del estado INCOMPLETO aun con lanzamientos confirmados.
+El cierre tecnico ECS se verifica ademas con salida esencial cero, salida no
+cero, codigos ausentes, salida no esencial, interrupcion, solicitud de parada
+todavia RUNNING y esencialidad no confirmada. Una lectura parcial de logs no
+oculta la falla esencial observada.
+La exportacion de datos de entrada se verifica con dos CSV: resumen y controles
+integrados en general.csv, detalle en diario.csv; copias locales/S3 equivalentes,
+controles globales conservados y cabeceras presentes aun sin registros.
+Publicacion S3 por monitor: destino/script/fecha/hora, solo CSV, persistencia de
+copia local ante permisos denegados y reintento de historial sin repetir consulta.
+Estas pruebas no constituyen un ciclo productivo end-to-end ni pruebas de carga.
+
+COMPROBACION AWS DE SOLO LECTURA
+Cuenta 926162397524, us-east-1. Sin ejecutar predicciones ni modificar recursos.
+- Regla predicciones: cron(0 1 ? * SUN *), ENABLED.
+  Esperado 2026-10-24 20:00 Bogota: TriggeredRules=1, Invocations=1.
+- Regla informes: esperado 2026-10-28 13:00 Bogota:
+  TriggeredRules=1, Invocations=1.
+  FailedInvocations sin datapoints en ambas; no se inventa un cero.
+- Lanzadora inspeccionada sin ejecutarla: catalogo utilidades/siglas_fisicas.json;
+  deduplicacion CAD y modalidades HORA/TURNO salvo overrides del target.
+- Catalogo actual: 56 entradas, 55 CAD distintos, DESAB repetido.
+- Ciclo: inicio 2026-10-25 01:00 UTC / 2026-10-24 20:00 Bogota.
+  Catalogo vigente recuperado: version Y08MOPTVNPRlW_1C.tcfdW9Ilyv6EaY9,
+  modificado 2026-10-18 21:06:04 UTC. Sus bytes coinciden con el catalogo actual
+  (SHA256 a90d3e05360514ead3a8422f77644d8049be49cfd703695b54192eb1c1381655).
+  Ya contenia 56 entradas, 55 CAD distintos y la repeticion de DESAB.
+- Lanzamientos iniciales: 112 tareas distintas, 55 CAD y 110/110 combinaciones
+  HORA/TURNO. CloudTrail confirma ARN; 112 documentos JSON completos de Lambda
+  identifican CAD/modalidad en la misma tarea, con una sola invocacion observada.
+  Sin fragmentos JSON pendientes ni fallos de API observados en esa lectura.
+- OFTIC: ambas tareas si fueron creadas; antes sus streams carecian de CAD.
+  TURNO: b879b431130d448ea30212e3fba98c3b, 2026-10-25T01:00:51.373 UTC.
+  HORA:  c0aa73c023af400aab18d03646354004, 2026-10-25T01:01:28.910 UTC.
+  Cero selecciones observadas en ambas; AVISO, no fallo demostrado ni exito.
+- Estructura vigente al inicio: version dOANVtJAqa.MBcD82YKkyF.8CCpEINPT,
+  modificada 2026-08-26 17:01:26 UTC, 2851 filas. Comprobacion adicional:
+  SIGLA_PAPA=OFTIC: 0 filas; DESAB: 37 filas, 33 con UNIDAD_ID no vacio.
+  Es contexto para investigar; no prueba la causa de la ausencia de selecciones.
+- DESAB: dos tareas distintas por modalidad en el lanzamiento inicial; AVISO.
+  No se atribuye la causa a la repeticion del catalogo sin evidencia adicional.
+- De las 112 tareas iniciales, 110 tienen selecciones observadas: corresponden
+  a 108/110 combinaciones CAD/modalidad. Las dos restantes son OFTIC.
+- La lectura completa de modelos incluye 156 tareas con evidencia: 112 iniciales
+  y 44 adicionales dentro del periodo. No se confunden esas tareas adicionales
+  con las del disparo inicial al comprobar selecciones.
+- Consulta Logs Insights 1a9f6163-64b5-40ee-866b-bf05d7eb36bd, Complete.
+  Ventana 2026-10-25T01:00:00 UTC a 2026-10-29T20:17:58 UTC.
+  55 CAD identificados, 0 streams con CAD sin atribucion. Estado ECS: 1 RUNNING,
+  155 NO DISPONIBLE. Esto NO certifica que esas 155 terminaran correctamente.
+- El codigo Lambda actual se modifico el 2026-10-27. Su version anterior y toda
+  la configuracion historica no se recuperaron. El catalogo inicial y la
+  creacion de las tareas si tienen evidencia historica independiente.
+- Informe: ValidationReports/MonitorModelosDependencias/2026-10-29/
+  15-17-56_382719/historial_tareas.csv (bucket pon-prod-ml-iapol).
+- Excepciones agrupadas en la captura actual: 400155 eventos NameError.
+  No son 400155 predicciones fallidas unicas; se evita esa equivalencia.
+- Crawler pon-prod-probabilidadDelito: fuente probabilidadDelito/, sin Schedule
+  ni LastCrawl. No confirma productor, consumidor ni frecuencia.
+
+COMPROBACION ADICIONAL DEL CIERRE TECNICO - 2026-10-29
+- El control de finalizacion tecnica ya esta implementado en el monitor ECS.
+  La validacion de archivos de prediccion corresponde al validador S3 existente.
+- Se consultaron directamente las 112 tareas iniciales mediante DescribeTasks:
+  1 RUNNING y 111 MISSING. MISSING no equivale a terminada ni a fallida.
+- Tarea activa: DECAU / HORA / 810efd04b6cf4ac7bdd85c4eea2496e5.
+  El monitor ECS volvio a observarla RUNNING el 2026-10-29 a las 16:02 Bogota.
+- Se revisaron las 80 reglas del bus default; 30 tienen patron de eventos.
+  La unica con fuente compatible con ECS filtra startedBy="AWS Step Functions".
+  No se encontro un destino de historial de las paradas de las 111 tareas.
+  EventBridge: cero archives enumerados, sin truncamiento.
+- CloudTrail desde el inicio del ciclo: 100 eventos StopTask, ninguno de las
+  tareas iniciales; cero SubmitTaskStateChange. Una solicitud de parada no se
+  habria usado como confirmacion de que una tarea termino.
+- Se enumeraron 927 grupos de logs, sin truncamiento. El grupo performance
+  de este cluster tiene retencion de un dia; la muestra leida contiene metricas
+  de Cluster, sin salidas de contenedores. No se usa como prueba de cierre.
+- Informe ECS publicado en ValidationReports/05-MonitorInicioProgreso/
+  2026-10-29/16-02-47_242481/tareas.csv, bucket pon-prod-ml-iapol.
+  Esta ejecucion devolvio 3 por el limite de 10000 eventos de logs; la consulta
+  ECS si confirma RUNNING. Hubo 594 indicios de error en esa lectura parcial;
+  no son 594 predicciones fallidas ni una prueba de bloqueo.
+- No se consultaron los archivos de resultados de prediccion en S3.
+
+PENDIENTE FUNCIONAL Y LIMITES DE CERTIFICACION
+1. El criterio funcional de actualidad de probabilidaddelito, que sigue sin
+   confirmar. Se necesita informacion del responsable funcional/productor.
+2. Evidencia historica del ciclo: no es un control pendiente de construir.
+   La finalizacion ya la comprueba el monitor ECS cuando la tarea es visible.
+   De las 112 tareas iniciales, 111 ya no conservan estado consultable y una
+   seguia RUNNING. No se certifica retrospectivamente el cierre de ese ciclo.
+   Conservar los eventos/capturas de parada para el resumen semanal corresponde
+   a la implementacion operativa posterior, que aun no se ha desplegado.
+3. Toda la configuracion historica: se recuperaron catalogo inicial y evidencia
+   de lanzamientos; no las versiones de codigo/targets que no se conservaron.
+4. Exito integral de los resultados: excluido expresamente de esta revision.
+   El alcance verificable es monitoreo de procesos y evidencia, no validacion
+   completa de cada prediccion.
+
+No se cambia una estimacion porcentual por una certificacion: los estados
+anteriores y sus criterios permiten evaluar el avance sin ocultar pendientes.

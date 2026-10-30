@@ -1,89 +1,76 @@
-Este es un monitor de frescura/presencia de datos en la tabla de predicciones. Solo lectura, no modifica datos.
+ACTUALIDAD DE LA TABLA DE PROBABILIDADES
+=======================================
 
-Propósito principal
-Verificar que datos de predicción (probabilidaddelito) existan en el período esperado:
+Archivo: monitor_freshness_probabilidaddelito.py
 
-Consulta esquema Glue
-Opcionalmente ejecuta agregado en Athena
-Opcionalmente inspecciona metadata S3 subyacente
-Funcionalidades clave
-1. Descubrimiento de esquema (por defecto)
+PARA QUÉ SIRVE
 
-Lista columnas y tipos de datos
-Identifica particiones
-Ubicación de datos en S3
-Timestamp de actualización Glue
-2. Validación de presencia (con --ejecutar)
-Ejecuta SELECT agregado que cuenta:
+Revisa si existe la tabla pon-prod-mdp.probabilidaddelito y qué información
+hay sobre los archivos de su fuente.
 
-Total de registros
-Fechas no interpretables
-Rango completo de fechas (primero/último)
-Registros en período: conteo dentro de fechas configuradas
-Días con datos: cantidad de fechas distintas en período
-Rango de fechas dentro del período
-3. Inspección S3 (con --revisar-fuente-s3)
-Sin leer contenido, lista metadata:
+Su uso dentro de la predicción actual y su frecuencia de actualización siguen
+sin confirmar. Por eso la actualidad del contenido permanece NO EVALUADA.
+Este estado no debe interpretarse como datos vigentes ni como una falla de carga.
 
-Objetos en la ubicación Glue
-LastModified de cada objeto
-Tamaño de candidatos no vacíos
-Objetos técnicos (_ ._ ) y vacíos
-Últimos 5 objetos modificados
-4. Análisis de fecha
+QUÉ REVISA CON EL COMANDO RECOMENDADO
 
-Soporta columnas tipo date, timestamp, string
-Conversión de texto con --formato-fecha (sintaxis Athena)
-Interpretación de significado: objetivo / generación / dato
-Periodo explícito e inclusivo (DESDE/HASTA)
-5. Reporte CSV
-Un único informe_freshness_probabilidaddelito.csv:
+- Existencia y ubicación de la tabla en el catálogo Glue.
+- Archivos disponibles en la ubicación S3 de la tabla.
+- Cantidad, tamaño y fecha de modificación de los archivos observados.
+- Archivos vacíos y candidatos con contenido.
 
-tipo_registro=ESQUEMA — columnas de la tabla
-tipo_registro=RESUMEN — hallazgos principales
-tipo_registro=CONTROL — validaciones
-tipo_registro=SQL — consulta ejecutada
-tipo_registro=OBJETO_S3 — metadata de archivos (si aplica)
-tipo_registro=CONTEXTO — metadatos y configuración
-Estados de control
-INFO: esquema encontrado, presencia confirmada
-AVISO: fechas inválidas presentes, vacíos, sin DLQ
-FALLA: sin registros en período esperado
-INCOMPLETO: lectura parcial, fecha no interpretable
-AUSENTE: tabla no existe
-Limitaciones importantes
-NO valida contenido — solo presencia de registros
-NO certifica cobertura: puede haber unidades ausentes
-LastModified ≠ fecha de datos — solo prueba modificación del objeto
-Periodo explícito: no impone antiguedad estándar
-Fecha debe confirmarse: no se deduce del nombre de columna
-Presencia ≠ calidad — registros pueden estar corruptos
-Sin alertas automáticas — solo CSV local
-Modos de uso
-Modo	Qué hace
-Sin opciones	Consulta esquema Glue; no ejecuta Athena
---ejecutar	Ejecuta agregado Athena con fechas configuradas
---solo-sql	Genera SQL sin ejecutar
---revisar-fuente-s3	Lista metadata de objetos S3 (sin leer contenido)
-Opciones de fecha (requeridas para --ejecutar):
+No lee las filas de esos archivos ni ejecuta una consulta Athena con este comando.
 
---fecha COLUMNA_EXACTA — nombre confirmado en esquema
---tipo-fecha {objetivo,generacion,dato} — significado confirmado
---desde 2026-10-20 — primer día esperado (inclusivo)
---hasta 2026-10-28 — último día esperado (inclusivo)
---formato-fecha '%Y%m%d' — si la columna es texto (sintaxis Athena)
-Exit codes: 0 (presencia confirmada), 1 (ausente/falla), 2 (args inválidos), 3 (lectura incompleta/Athena timeout), 130 (interrupción)
+CÓMO EJECUTARLO EN CLOUDSHELL
 
-Ejemplos:
+  python3 "$HOME/monitor_freshness_probabilidaddelito.py" \
+    --revisar-fuente-s3 \
+    --listado-completo \
+    --salida "$HOME/salida"
 
+QUÉ INFORME ENTREGA
 
-# Solo esquema
-python3 monitor_freshness.py --tabla probabilidaddelito
+Genera informe_freshness_probabilidaddelito.csv.
 
-# Con periodo de datos
-python3 monitor_freshness.py --fecha fecha_prediccion --tipo-fecha objetivo \
-  --desde 2026-10-20 --hasta 2026-10-28 --ejecutar
+En Excel, filtra tipo_registro:
+  RESUMEN: existencia, ubicación y observaciones principales.
+  CONTROL: qué pudo evaluarse y qué queda pendiente.
+  OBJETO_S3: información de los archivos observados.
+  CONTEXTO: configuración y alcance de la revisión.
 
-# Inspeccionar archivos S3
-python3 monitor_freshness.py --revisar-fuente-s3 --listado-completo --max-objetos 50000
-Caso de uso: auditoría post-predicción de presencia de resultados, sin validar contenido ni calidad.
+Destino S3 del informe:
+  s3://pon-prod-ml-iapol/ValidationReports/07-MonitorFreshnessProbabilidaddelito/FECHA/HORA/
+
+FECHA corresponde al día de ejecución en hora de Bogotá, aunque se revisen datos de un período anterior.
+
+Copia local:
+  $HOME/salida/freshness_probabilidaddelito/FECHA/HORA/informe_freshness_probabilidaddelito.csv
+
+La fuente que se inspecciona es distinta de la carpeta del informe:
+  s3://pon-prod-ml-iapol/probabilidadDelito/
+
+CÓMO INTERPRETARLO
+
+INFO indica evidencia disponible, como la existencia de la tabla o sus archivos.
+INCOMPLETO señala que no se pudo terminar una lectura.
+AUSENTE indica que no se encontró la tabla configurada.
+
+La última modificación de un archivo solo dice cuándo cambió ese objeto.
+No demuestra a qué período pertenecen sus datos ni si están completos.
+Una fecha de modificación antigua necesita contexto de uso y frecuencia antes
+de decidir si representa un problema.
+
+LÍMITES DEL RESULTADO
+
+- No se aplica una obligación de actualización semanal sin confirmarla.
+- La tabla revisada no tiene una columna temporal ni particiones de fecha
+  confirmadas para evaluar el período del contenido.
+- La presencia de archivos no demuestra cobertura de todas las siglas o unidades.
+- Este monitor no reemplaza al validador de resultados de predicción en S3.
+
+El script dispone de una revisión por período cuando se confirmen una columna
+de fecha, su significado y las fechas esperadas. Esa definición todavía falta;
+el comando recomendado mantiene explícitamente el control NO EVALUADO.
+
+El informe se guarda en S3 y localmente, incluso si documenta controles pendientes.
+Si la subida falla, la copia local queda disponible.

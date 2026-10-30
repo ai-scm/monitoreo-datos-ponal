@@ -16,9 +16,10 @@ Modo --comparar-periodos: UN SELECT para resumen y diario de dos ventanas de 15 
 Sin ese modo, se conserva la auditoria historica y su detalle opcional (dos consultas).
 Filtrar unidad/sigla no garantiza reducir bytes leidos; LIMIT solo limita grupos.
 Usar el workgroup de pruebas y su limite de bytes por consulta si corresponde.
-Reportes: general.csv, diario.csv, control.csv en S3 /fecha/hora/ y copia en salida/.
-Destino fijo: s3://pon-prod-ml-iapol/ValidationReports/MonitorDatosEntrada/
-Resultados internos de Athena en /fecha/hora/_athena/, junto a los tres reportes.
+Reportes: general.csv (resumen y controles) y diario.csv en S3 /fecha/hora/.
+Copias locales: general_datos_entrada_FECHA_HORA.csv y diario_datos_entrada_FECHA_HORA.csv.
+Destino fijo: s3://pon-prod-ml-iapol/ValidationReports/01-MonitorDatosEntrada/
+Resultados internos de Athena en /fecha/hora/_athena/, junto a los dos reportes.
 Fechas sin zona: se interpretan en --zona-datos (por defecto America/Bogota).
 Si la columna es texto no ISO: --formato-fecha '%d/%m/%Y %H:%i:%s' (Athena).
 La fecha del hecho mide recencia de incidentes; no demuestra fecha de ingestion.
@@ -40,7 +41,11 @@ import textwrap
 from datetime import datetime, timedelta, timezone
 
 
-REPORTS_S3 = 's3://pon-prod-ml-iapol/ValidationReports/MonitorDatosEntrada/'
+REPORTS_S3 = 's3://pon-prod-ml-iapol/ValidationReports/01-MonitorDatosEntrada/'
+REPORT_FIELDS = {
+    'general': ('tipo_registro', 'sigla', 'unidad', 'bd', 'recurso', 'control', 'estado', 'mensaje'),
+    'diario': ('sigla', 'unidad', 'bd', 'fecha', 'periodo', 'registros'),
+}
 
 
 class Blocked(RuntimeError):
@@ -359,12 +364,29 @@ def evaluate(rows, a, now):
     return checks
 
 
-def save_csv(path, rows):
-    if rows:
-        with path.open('w', encoding='utf-8-sig', newline='') as f:
-            writer = csv.DictWriter(f, fieldnames=list(rows[0]))
-            writer.writeheader()
-            writer.writerows(rows)
+def report_columns(rows, initial=()):
+    """Esquema comun a resumen y controles; conserva columnas de ambos tipos."""
+    return list(dict.fromkeys([*initial, *(field for row in rows for field in row)]))
+
+
+def input_reports(summary, daily, checks, sources=()):
+    """Dos informes, conservando controles globales aunque no haya grupos de datos."""
+    general = [dict(tipo_registro=kind, **row)
+               for kind, records in (('RESUMEN', summary), ('RESUMEN_FUENTE', sources), ('CONTROL', checks))
+               for row in records]
+    return {'general': general, 'diario': daily}
+
+
+def save_csv(path, rows, initial=()):
+    with path.open('w', encoding='utf-8-sig', newline='') as f:
+        writer = csv.DictWriter(f, fieldnames=report_columns(rows, initial))
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+def save_local_reports(prefix, reports):
+    for name, rows in reports.items():
+        save_csv(csv_path(prefix, name), rows, REPORT_FIELDS[name])
 
 
 def csv_path(prefix, report):
@@ -385,7 +407,7 @@ def upload_reports(s3, prefix, reports, verbose=True):
     locations = {}
     for name, rows in reports.items():
         buffer = io.StringIO(newline='')
-        fields = list(rows[0]) if rows else ['sigla', 'unidad', 'bd']
+        fields = report_columns(rows, REPORT_FIELDS[name])
         writer = csv.DictWriter(buffer, fieldnames=fields)
         writer.writeheader()
         writer.writerows(rows)
@@ -613,17 +635,16 @@ def run_period_mode(a, now, schema, athena, prefix, identity, s3=None):
     records, info = execute(athena, a, sql)
     summary, daily, checks = period_report(records, a, now, expected)
     if prefix:
-        save_csv(csv_path(prefix, 'resumen'), summary)
-        save_csv(csv_path(prefix, 'diario'), daily)
-        save_csv(csv_path(prefix, 'controles'), checks)
+        reports = input_reports(summary, daily, checks)
+        save_local_reports(prefix, reports)
         context = {'configuracion': vars(a), 'reloj': now.isoformat(), 'cuenta': identity['Account'],
                    'schema': schema, 'query': info, 'resumen': summary,
                    'cobertura': 'INCOMPLETA' if len(records) > a.max_grupos else 'COMPLETA',
                    'calidad_fechas_evaluada': a.particiones_fecha_confirmadas}
         prefix.with_suffix('.json').write_text(json.dumps(context, ensure_ascii=False, indent=2, default=str), encoding='utf-8')
         if a.detallado:
-            print(f'[INFO] Resumen: {csv_path(prefix, "resumen")} | Diario: {csv_path(prefix, "diario")} | Controles: {csv_path(prefix, "controles")}')
-        context['reportes_s3'] = upload_reports(s3, prefix, {'general': summary, 'diario': daily, 'control': checks}, verbose=a.detallado)
+            print(f'[INFO] General (resumen y controles): {csv_path(prefix, "general")} | Diario: {csv_path(prefix, "diario")}')
+        context['reportes_s3'] = upload_reports(s3, prefix, reports, verbose=a.detallado)
         prefix.with_suffix('.json').write_text(json.dumps(context, ensure_ascii=False, indent=2, default=str), encoding='utf-8')
     print_summary_table(summary, a)
     for check in checks:
@@ -641,7 +662,7 @@ def run_period_mode(a, now, schema, athena, prefix, identity, s3=None):
         print('Reportes: exportacion desactivada (--no-export).')
     scope_notes = [c['control'] for c in checks if c['recurso'] == 'ALCANCE']
     if scope_notes:
-        print('Alcance pendiente: ' + ', '.join(scope_notes) + '. Detalle en control.csv o --detallado.')
+        print('Alcance pendiente: ' + ', '.join(scope_notes) + '. Detalle en general.csv (tipo_registro=CONTROL) o --detallado.')
     return 1 if counts['FALLA'] else 0
 
 
@@ -713,9 +734,10 @@ def main():
         context = {'configuracion': vars(a), 'reloj': now.isoformat(), 'cuenta': identity['Account'], 'query': info, 'agregados': records,
                    'estado_detalle': 'PENDIENTE' if detail_sql else 'NO_SOLICITADO'}
         if prefix:
-            save_csv(csv_path(prefix, 'controles'), checks)
+            # Conservar ambos informes locales si despues falla el detalle opcional.
+            save_local_reports(prefix, input_reports(records, daily, checks))
             prefix.with_suffix('.json').write_text(json.dumps(context, ensure_ascii=False, indent=2, default=str), encoding='utf-8')
-            print(f'[INFO] Controles: {csv_path(prefix, "controles")} | Contexto: {prefix}.json | Consulta: {prefix}.sql')
+            print(f'[INFO] General (resumen y controles): {csv_path(prefix, "general")} | Diario: {csv_path(prefix, "diario")} | Contexto: {prefix}.json | Consulta: {prefix}.sql')
         if detail_sql:
             print('[INFO] Iniciando detalle diario y por fuente; timeout aplica a cada consulta.')
             detail_records, detail_info = execute(athena, a, detail_sql)
@@ -725,15 +747,11 @@ def main():
             context.update(query_detalle=detail_info, fuentes=sources, diario=daily,
                            estado_detalle='INCOMPLETO' if not detail_records or len(detail_records) > a.max_grupos else 'COMPLETO')
             if prefix:
-                save_csv(csv_path(prefix, 'controles'), checks)
-                save_csv(csv_path(prefix, 'fuentes'), sources)
-                save_csv(csv_path(prefix, 'diario'), daily)
+                save_local_reports(prefix, input_reports(records, daily, checks, sources))
                 prefix.with_suffix('.json').write_text(json.dumps(context, ensure_ascii=False, indent=2, default=str), encoding='utf-8')
-                print(f'[INFO] Fuentes: {csv_path(prefix, "fuentes")} | Diario: {csv_path(prefix, "diario")}')
+                print(f'[INFO] Resumen por fuente y controles: {csv_path(prefix, "general")} | Diario: {csv_path(prefix, "diario")}')
         if prefix:
-            reports = {'control': checks}
-            if detail_sql:
-                reports.update(general=sources, diario=daily)
+            reports = input_reports(records, daily, checks, sources)
             context['reportes_s3'] = upload_reports(s3, prefix, reports)
             prefix.with_suffix('.json').write_text(json.dumps(context, ensure_ascii=False, indent=2, default=str), encoding='utf-8')
         for check in checks:

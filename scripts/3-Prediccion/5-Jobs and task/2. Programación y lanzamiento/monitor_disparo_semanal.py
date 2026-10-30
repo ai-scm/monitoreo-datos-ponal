@@ -1,19 +1,21 @@
 #!/usr/bin/env python3
-"""Mapeo manual EventBridge -> Lambda, solo lectura. No invoca funciones ni crea alarmas.
+"""Consulta EventBridge -> Lambda, solo lectura del pipeline; publica CSV en S3.
 
 CloudShell: python3 ~/monitor_disparo_semanal.py
 Consulta reglas del bus default, sus targets y las Lambdas esperadas/enlazadas.
 Metricas de los ultimos 8 dias, agregadas por recurso; no certifican el lanzamiento ECS.
+Comprueba ademas cada disparo esperado del cron semanal actual en su propia ventana.
 Salida: una tabla y un unico informe_disparo_semanal.csv local con resumen,
 controles, contexto y evidencias. Logs acotados, sin exportar mensajes.
-Exit: 0 consultas completas (puede haber avisos); 1 recurso no encontrado;
-3 lectura incompleta o bloqueo; 2 argumentos; 130 interrupcion.
+Exit: 0 consultas evaluables (puede haber avisos); 1 falla o recurso no encontrado;
+3 lectura incompleta, disparo no evaluado o bloqueo; 2 argumentos; 130 interrupcion.
 """
 import argparse
 import ast
 import csv
 from datetime import datetime, timedelta, timezone
 import json
+import math
 from pathlib import Path
 import re
 import sys
@@ -23,12 +25,38 @@ import textwrap
 RULES = ('xcrime_prediccion_siglas_unidades', 'generacion_informes_anticipaciones')
 FUNCTIONS = ('pon-prod-xcrime-prediccion-launch-fargate', 'pon_prod_xcrime_informes_anticipaciones')
 BOGOTA = timezone(timedelta(hours=-5))
+REPORTS_BUCKET = 'pon-prod-ml-iapol'
+REPORTS_PREFIX = 'ValidationReports/02-MonitorDisparoSemanal/'
+
+
+def upload_csv_reports(session, config, folder):
+    """Publica solo los CSV de esta ejecucion; mantiene todos los archivos locales."""
+    files = sorted(folder.glob('*.csv'))
+    if not files:
+        return {}
+    # Las carpetas locales se crean con fecha y hora de Bogota.
+    datetime.strptime(folder.parent.name, '%Y-%m-%d')
+    datetime.strptime(folder.name, '%H-%M-%S_%f')
+    key_root = REPORTS_PREFIX + folder.parent.name + '/' + folder.name + '/'
+    s3 = session.client('s3', config=config)
+    locations = {}
+    for path in files:
+        key = key_root + path.name
+        with path.open('rb') as body:
+            s3.upload_fileobj(body, REPORTS_BUCKET, key,
+                              ExtraArgs={'ContentType': 'text/csv; charset=utf-8'})
+        locations[path.name] = 's3://' + REPORTS_BUCKET + '/' + key
+    print('[S3] CSV guardados en s3://' + REPORTS_BUCKET + '/' + key_root, flush=True)
+    return locations
+
 LIMITATIONS = [
-    'No invoca Lambda, no ejecuta ECS y no modifica AWS. No crea alarmas, DLQ ni notificaciones.',
+    'No invoca Lambda ni ejecuta ECS. Solo escribe CSV en ValidationReports/02-MonitorDisparoSemanal/. No crea alarmas, DLQ ni notificaciones.',
     'Metricas agregadas por regla/funcion, no por disparo, sigla ni solicitante; no se correlacionan por proximidad.',
     'Invocations de Lambda incluye todos sus llamadores; no prueba invocacion desde esta regla ni creacion de tareas ECS.',
     'SIN DATOS no equivale a cero, recurso sano, falta de ejecucion o fallo del disparo.',
-    'Cron/rate se muestran como estan configurados, en UTC para reglas programadas. No se calcula un domingo esperado.',
+    'Se comprueban disparos esperados del cron semanal actual (minuto/hora fijos, dias de semana); otros cron/rate quedan NO EVALUADOS.',
+    'SIN EVIDENCIA en un disparo esperado genera AVISO, no prueba que no ocurrio: CloudWatch entrega metricas best effort.',
+    'La ventana de observacion del disparo y la espera de metricas son tecnicas y configurables; no son limites de duracion ECS.',
     'Estado de configuracion actual y metricas de la ventana pueden corresponder a configuraciones diferentes.',
     'Los targets DLQ y destinos Lambda son referencias configuradas; no se validan permisos, conectividad ni entrega.',
     'Se consulta $LATEST y se enumeran configuraciones asincronas por version/alias; no se certifica la configuracion efectiva de targets calificados.',
@@ -79,19 +107,90 @@ class Reader:
             return None
 
 
-def metric(reader, cw, resource, namespace, name, dimensions, start, end, stat='Sum'):
+def metric(reader, cw, resource, namespace, name, dimensions, start, end, stat='Sum', period=3600):
     response = reader.read(resource, 'metrica:'+name, lambda: cw.get_metric_statistics(
         Namespace=namespace, MetricName=name, Dimensions=dimensions,
-        StartTime=start, EndTime=end, Period=3600, Statistics=[stat]))
+        StartTime=start, EndTime=end, Period=period, Statistics=[stat]))
     if response is None:
         return dict(lectura='ERROR', valor=None, muestras=0, ultima_muestra='')
     points = [p for p in response.get('Datapoints', []) if stat in p]
+    if any(not isinstance(p[stat], (int, float)) or isinstance(p[stat], bool) or
+           not math.isfinite(p[stat]) or p[stat] < 0 for p in points):
+        reader.issues.append(dict(recurso=resource, operacion='metrica:'+name,
+                                 error='Valores no interpretables', tipo='INCOMPLETO'))
+        return dict(lectura='ERROR', valor=None, muestras=0, ultima_muestra='')
     if not points:
         return dict(lectura='SIN DATOS', valor=None, muestras=0, ultima_muestra='')
     values = [p[stat] for p in points]
     times = [p['Timestamp'] for p in points if isinstance(p.get('Timestamp'), datetime)]
     return dict(lectura='LEIDA', valor=sum(values) if stat == 'Sum' else max(values),
         muestras=len(points), ultima_muestra=stamp(max(times)) if times else '')
+
+
+def weekly_slots(expression, start, end):
+    """Cron semanal de AWS; no aproxima rate, fechas mensuales ni sintaxis no admitida."""
+    match = re.fullmatch(r'cron\((\d{1,2}) (\d{1,2}) \? \* ([A-Z,1-7]+) \*\)', expression or '')
+    if not match:
+        raise ValueError('Cron no semanal simple; no se deduce una ejecucion esperada')
+    minute, hour = map(int, match.group(1, 2))
+    names = dict(SUN=6, MON=0, TUE=1, WED=2, THU=3, FRI=4, SAT=5)
+    names.update({str(n): (n + 5) % 7 for n in range(1, 8)})
+    days = match[3].split(',')
+    if minute > 59 or hour > 23 or any(day not in names for day in days):
+        raise ValueError('Cron semanal no interpretable')
+    cursor = start.astimezone(timezone.utc).replace(hour=hour, minute=minute, second=0, microsecond=0)
+    result = []
+    while cursor <= end:
+        if cursor >= start and cursor.weekday() in {names[day] for day in days}:
+            result.append(cursor)
+        cursor += timedelta(days=1)
+    return result
+
+
+def inspect_expected_triggers(reader, cw, name, info, start, now, args, controls):
+    """Un control por disparo, para no ocultar uno ausente con actividad de otra semana."""
+    try:
+        slots = weekly_slots(info.get('ScheduleExpression', ''), start, now)
+    except ValueError as exc:
+        control(controls, name, 'Disparo esperado', 'NO EVALUADO', str(exc))
+        return []
+    results = []
+    for slot in slots:
+        window_end = slot + timedelta(minutes=args.ventana_disparo_minutos)
+        if now-slot >= timedelta(days=15):
+            detail = 'Disparo anterior a la retencion de metricas de un minuto; acotar --dias para no atribuir una ventana redondeada'
+            results.append(dict(esperado_utc=slot.isoformat(), esperado_bogota=stamp(slot),
+                hasta_observado_utc=window_end.isoformat(), ventana_fin_utc=window_end.isoformat(),
+                metricas={}, control='NO EVALUADO', detalle=detail))
+            control(controls, name, 'Disparo esperado '+stamp(slot), 'NO EVALUADO', detail)
+            continue
+        # Minuto completo; evita consultar intervalos negativos durante el disparo.
+        if now <= slot + timedelta(minutes=1):
+            metrics = {}
+        else:
+            metrics = {key: metric(reader, cw, name, 'AWS/Events', key,
+                [dict(Name='RuleName', Value=name)], slot, min(now, window_end),
+                period=60)
+                for key in ('TriggeredRules', 'Invocations', 'FailedInvocations')}
+        failed = metrics.get('FailedInvocations', {}).get('valor')
+        observed = any(metrics.get(key, {}).get('valor', 0) is not None and
+                       metrics[key]['valor'] > 0 for key in ('TriggeredRules', 'Invocations') if key in metrics)
+        if failed is not None and failed > 0:
+            state, detail = 'FALLA', 'Hay invocaciones fallidas permanentes en la ventana del disparo'
+        elif any(m['lectura'] == 'ERROR' for m in metrics.values()):
+            state, detail = 'INCOMPLETO', 'No se pudo consultar toda la evidencia del disparo'
+        elif observed:
+            state, detail = 'INFO', 'Actividad de la regla observada; no prueba inicio de todas las tareas ni exito final'
+        elif now < window_end + timedelta(minutes=args.espera_metricas_minutos):
+            state, detail = 'PENDIENTE', 'Ventana de observacion/espera abierta; aun no se declara falta de evidencia'
+        else:
+            state, detail = 'AVISO', 'SIN EVIDENCIA del disparo esperado; no equivale a cero ni prueba fallo de entrega'
+        item = dict(esperado_utc=slot.isoformat(), esperado_bogota=stamp(slot),
+                    hasta_observado_utc=min(now, window_end).isoformat(),
+                    ventana_fin_utc=window_end.isoformat(), metricas=metrics, control=state, detalle=detail)
+        results.append(item)
+        control(controls, name, 'Disparo esperado '+stamp(slot), state, detail)
+    return results
 
 
 def shown(result):
@@ -114,10 +213,14 @@ def add_metric_controls(controls, resource, metrics, failures):
 
 def row_status(controls, reader, resource):
     issues = [i for i in reader.issues if i['recurso'] == resource]
+    if any(c['recurso'] == resource and c['estado'] == 'FALLA' for c in controls):
+        return 'FALLA'
     if any(i['tipo'] == 'INCOMPLETO' for i in issues):
         return 'INCOMPLETO'
     if any(i['tipo'] == 'AUSENTE' for i in issues):
         return 'AUSENTE'
+    if any(c['recurso'] == resource and c['estado'] == 'NO EVALUADO' for c in controls):
+        return 'NO EVAL.'
     return 'AVISO' if any(c['recurso'] == resource and c['estado'] == 'AVISO' for c in controls) else 'INFO'
 
 
@@ -444,6 +547,7 @@ def review_log_formats(session, config, identity, args, errors):
                  'Valores y campos no permitidos omitidos; no se exporta texto original ni se ejecutan objetos Python']))
     print_table(summaries)
     print(f'Informe de formatos: {report}')
+    upload_csv_reports(session, config, folder)
     return 3 if reader.issues or any(p['formato'] == 'NO DISPONIBLE' for p in profiles) else 0
 
 
@@ -487,14 +591,21 @@ def inspect(session, config, identity, args, errors):
             control(controls, name, 'DLQ target', 'AVISO', 'Hay targets sin DLQ configurada; no implica entrega fallida')
         if not info.get('ScheduleExpression'):
             control(controls, name, 'Programacion', 'INFO', 'Sin ScheduleExpression; no se interpreta el patron de eventos')
+        cycles = inspect_expected_triggers(reader, cw, name, info, start, now, args, controls)
         rules.append(dict(nombre=name, arn=info.get('Arn'), estado=info.get('State'),
             programacion_utc=info.get('ScheduleExpression', ''), tiene_event_pattern=bool(info.get('EventPattern')),
-            targets=projected_targets, lectura_targets='LEIDA' if targets is not None else 'INCOMPLETA', metricas=metrics))
+            targets=projected_targets, lectura_targets='LEIDA' if targets is not None else 'INCOMPLETA',
+            metricas=metrics, disparos_esperados=cycles))
         dlq_text = 'NO EVALUADO' if targets is None else f'{sum(bool(t["dlq"]) for t in projected_targets)}/{len(projected_targets)} targets con DLQ'
         summaries.append(dict(tipo='EventBridge', recurso=name,
             configuracion='; '.join((info.get('State', '?'), info.get('ScheduleExpression') or 'Sin programacion', dlq_text)),
             actividad=f"Inv={shown(metrics['Invocations'])}; Fallos={shown(metrics['FailedInvocations'])}",
             control=row_status(controls, reader, name)))
+        for cycle in cycles:
+            summaries.append(dict(tipo='Disparo', recurso=name,
+                configuracion='Esperado Bogota: '+cycle['esperado_bogota'],
+                actividad='; '.join(key+'='+shown(value) for key, value in cycle['metricas'].items()) or 'Esperando evidencia',
+                control=cycle['control']))
     for name in sorted(function_names):
         info = reader.read(name, 'GetFunctionConfiguration', lambda: lambdas.get_function_configuration(FunctionName=name))
         if info is None:
@@ -580,10 +691,13 @@ def inspect(session, config, identity, args, errors):
     print(f'DISPARO SEMANAL | Solo lectura | {args.region} | Ultimos {args.dias} dias')
     print_table(summaries)
     print('INFO = evidencia consultada; AVISO = revisar; INCOMPLETO/AUSENTE = ver informe. SIN DATOS no es cero.')
-    print('Metricas por recurso; no certifican el disparo del domingo ni el lanzamiento correcto de Fargate. Cron en UTC.')
+    print('Disparo: evidencia por ventana del cron actual; ausencia de metricas es AVISO, no fallo probado. Cron en UTC.')
     print('N/V = no verificable en logs. ARN mencionado no demuestra creacion; respuesta RunTask reportada no demuestra ejecucion exitosa.')
     print(f'Informe: {report} | Filtrar tipo_registro=RESUMEN para la vista principal.')
-    return 3 if any(i['tipo'] == 'INCOMPLETO' for i in reader.issues) else 1 if reader.issues else 0
+    upload_csv_reports(session, config, folder)
+    return (3 if any(i['tipo'] == 'INCOMPLETO' for i in reader.issues) or
+            any(c['estado'] in ('INCOMPLETO', 'NO EVALUADO') for c in controls) else
+            1 if reader.issues or any(c['estado'] == 'FALLA' for c in controls) else 0)
 
 
 def main():
@@ -599,6 +713,10 @@ def main():
     parser.add_argument('--sin-logs', action='store_true', help='Omite mensajes de la lanzadora; conserva consulta de metadata de log streams')
     parser.add_argument('--max-eventos', type=int, default=10000, help='Maximo de eventos por lanzadora en la ventana; 1..100000, lectura total acotada a 16 MiB')
     parser.add_argument('--fraccion-timeout', type=float, default=0.9, help='Aviso por Duration maxima / timeout actual (default 0.9); no es umbral de tareas ECS')
+    parser.add_argument('--ventana-disparo-minutos', type=int, default=60,
+                        help='Ventana de evidencia desde cada disparo del cron semanal actual: 5..1440; no es duracion ECS')
+    parser.add_argument('--espera-metricas-minutos', type=int, default=15,
+                        help='Espera tecnica adicional antes de avisar SIN EVIDENCIA: 0..1440; no garantiza entrega de metricas')
     parser.add_argument('--salida', default='salida')
     args = parser.parse_args()
     if args.informe and not args.revisar_formatos:
@@ -609,6 +727,8 @@ def main():
         parser.error('--dias: 1..31; --fraccion-timeout: mayor de 0 y hasta 1')
     if not 1 <= args.max_eventos <= 100000:
         parser.error('--max-eventos debe estar entre 1 y 100000')
+    if not 5 <= args.ventana_disparo_minutos <= 1440 or not 0 <= args.espera_metricas_minutos <= 1440:
+        parser.error('--ventana-disparo-minutos: 5..1440; --espera-metricas-minutos: 0..1440')
     if (any(not re.fullmatch(r'[A-Za-z0-9_.-]{1,64}', n) for n in args.regla or []) or
             any(not re.fullmatch(r'[A-Za-z0-9_-]{1,64}', n) for n in (args.funcion or []) + (args.funcion_lanzadora or []))):
         parser.error('Reglas y funciones: nombres base de hasta 64 caracteres, sin ARN ni alias')

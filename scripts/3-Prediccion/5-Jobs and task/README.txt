@@ -1,127 +1,122 @@
-MONITORES DE PREDICCION - ORGANIZACION ACTUAL
-============================================
-Reorganizacion: 28 de octubre de 2026. Consultas manuales de solo lectura.
+MONITOREO DE PREDICCIONES
+========================
 
-Se concentro GetJobRuns en Glue-Jobs/monitor_glue_jobs.py. Sustituye:
-  - Entrenamiento/monitor_entrenamiento.py (tres jobs).
-  - Informes/monitor_glue_job_informes.py (un job).
-  - Los tres jobs de referencia que consultaba upstream.
-Procesos-Upstream mantiene ECS de limpieza, crawler y DynamoDB. Cada monitor
-sigue siendo independiente en CloudShell; no importa los otros .py.
+Esta carpeta reúne siete scripts para revisar el proceso de predicción:
+los datos disponibles, el lanzamiento de las tareas, su ejecución y los
+modelos que reportan. Cada script se puede ejecutar por separado en CloudShell.
 
-SIETE SCRIPTS OPERATIVOS (la cantidad de controles no equivale a archivos)
-Carpeta                 Archivo                                     Funcion actual
--------------------- ------------------------------------------- ------------------------------
-Datos-Entrada          monitor_datos_entrada.py                     Volumen/recencia/calidad de entradas
-Disparo-Semanal        monitor_disparo_semanal.py                   EventBridge, Lambda y evidencia de lanzamiento
-Procesos-Upstream      monitor_procesos_upstream.py                 ECS limpieza, crawler, throttling DynamoDB
-Glue-Jobs              monitor_glue_jobs.py                         Runs de referencia, entrenamiento e informes
-Inicio-Progreso        mapear_inicio_progreso.py                    Estado ECS, tiempos, logs y metricas disponibles
-Modelos-Dependencias   mapear_modelos_dependencias.py               Modelos reportados y dependencias del predictor
-Freshness              monitor_freshness_probabilidaddelito.py      Esquema/fuente y evaluacion disponible de actualidad
+Los monitores muestran una tabla y guardan informes CSV. Consultan los procesos
+sin arrancarlos ni detenerlos; escriben sus propios informes en S3.
+Actualmente no envían correos ni notificaciones automáticas.
 
-El validador S3 existente vive fuera de este directorio y no se ha movido ni
-integrado. Los otros monitores tampoco se han convertido a Lambda. Cada
-subcarpeta documenta sus limites actuales.
+POR DÓNDE EMPEZAR
 
-USO TRAS ACTUALIZAR LOS ARCHIVOS EN CLOUDSHELL
-Subir Glue-Jobs/monitor_glue_jobs.py y la version actual de
-Procesos-Upstream/monitor_procesos_upstream.py. No subir tests ni docs.
+1. Abre CloudShell en la región us-east-1 con acceso a la cuenta 926162397524.
+2. Carga los siete archivos .py actualizados en /home/cloudshell-user/.
+   Cada script funciona por sí solo; no necesitas subir los tests.
+3. Abre el README de la carpeta que te interese y copia su comando.
+4. Revisa la tabla de consola y después el CSV. La consola muestra dónde
+   quedaron los archivos.
 
-Todos los jobs, agotando el historial disponible:
-  python3 ~/monitor_glue_jobs.py --historial-completo
-Solo un grupo:
-  python3 ~/monitor_glue_jobs.py --grupo referencia --historial-completo
-  python3 ~/monitor_glue_jobs.py --grupo entrenamiento --historial-completo
-  python3 ~/monitor_glue_jobs.py --grupo informes --historial-completo
-ECS limpieza, crawler y DynamoDB:
-  python3 ~/monitor_procesos_upstream.py
+Si antes configuraste ATHENA_OUTPUT_S3 con una ruta antigua, ejecuta una vez:
 
-Las dos CLI anteriores se retiraron de este directorio para evitar consultas
-duplicadas. Sus versiones previas estan en Git. Su documentacion se preservo
-en Glue-Jobs/docs/historico/: sus comandos NO son la guia actual.
+  unset ATHENA_OUTPUT_S3
 
-CAMBIOS EXPLICITOS DEL MONITOR GLUE
-- Una tabla y un unico informe_glue_jobs.csv para los grupos seleccionados.
-- Control y cobertura de lectura son columnas separadas: una lectura parcial
-  no oculta una FALLA conocida. Errores entre paginas conservan datos previos.
-- Ultimo estado puede ser antiguo. FALLA del resumen se refiere a runs de la
-  ventana (inicios/fines dentro del periodo o ejecuciones aun abiertas).
-  Un FAILED antiguo queda visible, sin contarlo como falla de la ventana.
-- Exit 1 si hay FALLA/AUSENTE; 3 si la lectura es parcial/error. Los monitores
-  anteriores podian devolver 0 aun con fallas. Revisar esto al automatizar.
-- Las opciones upstream --job/--max-ejecuciones pasan al monitor Glue.
+Así, cada monitor utilizará su propia carpeta predeterminada para Athena.
 
-PRUEBAS LOCALES (desde la raiz del repositorio)
-  python3 -B -m unittest discover -s 'scripts/3-Prediccion/5-Jobs and task/tests' -v
-Clientes simulados: sin boto3, credenciales ni AWS. Verifican la unificacion
-y que upstream no vuelva a consultar GetJobRuns.
+La numeración ayuda a recorrer las partes del monitoreo. Ejecutar un script
+no ejecuta los demás ni pone en marcha la predicción.
 
-PENDIENTE PARA DESPLIEGUE
-Esta reorganizacion no implementa handlers, estado persistente, presupuesto
-de tiempo Lambda, calendario esperado ni notificaciones. La auditoria bajo
-docs/auditorias/ es una fotografia anterior; sus rutas y duplicaciones deben
-leerse con esa fecha de corte.
+QUÉ REVISA CADA CARPETA
 
-_______________________________________________________________
-_______________________________________________________________
-_______________________________________________________________
+1. Datos antes de predecir
+   monitor_datos_entrada.py
+   Compara volumen, fechas y coordenadas de los datos de entrada.
+   Entrega 2 CSV: general y diario.
 
-1. monitor_datos_entrada.py — Datos antes de predecir
-Consulta pon-prod-mdp.mdp_limpio. Compara los últimos 15 días completos contra los 15 anteriores, por sigla, unidad y BD. Revisa volumen, recencia, días sin registros y coordenadas. En este modo, las fechas inválidas fuera del filtro temporal quedan sin evaluar.
+2. Programación y lanzamiento
+   monitor_disparo_semanal.py
+   Revisa los disparos esperados y las funciones que lanzan tareas o informes.
+   Entrega 1 CSV.
 
-Este comando analiza las unidades observadas, sin limitarse a MEPAS, y guarda los reportes en la ruta S3 acordada:
+3. Preparación de datos
+   monitor_procesos_upstream.py
+   Revisa limpieza, crawler y señales de limitación de solicitudes en DynamoDB.
+   Entrega 1 CSV.
 
-export ATHENA_OUTPUT_S3='s3://pon-prod-ml-iapol/ValidationReports/MonitorDatosEntrada/'
-python3 ~/monitor_datos_entrada.py \
-  --database pon-prod-mdp \
-  --fecha fecha_hora \
-  --unidad unidad_base \
-  --sigla sigla \
-  --fuente bd \
-  --latitud latitud \
-  --longitud longitud \
-  --comparar-periodos --ventana-dias 15 \
-  --max-grupos 10000 \
-  --ejecutar --timeout 600
+4. Referencias, entrenamiento e informes
+   monitor_glue_jobs.py
+   Revisa las ejecuciones de los siete jobs Glue configurados.
+   Entrega 1 CSV.
 
-2. monitor_disparo_semanal.py — Programación y lanzamiento
-Revisa las reglas EventBridge de predicciones e informes, sus destinos Lambda, errores, throttling, duración y configuración de manejo de fallos. Consulta evidencia de lanzamiento en logs durante los últimos 8 días. No certifica por sí solo que todas las tareas esperadas hayan arrancado.
+5. Ejecución de las predicciones
+   mapear_inicio_progreso.py
+   Muestra estado, tiempos y errores de las tareas que ECS todavía conserva.
+   Entrega 1 CSV.
 
-python3 ~/monitor_disparo_semanal.py --max-eventos 50000
+6. Modelos utilizados y componentes
+   mapear_modelos_dependencias.py
+   Resume modelos reportados por sigla, uso de Uniform, pocos datos y errores.
+   Contrasta los CAD/modalidades con el catálogo de inicio cuando se recupera
+   y distingue las tareas creadas de las que reportaron selecciones de modelo.
+   Entrega 1 CSV con el comando recomendado.
 
-3. monitor_procesos_upstream.py — Preparación de datos
-Revisa ECS de limpieza, la última ejecución del crawler Glue y el throttling observado en las tres tablas DynamoDB históricas. Los jobs de referencia ahora pertenecen al monitor Glue unificado. ECS muestra tareas aún visibles; el crawler muestra únicamente su última ejecución.
+7. Actualidad de la tabla de probabilidades
+   monitor_freshness_probabilidaddelito.py
+   Revisa la tabla probabilidaddelito y los archivos de su fuente.
+   La actualidad del contenido sigue pendiente de confirmación.
+   Entrega 1 CSV.
 
-python3 ~/monitor_procesos_upstream.py
+Con los comandos recomendados, los siete monitores generan 8 informes CSV.
+Los modos adicionales de diagnóstico pueden producir otros CSV.
 
-4. monitor_glue_jobs.py — Referencias, entrenamiento e informes
-Consulta los 7 jobs Glue de actualización de referencias, entrenamiento, homologación, consumo y generación de informes. Muestra estados, inicio, fin, duración, fallos y clases de error. Separa el resultado del job de la cobertura de lectura y genera un único CSV.
-Este comando agota el historial disponible y evalúa una ventana de 8 días:
+DÓNDE SE GUARDAN LOS INFORMES
 
-python3 ~/monitor_glue_jobs.py --historial-completo
+En S3, dentro de s3://pon-prod-ml-iapol/ValidationReports/:
 
-5. mapear_inicio_progreso.py — Ejecución de las predicciones
-Revisa tareas del cluster de predicciones: sigla identificada, estado ECS, tiempos de arranque y ejecución, códigos de salida, errores y telemetría disponible. Incluye tareas detenidas que ECS todavía conserve. No impone una duración máxima estándar ni interpreta RUNNING como avance confirmado.
+  01-MonitorDatosEntrada/
+  02-MonitorDisparoSemanal/
+  03-MonitorProcesosUpstream/
+  04-MonitorGlueJobs/
+  05-MonitorInicioProgreso/
+  06-MonitorModelosDependencias/
+  07-MonitorFreshnessProbabilidaddelito/
 
-python3 ~/mapear_inicio_progreso.py \
-  --ventana-minutos 60 \
-  --max-eventos 10000
+Cada carpeta organiza sus informes por fecha y hora de Bogotá:
+CARPETA/FECHA/HORA/archivo.csv. Aparece cuando se guarda el primer CSV.
+FECHA corresponde al día de ejecución en hora de Bogotá, aunque se revisen datos de un período anterior.
 
-6. mapear_modelos_dependencias.py — Modelos utilizados y componentes
-Recoge selecciones de modelos reportadas en logs por tarea y sigla, conteos de Uniform y avisos de datos insuficientes. También identifica imagen y configuración; dispone de modos adicionales para inspeccionar dependencias y auxiliares. Los conteos representan declaraciones observadas, no predicciones únicas ni calidad certificada.
+Los comandos recomendados conservan también una copia en $HOME/salida.
+Los archivos auxiliares JSON, SQL y los registros de consola quedan locales.
+Si falla la subida a S3, el monitor informa el problema y conserva el CSV local.
 
-Este comando consulta modelos de tareas activas y detenidas aún visibles, con logs de las últimas 24 horas:
+ValidationReports/2026/ pertenece al validador de resultados en S3, que está
+fuera de estos siete monitores y conserva su ubicación.
 
-python3 ~/mapear_modelos_dependencias.py \
-  --incluir-finalizadas \
-  --correlacionar-modelos \
-  --ventana-minutos 1440 \
-  --max-eventos 10000
+CÓMO LEER LOS ESTADOS
 
-7. monitor_freshness_probabilidaddelito.py — Actualidad de la tabla de probabilidades
-Consulta el esquema de pon-prod-mdp.probabilidaddelito y la metadata de su fuente S3: objetos, tamaños y última modificación. La actualidad del contenido sigue sin evaluarse, porque no hay una columna temporal ni una frecuencia esperada confirmadas.
+  OK / INFO: el control pasó o hay evidencia disponible, según el monitor.
+  AVISO: hay una señal que conviene revisar; no prueba una falla por sí sola.
+  FALLA: se detectó un error o un incumplimiento del control evaluado.
+  INCOMPLETO / PARCIAL: faltó información para terminar la revisión.
+  AUSENTE: no se encontró el recurso configurado.
+  NO EVALUADO: faltan datos o una definición para aplicar ese control.
+  PENDIENTE: la ventana de observación todavía está abierta.
 
-python3 ~/monitor_freshness_probabilidaddelito.py \
-  --revisar-fuente-s3 \
-  --listado-completo
+La cobertura de lectura y el resultado son cosas distintas. Una lectura
+completa puede encontrar fallas, y una lectura parcial puede mostrar errores
+que sí quedaron confirmados. Revisa los estados del CSV; que el comando termine
+no garantiza que toda la predicción haya salido bien.
+
+TÉRMINOS QUE APARECEN EN LOS INFORMES
+
+Sigla o CAD: código del ámbito de la predicción, por ejemplo METIB o MEBOG.
+En la configuración de las tareas se utiliza la variable CAD.
+Unidad: unidad base dentro de una sigla.
+BD: fuente de datos; en el monitor de entradas se consideran RNMC, SECAD y SIEDCO.
+Ciclo: período de revisión asociado al disparo semanal de predicciones.
+
+PARA UNA REVISIÓN MÁS DETALLADA
+
+ALCANCE_Y_VALIDACION.txt reúne los criterios y la evidencia de validación.
+Cada README describe el uso actual de su script y sus límites.
