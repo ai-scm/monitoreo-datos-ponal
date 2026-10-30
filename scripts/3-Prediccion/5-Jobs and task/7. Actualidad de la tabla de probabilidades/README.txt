@@ -1,76 +1,75 @@
-ACTUALIDAD DE LA TABLA DE PROBABILIDADES
+DIAGNÓSTICO DE LA TABLA DE PROBABILIDADES
 =======================================
 
-Archivo: monitor_freshness_probabilidaddelito.py
+Script: monitor_freshness_probabilidaddelito.py
 
-PARA QUÉ SIRVE
+ESTADO DE USO - 30 DE OCTUBRE DE 2026
 
-Revisa si existe la tabla pon-prod-mdp.probabilidaddelito y qué información
-hay sobre los archivos de su fuente.
+Fuera de la ejecución habitual del monitoreo. Se conserva como herramienta
+opcional para revisar si existe la tabla y qué archivos hay en su fuente.
 
-Su uso dentro de la predicción actual y su frecuencia de actualización siguen
-sin confirmar. Por eso la actualidad del contenido permanece NO EVALUADA.
-Este estado no debe interpretarse como datos vigentes ni como una falla de carga.
+Se confirmó en Athena, CloudTrail y ECS que la tarea de predicción de DECAU
+consulta esta tabla. Contiene proporciones por cuadrante y categoría.
+Se acuerda tratarla como referencia fija, sin exigir actualización semanal.
+La antigüedad de los archivos no es una alarma ni un bloqueo del alcance.
+Su política de recálculo sigue sin establecerse.
 
-QUÉ REVISA CON EL COMANDO RECOMENDADO
+DÓNDE ESTÁ LA TABLA
 
-- Existencia y ubicación de la tabla en el catálogo Glue.
-- Archivos disponibles en la ubicación S3 de la tabla.
-- Cantidad, tamaño y fecha de modificación de los archivos observados.
-- Archivos vacíos y candidatos con contenido.
+Región: us-east-1.
+Catálogo: AWS Glue Data Catalog, consultable desde Athena.
+Base de datos: pon-prod-mdp.
+Tabla: probabilidaddelito.
+Fuente observada: s3://pon-prod-ml-iapol/probabilidadDelito/.
 
-No lee las filas de esos archivos ni ejecuta una consulta Athena con este comando.
+En consola: Glue > Data Catalog > Databases > pon-prod-mdp > Tables.
+El script obtiene la ubicación desde Glue al ejecutarse.
 
-CÓMO EJECUTARLO EN CLOUDSHELL
+QUÉ REVISA EL DIAGNÓSTICO
+
+- Existencia, esquema y ubicación de la tabla en Glue.
+- Listado de los archivos de su fuente S3.
+- Cantidad, tamaño, archivos vacíos y fechas de modificación.
+
+Este comando no lee las filas ni ejecuta una consulta Athena.
+
+CÓMO EJECUTARLO SI NECESITAS EL DIAGNÓSTICO
+
+Carga el .py en $HOME y ejecuta:
 
   python3 "$HOME/monitor_freshness_probabilidaddelito.py" \
+    --region us-east-1 \
     --revisar-fuente-s3 \
     --listado-completo \
     --salida "$HOME/salida"
 
-QUÉ INFORME ENTREGA
+QUÉ ENTREGA Y DÓNDE
 
-Genera informe_freshness_probabilidaddelito.csv.
+Genera un CSV: informe_freshness_probabilidaddelito.csv.
+Filtra tipo_registro=RESUMEN para existencia y observaciones principales.
+CONTROL explica qué se pudo evaluar; OBJETO_S3 describe los archivos;
+CONTEXTO conserva la configuración y el alcance de la revisión.
 
-En Excel, filtra tipo_registro:
-  RESUMEN: existencia, ubicación y observaciones principales.
-  CONTROL: qué pudo evaluarse y qué queda pendiente.
-  OBJETO_S3: información de los archivos observados.
-  CONTEXTO: configuración y alcance de la revisión.
-
-Destino S3 del informe:
+S3 del informe:
   s3://pon-prod-ml-iapol/ValidationReports/07-MonitorFreshnessProbabilidaddelito/FECHA/HORA/
 
-FECHA corresponde al día de ejecución en hora de Bogotá, aunque se revisen datos de un período anterior.
-
-Copia local:
+Local:
   $HOME/salida/freshness_probabilidaddelito/FECHA/HORA/informe_freshness_probabilidaddelito.csv
 
-La fuente que se inspecciona es distinta de la carpeta del informe:
-  s3://pon-prod-ml-iapol/probabilidadDelito/
+FECHA/HORA es la ejecución en Bogotá. La fuente y la carpeta de informes son
+ubicaciones distintas. Si falla la publicación, conserva el CSV local.
 
-CÓMO INTERPRETARLO
+CÓMO LEER EL RESULTADO
 
-INFO indica evidencia disponible, como la existencia de la tabla o sus archivos.
-INCOMPLETO señala que no se pudo terminar una lectura.
-AUSENTE indica que no se encontró la tabla configurada.
+INFO indica evidencia disponible. AUSENTE significa que no se encontró la tabla.
+INCOMPLETO señala que no terminó una lectura. NO EVALUADO en los controles
+temporales significa que no se está aplicando una obligación de actualización
+a esta referencia.
 
-La última modificación de un archivo solo dice cuándo cambió ese objeto.
-No demuestra a qué período pertenecen sus datos ni si están completos.
-Una fecha de modificación antigua necesita contexto de uso y frecuencia antes
-de decidir si representa un problema.
+LastModified indica cuándo cambió el objeto; no confirma el período de sus filas.
+No se aplica una obligación semanal sin confirmarla. La tabla observada no tiene
+una columna temporal ni particiones de fecha para comprobar ese período.
 
-LÍMITES DEL RESULTADO
-
-- No se aplica una obligación de actualización semanal sin confirmarla.
-- La tabla revisada no tiene una columna temporal ni particiones de fecha
-  confirmadas para evaluar el período del contenido.
-- La presencia de archivos no demuestra cobertura de todas las siglas o unidades.
-- Este monitor no reemplaza al validador de resultados de predicción en S3.
-
-El script dispone de una revisión por período cuando se confirmen una columna
-de fecha, su significado y las fechas esperadas. Esa definición todavía falta;
-el comando recomendado mantiene explícitamente el control NO EVALUADO.
-
-El informe se guarda en S3 y localmente, incluso si documenta controles pendientes.
-Si la subida falla, la copia local queda disponible.
+El archivo admite una consulta por período cuando se confirmen columna de fecha,
+su significado y fechas esperadas. Esa opción no se activa en el comando anterior.
+No reemplaza al validador de predicciones y no envía alertas automáticas.

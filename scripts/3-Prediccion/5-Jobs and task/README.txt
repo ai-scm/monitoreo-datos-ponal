@@ -1,78 +1,61 @@
-MONITOREO DE PREDICCIONES
-========================
+MONITORES DEL PROCESO DE PREDICCIÓN
+==================================
 
-Esta carpeta reúne siete scripts para revisar el proceso de predicción:
-los datos disponibles, el lanzamiento de las tareas, su ejecución y los
-modelos que reportan. Cada script se puede ejecutar por separado en CloudShell.
+Aquí se conservan siete scripts: seis monitores de uso habitual y un diagnóstico
+opcional de la tabla de probabilidades. Los otros tres validadores del proyecto
+revisan Prediccion/, Optimizacion/ y MatricesPrediccion/; sus enlaces están
+en ../README.md.
 
-Los monitores muestran una tabla y guardan informes CSV. Consultan los procesos
-sin arrancarlos ni detenerlos; escriben sus propios informes en S3.
-Actualmente no envían correos ni notificaciones automáticas.
+El seguimiento global queda al 100% del alcance funcional aceptado al
+30 de octubre de 2026, incluyendo los tres validadores de resultados.
+La implementación en Lambda y las alertas automáticas no entran en ese porcentaje.
 
-POR DÓNDE EMPEZAR
+QUÉ HACE CADA UNO
 
-1. Abre CloudShell en la región us-east-1 con acceso a la cuenta 926162397524.
-2. Carga los siete archivos .py actualizados en /home/cloudshell-user/.
-   Cada script funciona por sí solo; no necesitas subir los tests.
-3. Abre el README de la carpeta que te interese y copia su comando.
-4. Revisa la tabla de consola y después el CSV. La consola muestra dónde
-   quedaron los archivos.
+1. monitor_datos_entrada.py
+   Volumen, recencia, coordenadas y conteo diario por unidad y fuente.
+   Entrega 2 CSV: general.csv y diario.csv.
 
-Si antes configuraste ATHENA_OUTPUT_S3 con una ruta antigua, ejecuta una vez:
+2. monitor_disparo_semanal.py
+   Disparos esperados de EventBridge, Lambdas y evidencia de lanzamiento.
+   Entrega 1 CSV: informe_disparo_semanal.csv.
 
-  unset ATHENA_OUTPUT_S3
+3. monitor_procesos_upstream.py
+   Tareas de limpieza, última ejecución del crawler y métricas de DynamoDB.
+   Entrega 1 CSV: informe_procesos_upstream.csv.
 
-Así, cada monitor utilizará su propia carpeta predeterminada para Athena.
+4. monitor_glue_jobs.py
+   Ejecuciones de referencia, entrenamiento e informes; reúne los siete jobs.
+   Entrega 1 CSV: informe_glue_jobs.csv.
 
-La numeración ayuda a recorrer las partes del monitoreo. Ejecutar un script
-no ejecuta los demás ni pone en marcha la predicción.
+5. mapear_inicio_progreso.py
+   Estado, tiempos, salidas y errores de tareas aún visibles en ECS.
+   Entrega 1 CSV: tareas.csv.
 
-QUÉ REVISA CADA CARPETA
+6. mapear_modelos_dependencias.py
+   Modelos por CAD, porcentaje de Uniform, pocos datos y cobertura del ciclo.
+   Entrega 1 CSV: historial_tareas.csv en el modo recomendado.
+   Los diagnósticos adicionales pueden generar otros archivos.
 
-1. Datos antes de predecir
-   monitor_datos_entrada.py
-   Compara volumen, fechas y coordenadas de los datos de entrada.
-   Entrega 2 CSV: general y diario.
+7. monitor_freshness_probabilidaddelito.py
+   Diagnóstico opcional; fuera de la ejecución habitual.
+   Revisa existencia de la tabla probabilidaddelito y archivos de su fuente.
+   Entrega 1 CSV si se ejecuta: informe_freshness_probabilidaddelito.csv.
+   Su lectura por el predictor está confirmada. Se trata como referencia fija,
+   sin exigir una actualización semanal ni alarmar por su antigüedad.
 
-2. Programación y lanzamiento
-   monitor_disparo_semanal.py
-   Revisa los disparos esperados y las funciones que lanzan tareas o informes.
-   Entrega 1 CSV.
+CÓMO USARLOS
 
-3. Preparación de datos
-   monitor_procesos_upstream.py
-   Revisa limpieza, crawler y señales de limitación de solicitudes en DynamoDB.
-   Entrega 1 CSV.
+Carga el .py actualizado en $HOME de CloudShell, en us-east-1 y la cuenta
+926162397524. Abre el README de su carpeta y copia el comando recomendado.
+Cada monitor funciona por separado; no necesita los otros seis .py.
+La numeración organiza la lectura del proceso; no programa ni encadena tareas.
 
-4. Referencias, entrenamiento e informes
-   monitor_glue_jobs.py
-   Revisa las ejecuciones de los siete jobs Glue configurados.
-   Entrega 1 CSV.
+DÓNDE SE GUARDAN
 
-5. Ejecución de las predicciones
-   mapear_inicio_progreso.py
-   Muestra estado, tiempos y errores de las tareas que ECS todavía conserva.
-   Entrega 1 CSV.
-
-6. Modelos utilizados y componentes
-   mapear_modelos_dependencias.py
-   Resume modelos reportados por sigla, uso de Uniform, pocos datos y errores.
-   Contrasta los CAD/modalidades con el catálogo de inicio cuando se recupera
-   y distingue las tareas creadas de las que reportaron selecciones de modelo.
-   Entrega 1 CSV con el comando recomendado.
-
-7. Actualidad de la tabla de probabilidades
-   monitor_freshness_probabilidaddelito.py
-   Revisa la tabla probabilidaddelito y los archivos de su fuente.
-   La actualidad del contenido sigue pendiente de confirmación.
-   Entrega 1 CSV.
-
-Con los comandos recomendados, los siete monitores generan 8 informes CSV.
-Los modos adicionales de diagnóstico pueden producir otros CSV.
-
-DÓNDE SE GUARDAN LOS INFORMES
-
-En S3, dentro de s3://pon-prod-ml-iapol/ValidationReports/:
+Los seis monitores habituales generan siete CSV en total. El diagnóstico
+opcional añade otro CSV cuando se ejecuta. Conservan copias locales en
+$HOME/salida y estas carpetas de s3://pon-prod-ml-iapol/ValidationReports/:
 
   01-MonitorDatosEntrada/
   02-MonitorDisparoSemanal/
@@ -80,43 +63,26 @@ En S3, dentro de s3://pon-prod-ml-iapol/ValidationReports/:
   04-MonitorGlueJobs/
   05-MonitorInicioProgreso/
   06-MonitorModelosDependencias/
-  07-MonitorFreshnessProbabilidaddelito/
+  07-MonitorFreshnessProbabilidaddelito/ (solo diagnóstico opcional)
 
-Cada carpeta organiza sus informes por fecha y hora de Bogotá:
-CARPETA/FECHA/HORA/archivo.csv. Aparece cuando se guarda el primer CSV.
-FECHA corresponde al día de ejecución en hora de Bogotá, aunque se revisen datos de un período anterior.
+Dentro de cada carpeta: FECHA/HORA/archivo.csv. La fecha es el día de ejecución
+en Bogotá. Los JSON y SQL auxiliares quedan locales.
+Si falla la publicación, revisa el mensaje y utiliza la copia local.
 
-Los comandos recomendados conservan también una copia en $HOME/salida.
-Los archivos auxiliares JSON, SQL y los registros de consola quedan locales.
-Si falla la subida a S3, el monitor informa el problema y conserva el CSV local.
+Si conservas una ruta antigua en ATHENA_OUTPUT_S3, puedes quitarla con:
 
-ValidationReports/2026/ pertenece al validador de resultados en S3, que está
-fuera de estos siete monitores y conserva su ubicación.
+  unset ATHENA_OUTPUT_S3
 
-CÓMO LEER LOS ESTADOS
+Los README de datos de entrada y probabilidades explican su uso de Athena.
+No borres $HOME/salida si vas a reanudar una consulta de modelos pendiente.
 
-  OK / INFO: el control pasó o hay evidencia disponible, según el monitor.
-  AVISO: hay una señal que conviene revisar; no prueba una falla por sí sola.
-  FALLA: se detectó un error o un incumplimiento del control evaluado.
-  INCOMPLETO / PARCIAL: faltó información para terminar la revisión.
-  AUSENTE: no se encontró el recurso configurado.
-  NO EVALUADO: faltan datos o una definición para aplicar ese control.
-  PENDIENTE: la ventana de observación todavía está abierta.
+CÓMO INTERPRETARLOS
 
-La cobertura de lectura y el resultado son cosas distintas. Una lectura
-completa puede encontrar fallas, y una lectura parcial puede mostrar errores
-que sí quedaron confirmados. Revisa los estados del CSV; que el comando termine
-no garantiza que toda la predicción haya salido bien.
+Empieza por el resumen; después revisa FALLA, AVISO e INCOMPLETO.
+SIN DATOS no equivale a cero problemas. Un estado SUCCEEDED o RUNNING tampoco
+certifica la calidad de una predicción. La comprobación de archivos se hace
+con los validadores de resultados.
 
-TÉRMINOS QUE APARECEN EN LOS INFORMES
-
-Sigla o CAD: código del ámbito de la predicción, por ejemplo METIB o MEBOG.
-En la configuración de las tareas se utiliza la variable CAD.
-Unidad: unidad base dentro de una sigla.
-BD: fuente de datos; en el monitor de entradas se consideran RNMC, SECAD y SIEDCO.
-Ciclo: período de revisión asociado al disparo semanal de predicciones.
-
-PARA UNA REVISIÓN MÁS DETALLADA
-
-ALCANCE_Y_VALIDACION.txt reúne los criterios y la evidencia de validación.
-Cada README describe el uso actual de su script y sus límites.
+Estos scripts consultan recursos y guardan sus informes. No arrancan procesos,
+no corrigen datos y no envían notificaciones automáticas.
+ALCANCE_Y_VALIDACION.txt conserva el detalle de criterios y validaciones previas.

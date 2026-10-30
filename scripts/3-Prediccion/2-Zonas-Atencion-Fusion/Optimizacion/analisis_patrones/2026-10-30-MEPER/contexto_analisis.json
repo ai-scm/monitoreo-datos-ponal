@@ -1,0 +1,41 @@
+{
+  "captura_bogota": "2026-10-30T10:28:14.447911-05:00",
+  "bucket": "pon-prod-ml-iapol",
+  "prefijo": "PrediccionMdP/2026/<semana>/MEPER/<unidad>/Optimizacion/",
+  "semanas_historicas": [
+    "20260914",
+    "20260921",
+    "20260928",
+    "20261005",
+    "20261012",
+    "20261019"
+  ],
+  "semanas_comparadas": [
+    "20260914",
+    "20260921",
+    "20260928",
+    "20261005",
+    "20261012",
+    "20261019",
+    "20261026",
+    "20261102"
+  ],
+  "listados_completos": 384,
+  "errores_listado": 0,
+  "contenido_geojson": "NO LEIDO: analisis de nombres, cantidades y metadata",
+  "escrituras_s3": 0,
+  "referencia_sha256": "9a0a425e0eb5a07a223c741ddb55300cc99550d68f460dc92d3867371303edf4",
+  "resultados_unidades": {
+    "SIN ARCHIVOS EN SEMANAS REVISADAS": 5,
+    "PATRON ESTABLE": 43
+  },
+  "hallazgos": [],
+  "sin_referencia": [
+    "51699",
+    "51723",
+    "51740",
+    "51747",
+    "59222"
+  ],
+  "limites": "Snapshot actual de semanas pasadas. Ausencia historica no demuestra inelegibilidad, entrega obligatoria ni ausencia futura."
+}

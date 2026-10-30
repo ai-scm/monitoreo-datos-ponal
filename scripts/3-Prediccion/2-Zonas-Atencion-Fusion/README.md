@@ -1,45 +1,14 @@
-# 8-Zonas-Atencion-Fusion
+# Resultados de optimización
 
-Mantenido por el **equipo de predicción**. No sigue el patrón común de los monitores
-(`OK/AVISO/FALLA`, `check_identity`, flags `--con-avisos`, etc.).
+El validador revisa los archivos de `Optimizacion/` generados para cada semana,
+CAD y unidad. Comprueba nombres, parejas B/CP, cantidades y contenido GeoJSON.
 
-## Contenido
+La [guía del validador](Optimizacion/README.md) contiene los archivos que debes
+cargar en CloudShell, los comandos, los dos CSV y cómo continuar una revisión.
 
-```
-Optimizacion/
-├── validador_optimizacion_cloudshell.py   validador S3 (CloudShell)
-└── EstructuraArchivosOptimizacion.txt      ejemplo del naming esperado
-```
+Dentro de `Optimizacion/` también están la referencia histórica opcional y los
+análisis de patrones y avisos. Son material de apoyo para interpretar los
+hallazgos; no hay que cargar esas carpetas para ejecutar el validador.
 
-## `validador_optimizacion_cloudshell.py`
-
-Valida en S3 (bucket `pon-prod-ml-iapol`, prefijo
-`PrediccionMdP/<año>/<semana>/<SIGLA>/<unidad>/Optimizacion/`) que cada día de la semana
-tenga los **6 archivos de optimización** esperados:
-
-```
-1_F_B01   1_F_CP01
-2_F_B01   2_F_CP01
-3_F_B01   3_F_CP01   (archivos .geojson)
-```
-
-Recorre todas las SIGLAS y unidades del rango de semanas, comprueba el formato del
-nombre y que no falte ninguno de los 6; reporta errores y archivos faltantes en CSV
-(empaquetado en ZIP).
-
-### Uso (CloudShell)
-
-```bash
-export AWS_DEFAULT_REGION=us-east-1
-
-# por defecto valida la semana siguiente (lunes en UTC-5)
-python3 validador_optimizacion_cloudshell.py
-
-# rango de semanas y una SIGLA concreta
-python3 validador_optimizacion_cloudshell.py --desde 20260101 --hasta 20260107 --sigla <SIGLA>
-
-# mostrar también las unidades sin errores
-python3 validador_optimizacion_cloudshell.py --mostrar-todas
-```
-
-Permisos: lectura de S3 (`s3:ListBucket`, `s3:GetObject`) sobre `pon-prod-ml-iapol`.
+Este validador revisa la capa `Optimizacion/`. El control de `Prediccion/` se
+mantiene separado y utiliza la V2 de la carpeta `1-Ejecucion-Prediccion`.

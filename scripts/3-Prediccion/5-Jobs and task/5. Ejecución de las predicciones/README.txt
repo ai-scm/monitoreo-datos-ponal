@@ -1,87 +1,63 @@
 EJECUCIÓN DE LAS PREDICCIONES
 ============================
 
-Archivo: mapear_inicio_progreso.py
+Script: mapear_inicio_progreso.py
 
 PARA QUÉ SIRVE
 
-Muestra qué está pasando con las tareas de predicción que todavía son visibles
-en ECS: su estado, sus tiempos y los errores que se puedan observar.
-
-Consulta el cluster pon-prod-xcrime-predicciones-cluster y la familia
+Muestra qué ocurre con las tareas que ECS todavía conserva en el cluster
+pon-prod-xcrime-predicciones-cluster, de la familia
 pon-prod-xcrime-prediccion-definition.
 
 QUÉ REVISA
 
-- Creación, inicio, fin y duración de cada tarea.
-- Sigla identificada en la configuración; CAD es la variable utilizada.
-- Estado de las tareas y códigos de salida de sus contenedores.
-- Errores de arranque, falta de memoria y controles de salud.
-- Indicios de errores o reintentos en los registros de ejecución.
-- CPU, memoria y avance, cuando hay información disponible.
+- CAD o sigla de cada tarea, obtenido de su configuración.
+- Estado, creación, inicio, parada y duración.
+- Motivo de parada, códigos de salida y salud de contenedores esenciales.
+- Indicios de errores, reintentos y avance en los logs disponibles.
+- CPU y memoria por tarea, cuando existen métricas disponibles.
 
-Incluye tareas activas y detenidas que ECS aún conserva. No aplica un tiempo
-máximo común a todas las siglas.
+Incluye activas y detenidas visibles en ECS. No impone un máximo de duración
+común para todas las siglas.
 
 CÓMO EJECUTARLO EN CLOUDSHELL
 
+Carga el .py en $HOME y ejecuta:
+
   python3 "$HOME/mapear_inicio_progreso.py" \
+    --region us-east-1 \
     --ventana-minutos 60 \
     --max-eventos 10000 \
     --salida "$HOME/salida"
 
-La ventana de 60 minutos corresponde a registros y métricas recientes de
-tareas activas; no es un plazo máximo para terminar una predicción.
-Para tareas detenidas consulta sus registros de vida mientras estén disponibles.
+Los 60 minutos son la ventana de logs y métricas de tareas activas, no un plazo
+para terminar. Para tareas detenidas consulta sus logs de vida disponibles.
 
-QUÉ INFORME ENTREGA
+QUÉ ENTREGA Y DÓNDE
 
-Genera tareas.csv, con una fila por tarea.
+Genera un CSV: tareas.csv, con una fila por tarea.
 
-Destino S3:
-
-FECHA corresponde al día de ejecución en hora de Bogotá, aunque se revisen datos de un período anterior.
+S3:
   s3://pon-prod-ml-iapol/ValidationReports/05-MonitorInicioProgreso/FECHA/HORA/
 
-Copia local:
+Local:
   $HOME/salida/inicio_progreso/FECHA/HORA/tareas.csv
 
-También conserva contexto.json local para explicar la revisión.
+FECHA/HORA es la ejecución en Bogotá. También conserva contexto.json local.
+--no-export desactiva los archivos locales y la publicación del CSV.
 
-CÓMO INTERPRETARLO
+CÓMO LEER EL RESULTADO
 
-Empieza por sigla, estado ECS, tiempos, estado del control y motivo.
+Empieza por CAD, estado ECS, tiempos, control y motivo.
+RUNNING indica ejecución; STOPPED indica parada, cuyo motivo y salida se revisan.
+FALLA señala un fallo observado de arranque, salud o salida esencial.
+AVISO puede indicar interrupción, datos faltantes o indicios en logs.
 
-  RUNNING: ECS muestra la tarea en ejecución.
-  STOPPED: ECS muestra la tarea detenida; hay que revisar el motivo y la salida.
-  OK: no se detectó un error ECS en los controles aplicados.
-  AVISO: hay una señal para revisar o información que falta.
-  FALLA: se observó un fallo de arranque, salud o salida esencial.
+RUNNING u OK no prueban avance ni una predicción correcta. Una salida cero
+confirma cierre sin error ECS en lo observado; los resultados se validan en S3.
+SIN DATOS de CPU o memoria no equivale a consumo cero.
 
-STOPPED puede corresponder a un cierre normal, un error o una interrupción.
-El código de salida y el motivo ayudan a distinguirlos.
-
-Este script ya cubre el cierre técnico: parada registrada, hora de fin,
-salidas de los contenedores esenciales y motivo. Los códigos faltantes o una
-interrupción generan aviso; un error esencial genera falla.
-Una salida cero indica cierre sin error ECS; los archivos producidos se revisan
-después con el validador de resultados de predicción en S3.
-
-Para preparar un resumen semanal hay que conservar las capturas de cierre
-durante el ciclo. Si una tarea dejó de estar disponible antes de consultarla,
-su código de salida no se puede reconstruir a partir del silencio de sus logs.
-Esta necesidad de conservar evidencia pertenece a la operación del monitoreo;
-no requiere construir otro script de finalización.
-
-LÍMITES DEL RESULTADO
-
-- RUNNING u OK no demuestran avance real ni una predicción correcta.
-- Los tiempos no permiten declarar demora sin un criterio apropiado para la sigla.
-- SIN DATOS de CPU o memoria no significa consumo cero.
-- Los indicios de error en logs no confirman por sí solos el fallo de toda la tarea.
-- "End Script!" indica un cierre reportado de subunidad, no el éxito global.
-- Para recuperar evidencia de tareas que ECS ya no conserva, utiliza el monitor
-  de modelos de la carpeta 6.
-
-El script no arranca ni detiene tareas. Guarda su CSV en S3 y localmente.
---no-export desactiva ambas copias.
+Para tareas que ECS ya no conserva, el monitor de modelos puede recuperar
+los logs conservados, pero no inventa una hora de fin ni un código de salida.
+Conservar capturas durante el ciclo permite disponer después de esos datos.
+El script no arranca ni detiene tareas y no envía notificaciones.

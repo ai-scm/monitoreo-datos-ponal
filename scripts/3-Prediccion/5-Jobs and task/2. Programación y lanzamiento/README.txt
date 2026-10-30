@@ -1,72 +1,60 @@
 PROGRAMACIÓN Y LANZAMIENTO
 =========================
 
-Archivo: monitor_disparo_semanal.py
+Script: monitor_disparo_semanal.py
 
 PARA QUÉ SIRVE
 
-Revisa si hay evidencia de los disparos programados para iniciar las
-predicciones y los informes. También comprueba errores de las funciones
-encargadas de esos lanzamientos.
+Busca evidencia de los disparos programados para iniciar predicciones e informes,
+y revisa las funciones Lambda encargadas de lanzarlos.
 
 QUÉ REVISA
 
 - Las reglas xcrime_prediccion_siglas_unidades y generacion_informes_anticipaciones.
-- Sus horarios y las funciones Lambda que tienen como destino.
-- Cada disparo semanal esperado dentro de los últimos ocho días.
+- Programación, destinos y evidencia de cada disparo esperado en la ventana.
 - Invocaciones, errores, solicitudes limitadas y duración de las Lambdas.
-- Si hay configurado un mecanismo para conservar los fallos de entrega.
-- Evidencia de lanzamiento de tareas en los registros de la función lanzadora.
+- Configuración para conservar fallos de entrega: DLQ y destinos de fallo.
+- Evidencia de lanzamiento de tareas en los logs de la función lanzadora.
 
-Compara cada disparo con su propia ventana de observación, para que la actividad
-de otra semana no oculte un disparo sin evidencia.
+Compara cada disparo con su ventana; una invocación de otra semana no sustituye
+la evidencia del disparo que se está revisando.
 
 CÓMO EJECUTARLO EN CLOUDSHELL
 
+Carga el .py en $HOME y ejecuta:
+
   python3 "$HOME/monitor_disparo_semanal.py" \
+    --region us-east-1 \
     --dias 8 \
     --max-eventos 50000 \
     --salida "$HOME/salida"
 
-QUÉ INFORME ENTREGA
+QUÉ ENTREGA Y DÓNDE
 
-Genera informe_disparo_semanal.csv.
+Genera un CSV: informe_disparo_semanal.csv.
+Filtra tipo_registro=RESUMEN para la vista principal. CONTROL explica los
+hallazgos; EVIDENCIA reúne referencias de lanzamiento; CONTEXTO describe la lectura.
 
-En Excel, filtra la columna tipo_registro:
-
-  RESUMEN: vista principal de reglas, disparos esperados y funciones.
-  CONTROL: explicación de los avisos o problemas.
-  EVIDENCIA: referencias de lanzamiento encontradas en los registros.
-  CONTEXTO: período y configuración utilizados en la revisión.
-
-Destino S3:
-
-FECHA corresponde al día de ejecución en hora de Bogotá, aunque se revisen datos de un período anterior.
+S3:
   s3://pon-prod-ml-iapol/ValidationReports/02-MonitorDisparoSemanal/FECHA/HORA/
 
-Copia local:
+Local:
   $HOME/salida/disparo_semanal/FECHA/HORA/informe_disparo_semanal.csv
 
-CÓMO INTERPRETARLO
+FECHA/HORA es la ejecución en Bogotá. La copia local queda disponible si falla
+la publicación en S3.
 
-Un disparo con INFO tiene evidencia de actividad de la regla.
-SIN EVIDENCIA genera AVISO cuando termina la ventana de observación y espera.
-PENDIENTE significa que todavía se está esperando evidencia.
-FALLA indica que se observaron invocaciones fallidas en la ventana del disparo.
-INCOMPLETO significa que no se pudo recuperar toda la información.
+CÓMO LEER EL RESULTADO
 
-Un aviso por falta de DLQ o destino de fallo señala que no está configurado un
-mecanismo para conservar errores de entrega; no significa que el disparo haya fallado.
+INFO en un disparo indica evidencia de actividad de la regla. PENDIENTE significa
+que sigue abierta la espera de evidencia. SIN EVIDENCIA genera AVISO al terminar
+esa espera. FALLA indica invocaciones fallidas observadas. INCOMPLETO significa
+que no se pudo recuperar toda la información.
 
-LÍMITES DEL RESULTADO
+Un aviso por falta de DLQ describe una configuración de manejo de errores;
+no demuestra que el disparo haya fallado. SIN DATOS tampoco equivale a cero.
+Un ARN mencionado en logs no confirma por sí solo la creación de la tarea.
 
-- SIN DATOS no equivale a cero invocaciones ni demuestra una falla.
-- La actividad de Lambda puede incluir llamadas distintas del disparo semanal.
-- Una tarea mencionada en un registro no prueba que se haya creado o ejecutado.
-- No certifica que hayan arrancado todas las siglas esperadas ni que terminaran bien.
-- Usa la programación actual. Si cambió, no reconstruye el calendario anterior.
-- Los horarios se interpretan en UTC y los disparos esperados también se muestran
-  en hora de Bogotá. Programaciones no admitidas quedan NO EVALUADAS.
-
-El script no dispara reglas ni invoca funciones. Solo publica su informe.
-Si la subida a S3 falla, conserva el CSV local.
+Usa la programación actual, interpretada en UTC; muestra también horas de Bogotá.
+No certifica que todas las siglas arrancaran ni que sus predicciones terminaran.
+Consulta y guarda su informe; no dispara reglas, invoca funciones ni crea alarmas.

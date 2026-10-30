@@ -1,0 +1,88 @@
+flowchart TB
+  subgraph A["PREPARACION Y DATOS DISPONIBLES"]
+    sources["DynamoDB historicas · ECS limpieza · crawler Glue"]
+    mdp[("Athena / Glue · mdp_limpio")]
+    refs["Referencias y entrenamiento · 6 jobs Glue relacionados"]
+    aux["Imagen ECR · estructura PONAL · MaestroMdP"]
+    m3["M03 · monitor_procesos_upstream.py<br/>Limpieza, ultimo crawler y throttling"]
+    m1["M01 · monitor_datos_entrada.py<br/>Volumen, recencia, diario por BD y coordenadas"]
+    m4a["M04 · monitor_glue_jobs.py<br/>Estados, tiempos, fallos y cobertura de jobs"]
+    m6a["M06 · diagnosticos opcionales<br/>Imagen, metadata de dependencias, auxiliares y selector"]
+    sources -. "preparacion relacionada; enlace exacto no reconstruido" .-> mdp
+    m3 -. "revisa" .-> sources
+    m1 -. "revisa" .-> mdp
+    m4a -. "revisa" .-> refs
+    m6a -. "revisa en modos separados" .-> aux
+  end
+  subgraph B["DISPARO SEMANAL"]
+    eb["EventBridge · xcrime_prediccion_siglas_unidades"]
+    launch["Lambda · pon-prod-xcrime-prediccion-launch-fargate"]
+    m2["M02 · monitor_disparo_semanal.py<br/>Cron, disparos esperados, errores, limites y manejo de fallos"]
+    eb --> launch
+    m2 -. "revisa" .-> eb
+    m2 -. "revisa" .-> launch
+  end
+  subgraph C["EJECUCION Y MODELOS"]
+    ecs["ECS / Fargate · pon-prod-xcrime-predicciones-cluster<br/>Tareas HORA / TURNO · CAD"]
+    logs["CloudWatch Logs · streams por tarea"]
+    m5["M05 · mapear_inicio_progreso.py<br/>Estado, CAD, tiempos, salidas esenciales, salud y telemetria"]
+    m6["M06 · mapear_modelos_dependencias.py<br/>Modelos, porcentaje Uniform, pocos datos y errores<br/>Catalogo inicial frente a lanzamientos con --verificar-ciclo"]
+    ecs --> logs
+    m5 -. "revisa" .-> ecs
+    m5 -. "revisa" .-> logs
+    m6 -. "revisa historial" .-> logs
+    m6 -. "cruza evidencia" .-> launch
+  end
+  launch -->|"RunTask"| ecs
+  mdp -->|"datos de entrada"| ecs
+  refs -. "relacion funcional; secuencia no confirmada" .-> ecs
+  aux -. "referencias del predictor" .-> ecs
+  subgraph D["S3 · PrediccionMdP / ANO / SEMANA / CAD / UNIDAD"]
+    pred["Prediccion/<br/>R01 · validar_todas_siglas v2.py<br/>Nombres GeoJSON y faltantes por hora<br/>Dos CSV locales; script sin modificar"]
+    matrix["MatricesPrediccion/<br/>R03 · validador_matrices_cloudshell.py<br/>Nombres PKL horarios y faltantes<br/>Alcance actual aceptado; sin lectura PKL"]
+    train["Entrenamiento/<br/>CSV Hitrate/PAI y bestModel TXT<br/>SIN validador dedicado de estas salidas"]
+    opt["Optimizacion/<br/>R02 · validador_optimizacion_cloudshell.py<br/>Semana actual y siguiente; nombres y GeoJSON<br/>Prueba nacional completa: 376580 archivos"]
+    hechos["Hechos/<br/>Solo ejemplos locales<br/>SIN script validador"]
+  end
+  ecs --> pred
+  ecs --> matrix
+  ecs -. "producto observado; productor no reconstruido aqui" .-> train
+  ecs -. "producto observado; productor no reconstruido aqui" .-> opt
+  subgraph E["INFORMES · RAMA INDEPENDIENTE"]
+    ebi["EventBridge · generacion_informes_anticipaciones"]
+    li["Lambda · pon_prod_xcrime_informes_anticipaciones"]
+    gi["Glue · pon-prod-xcrime-informes-anticipaciones"]
+    m2i["M02 · reglas y Lambda de informes"]
+    m4i["M04 · ejecuciones y errores del job de informes"]
+    ebi --> li
+    li -. "encadenamiento no auditado en esta revision" .-> gi
+    m2i -. "revisa" .-> ebi
+    m2i -. "revisa" .-> li
+    m4i -. "revisa" .-> gi
+  end
+  subgraph F["REFERENCIA FIJA Y DIAGNOSTICO OPCIONAL"]
+    prob[("Athena / Glue · probabilidaddelito<br/>S3 · probabilidadDelito/<br/>Proporciones por cuadrante y categoria")]
+    m7["M07 · monitor_freshness_probabilidaddelito.py<br/>Diagnostico opcional; fuera de ejecucion habitual<br/>Sin obligacion de actualizacion semanal"]
+    m7 -. "diagnostico opcional" .-> prob
+  end
+  prob -->|"lectura via Athena confirmada en DECAU"| ecs
+  reports["Informes del monitoreo<br/>M01–M06: CSV locales y S3 01…06 / FECHA / HORA<br/>M07 opcional: carpeta 07; R02: carpeta 08<br/>R01: dos CSV locales; R03: ZIP con dos CSV locales"]
+  estado["100% del alcance funcional aceptado<br/>9 scripts habituales + 1 diagnostico opcional<br/>Lambda, programacion y alertas: etapa posterior"]
+  m1 -. "informe" .-> reports
+  m2 -. "informe" .-> reports
+  m3 -. "informe" .-> reports
+  m4a -. "informe" .-> reports
+  m5 -. "informe" .-> reports
+  m6 -. "informe" .-> reports
+  m7 -. "informe si se ejecuta" .-> reports
+  classDef resource fill:#edf2f9,stroke:#697c96,color:#182d47;
+  classDef implemented fill:#e8f5f1,stroke:#15836e,color:#164d41;
+  classDef diagnostic fill:#f0f1f4,stroke:#8a94a4,color:#4f5b6b;
+  classDef uncovered fill:#f0f1f4,stroke:#8a94a4,color:#4f5b6b;
+  classDef existing fill:#e8efff,stroke:#5573be,color:#293f72;
+  class sources,mdp,refs,aux,eb,launch,ecs,logs,ebi,li,gi,prob resource;
+  class m1,m2,m3,m4a,m4i,m5,m6,m6a,m2i implemented;
+  class m7 diagnostic;
+  class matrix,opt,estado implemented;
+  class train,hechos uncovered;
+  class pred,reports existing;

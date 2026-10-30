@@ -1,0 +1,19 @@
+{
+  "captura_bogota": "2026-10-30T13:55:22.337324-05:00",
+  "informe_s3": "s3://pon-prod-ml-iapol/ValidationReports/08-MonitorOptimizacion/2026-10-30/12-13-33_849918/",
+  "fuente_bytes": 144486420,
+  "fuente_sha256": "08b661945eaf972144c597f9f4caf875e8b2a8ec97a38dcd7de28078d0b79146",
+  "total_archivos": 376580,
+  "contenido_ok": 376134,
+  "contenido_aviso": 446,
+  "contenido_falla": 0,
+  "contenido_pendiente": 0,
+  "archivos_B_sin_geometrias": 414,
+  "unidades_B_sin_geometrias": 10,
+  "archivos_B_con_un_elemento_menos": 32,
+  "unidades_B_con_un_elemento_menos": 4,
+  "parejas_CP_OK_no_vacias": 446,
+  "sin_nuevas_lecturas_geojson": true,
+  "sin_cambios_a_resultados": true,
+  "limites": "Prioridades de investigacion, sin cambiar severidades operativas ni afirmar causa raiz o contrato funcional."
+}

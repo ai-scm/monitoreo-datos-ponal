@@ -1,3 +1,32 @@
+ESTADO DE SEGUIMIENTO ACTUALIZADO - 2026-10-30
+===========================================
+Avance: 100% del alcance funcional aceptado para esta etapa, incluidos los
+resultados de prediccion V2, optimizacion y matrices. No incluye implementacion
+Lambda, programacion ni notificaciones automaticas. El porcentaje no certifica
+la deteccion de toda falla posible ni amplia los controles de cada validador.
+
+Se mantienen nueve scripts de uso habitual: seis monitores del proceso y tres
+validadores de resultados. monitor_freshness_probabilidaddelito.py se conserva
+como diagnostico opcional, fuera de la ejecucion habitual y del pendiente de
+cierre. El usuario acepta tratar la tabla como referencia fija, sin exigir
+actualizacion semanal. No se cambia ni se elimina el codigo del script.
+
+Evidencia nueva sobre la referencia:
+- Leidos 16/16 archivos Parquet: 199506 filas, 4684 cuadrantes. Proporciones
+  delito_count/total_count coherentes y suma por cuadrante aproximadamente uno.
+- Lectura actual confirmada por Athena, CloudTrail y ECS: tarea DECAU
+  810efd04b6cf4ac7bdd85c4eea2496e5, familia pon-prod-xcrime-prediccion-definition:4.
+- Consultas confirmadas: fc6ddfeb-2f12-461c-967a-024353455d77,
+  d5ea58ec-cdaa-4e22-b4ad-2604bfcbbfd8 y 1acdab62-d002-4c2b-9def-c7b98ea70af8.
+- Se confirma que el predictor consulta la tabla, no el paso exacto en que usa
+  sus proporciones. No se establece una frecuencia de recalculo.
+- El validador de matrices se acepta con su alcance actual; sus observaciones
+  tecnicas se dejan como mejoras posteriores, sin modificar su codigo.
+
+La revision del 29 de octubre que sigue se conserva como evidencia historica.
+Su pendiente de actualidad de probabilidaddelito queda resuelto por la decision
+de alcance anterior; no continua bloqueando el avance funcional aceptado.
+
 ALCANCE Y EVIDENCIA DE VALIDACION - 2026-10-29
 ==========================================
 Objetivo de esta revision: cerrar cobertura funcional de los siete monitores

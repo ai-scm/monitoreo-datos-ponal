@@ -1,0 +1,221 @@
+<?xml version='1.0' encoding='utf-8'?>
+<svg xmlns="http://www.w3.org/2000/svg" width="2160" height="2850" viewBox="0 0 2160 2850" role="img" aria-labelledby="title desc">
+<title id="title">Pipeline de predicción y validaciones actuales</title><desc id="desc">Versión 30 de octubre de 2026: nueve scripts habituales y un diagnóstico opcional; 100% del alcance funcional aceptado. Automatización y alertas pertenecen a la implementación posterior. Lectura de probabilidaddelito confirmada en la tarea de predicción DECAU.</desc>
+<defs><marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="#526880" /></marker></defs>
+            <style>text{font-family:DejaVu Sans,sans-serif;fill:#172c46}.muted{fill:#586a80}</style>
+<rect width="2160" height="2850" fill="#f5f7fb" />
+<rect width="2160" height="9" fill="#147d70" />
+<text x="60" y="58" font-size="17" style="fill:#586a80">PONAL / XCRIMEAPP     ·     COBERTURA DEL CÓDIGO LOCAL     ·     30 OCT 2026</text>
+<text x="60" y="111" font-size="37" font-weight="700">Pipeline de predicción y validaciones actuales</text>
+<text x="60" y="151" font-size="20" style="fill:#586a80">9 scripts habituales + 1 diagnóstico · 100% del alcance funcional aceptado · Lambda y alertas: etapa posterior</text>
+<rect x="60" y="177" width="223.4" height="29" rx="14" fill="#e5f4ee" stroke="#e5f4ee" stroke-width="1.5" />
+<text x="72" y="198" font-size="16" font-weight="700" style="fill:#176b56">CONTROL IMPLEMENTADO</text>
+<rect x="395" y="177" width="233.32" height="29" rx="14" fill="#e9edf3" stroke="#e9edf3" stroke-width="1.5" />
+<text x="407" y="198" font-size="16" font-weight="700" style="fill:#526174">DIAGNÓSTICO OPCIONAL</text>
+<rect x="760" y="177" width="243.24" height="29" rx="14" fill="#e9edf3" stroke="#e9edf3" stroke-width="1.5" />
+<text x="772" y="198" font-size="16" font-weight="700" style="fill:#526174">SIN VALIDADOR DEDICADO</text>
+<rect x="1160" y="177" width="223.4" height="29" rx="14" fill="#e7edff" stroke="#e7edff" stroke-width="1.5" />
+<text x="1172" y="198" font-size="16" font-weight="700" style="fill:#36569a">PREDICCIÓN EXISTENTE</text>
+<text x="1535" y="198" font-size="16" style="fill:#586a80">M01–M06: habituales · M07: opcional.</text>
+<text x="60" y="267" font-size="19" font-weight="700" style="fill:#147d70">01</text>
+<text x="112" y="267" font-size="24" font-weight="700">PREPARACIÓN Y DATOS DISPONIBLES</text>
+<text x="112" y="295" font-size="17" style="fill:#586a80">Orden funcional: preparar datos antes de predecir; el diagrama no acredita todos los enlaces técnicos entre servicios.</text>
+<rect x="60" y="321" width="650" height="320" rx="18" fill="#ffffff" stroke="#b9d7cd" stroke-width="1.5" />
+<rect x="60" y="339" width="5" height="284" rx="2" fill="#147d70" />
+<rect x="82" y="342" width="54.76" height="29" rx="14" fill="#e5f4ee" stroke="#e5f4ee" stroke-width="1.5" />
+<text x="94" y="363" font-size="16" font-weight="700" style="fill:#176b56">M03</text>
+<text x="83" y="398" font-size="24" font-weight="700">Fuentes y preparación</text>
+<text x="83" y="436" font-size="17" style="fill:#586a80">monitor_procesos_upstream.py</text>
+<text x="83" y="472" font-size="20">DynamoDB: llamadas, comparendos y delitos</text>
+<text x="83" y="501" font-size="20">históricos.</text>
+<text x="83" y="540" font-size="20">ECS de limpieza y crawler Glue.</text>
+<text x="83" y="579" font-size="20">M03 · estado, fallos visibles y throttling.</text>
+<rect x="755" y="321" width="650" height="320" rx="18" fill="#ffffff" stroke="#b9d7cd" stroke-width="1.5" />
+<rect x="755" y="339" width="5" height="284" rx="2" fill="#147d70" />
+<rect x="777" y="342" width="54.76" height="29" rx="14" fill="#e5f4ee" stroke="#e5f4ee" stroke-width="1.5" />
+<text x="789" y="363" font-size="16" font-weight="700" style="fill:#176b56">M01</text>
+<text x="778" y="398" font-size="24" font-weight="700">Entrada del predictor</text>
+<text x="778" y="436" font-size="17" style="fill:#586a80">monitor_datos_entrada.py</text>
+<text x="778" y="472" font-size="20">Athena / Glue: pon-prod-mdp.mdp_limpio.</text>
+<text x="778" y="511" font-size="20">M01 · volumen 15 vs 15 días, recencia, diario por BD</text>
+<text x="778" y="540" font-size="20">y coordenadas.</text>
+<text x="778" y="579" font-size="20">Sin catálogo no detecta todas las unidades ausentes.</text>
+<rect x="1450" y="321" width="650" height="320" rx="18" fill="#ffffff" stroke="#b9d7cd" stroke-width="1.5" />
+<rect x="1450" y="339" width="5" height="284" rx="2" fill="#147d70" />
+<rect x="1472" y="342" width="114.28" height="29" rx="14" fill="#e5f4ee" stroke="#e5f4ee" stroke-width="1.5" />
+<text x="1484" y="363" font-size="16" font-weight="700" style="fill:#176b56">M04 + M06</text>
+<text x="1473" y="398" font-size="24" font-weight="700">Referencias y componentes</text>
+<text x="1473" y="436" font-size="17" style="fill:#586a80">No prueban vigencia ni uso efectivo de cada modelo.</text>
+<text x="1473" y="472" font-size="20">M04 · estados y fallos de 3 jobs de referencia y 3</text>
+<text x="1473" y="501" font-size="20">de entrenamiento/consumo.</text>
+<text x="1473" y="540" font-size="20">M06 · imagen, dependencias, auxiliares y selector:</text>
+<text x="1473" y="569" font-size="20">modos opcionales separados.</text>
+<path d="M710 476 H751" fill="none" stroke="#526880" stroke-width="2.4" marker-end="url(#arr)" stroke-dasharray="7 6" />
+<text x="60" y="710" font-size="19" font-weight="700" style="fill:#147d70">02</text>
+<text x="112" y="710" font-size="24" font-weight="700">DISPARO SEMANAL DE PREDICCIONES</text>
+<rect x="60" y="750" width="650" height="240" rx="18" fill="#ffffff" stroke="#b9d7cd" stroke-width="1.5" />
+<rect x="60" y="768" width="5" height="204" rx="2" fill="#147d70" />
+<rect x="82" y="771" width="54.76" height="29" rx="14" fill="#e5f4ee" stroke="#e5f4ee" stroke-width="1.5" />
+<text x="94" y="792" font-size="16" font-weight="700" style="fill:#176b56">M02</text>
+<text x="83" y="827" font-size="24" font-weight="700">Regla EventBridge</text>
+<text x="83" y="865" font-size="19">xcrime_prediccion_siglas_unidades</text>
+<text x="83" y="903" font-size="19">M02 · cron, disparos esperados, invocaciones fallidas y</text>
+<text x="83" y="931" font-size="19">DLQ del target.</text>
+<rect x="755" y="750" width="650" height="240" rx="18" fill="#ffffff" stroke="#b9d7cd" stroke-width="1.5" />
+<rect x="755" y="768" width="5" height="204" rx="2" fill="#147d70" />
+<rect x="777" y="771" width="54.76" height="29" rx="14" fill="#e5f4ee" stroke="#e5f4ee" stroke-width="1.5" />
+<text x="789" y="792" font-size="16" font-weight="700" style="fill:#176b56">M02</text>
+<text x="778" y="827" font-size="24" font-weight="700">Lambda lanzadora</text>
+<text x="778" y="865" font-size="19">pon-prod-xcrime-prediccion-launch-fargate</text>
+<text x="778" y="903" font-size="19">M02 · errores, throttling, duración, manejo de fallos y</text>
+<text x="778" y="931" font-size="19">logs de lanzamiento.</text>
+<rect x="1450" y="750" width="650" height="240" rx="18" fill="#ffffff" stroke="#b9d7cd" stroke-width="1.5" />
+<rect x="1450" y="768" width="5" height="204" rx="2" fill="#147d70" />
+<rect x="1472" y="771" width="114.28" height="29" rx="14" fill="#e5f4ee" stroke="#e5f4ee" stroke-width="1.5" />
+<text x="1484" y="792" font-size="16" font-weight="700" style="fill:#176b56">M05 + M06</text>
+<text x="1473" y="827" font-size="24" font-weight="700">Tareas ECS / Fargate</text>
+<text x="1473" y="865" font-size="19">pon-prod-xcrime-predicciones-cluster</text>
+<text x="1473" y="903" font-size="19">Predicciones por CAD y modalidad HORA / TURNO.</text>
+<path d="M710 867 H751" fill="none" stroke="#526880" stroke-width="2.4" marker-end="url(#arr)" />
+<path d="M1405 867 H1446" fill="none" stroke="#526880" stroke-width="2.4" marker-end="url(#arr)" />
+<text x="1410" y="845" font-size="16" style="fill:#586a80">RunTask</text>
+<path d="M1080 641 V687 H1605 V746" fill="none" stroke="#526880" stroke-width="2.4" marker-end="url(#arr)" />
+<text x="1190" y="679" font-size="16" style="fill:#586a80">datos de entrada</text>
+<path d="M1775 641 V746" fill="none" stroke="#526880" stroke-width="2.4" marker-end="url(#arr)" stroke-dasharray="7 6" />
+<text x="1796" y="694" font-size="16" style="fill:#586a80">referencias relacionadas</text>
+<text x="60" y="1054" font-size="19" font-weight="700" style="fill:#147d70">03</text>
+<text x="112" y="1054" font-size="24" font-weight="700">DURANTE LA EJECUCIÓN Y AL FINALIZAR</text>
+<rect x="60" y="1094" width="995" height="340" rx="18" fill="#ffffff" stroke="#b9d7cd" stroke-width="1.5" />
+<rect x="60" y="1112" width="5" height="304" rx="2" fill="#147d70" />
+<rect x="82" y="1115" width="54.76" height="29" rx="14" fill="#e5f4ee" stroke="#e5f4ee" stroke-width="1.5" />
+<text x="94" y="1136" font-size="16" font-weight="700" style="fill:#176b56">M05</text>
+<text x="83" y="1171" font-size="24" font-weight="700">M05 · ejecución y cierre técnico ECS</text>
+<text x="83" y="1209" font-size="17" style="fill:#586a80">mapear_inicio_progreso.py</text>
+<text x="83" y="1245" font-size="20">CAD, creación, inicio, fin, duración y estado de las tareas que ECS todavía</text>
+<text x="83" y="1274" font-size="20">conserva.</text>
+<text x="83" y="1313" font-size="20">Salidas de contenedores esenciales, arranque, salud, memoria, logs y métricas</text>
+<text x="83" y="1342" font-size="20">disponibles.</text>
+<text x="83" y="1381" font-size="20">Sin tiempos máximos estándar. RUNNING o salida cero no certifican el resultado.</text>
+<rect x="1100" y="1094" width="1000" height="340" rx="18" fill="#ffffff" stroke="#b9d7cd" stroke-width="1.5" />
+<rect x="1100" y="1112" width="5" height="304" rx="2" fill="#147d70" />
+<rect x="1122" y="1115" width="54.76" height="29" rx="14" fill="#e5f4ee" stroke="#e5f4ee" stroke-width="1.5" />
+<text x="1134" y="1136" font-size="16" font-weight="700" style="fill:#176b56">M06</text>
+<text x="1123" y="1171" font-size="24" font-weight="700">M06 · modelos y cobertura del ciclo</text>
+<text x="1123" y="1209" font-size="17" style="fill:#586a80">mapear_modelos_dependencias.py</text>
+<text x="1123" y="1245" font-size="20">Logs conservados: modelos por CAD, total observado, % Uniform, tareas solo Uniform,</text>
+<text x="1123" y="1274" font-size="20">pocos datos y errores.</text>
+<text x="1123" y="1313" font-size="20">--verificar-ciclo: catálogo inicial frente a tareas creadas por CAD / HORA / TURNO.</text>
+<text x="1123" y="1352" font-size="20">Recupera evidencia sin ECS, pero no reconstruye sus códigos de salida perdidos.</text>
+<path d="M1775 990 V1020 H575 V1090" fill="none" stroke="#526880" stroke-width="2.4" marker-end="url(#arr)" stroke-dasharray="7 6" />
+<path d="M1775 1020 H1600 V1090" fill="none" stroke="#526880" stroke-width="2.4" marker-end="url(#arr)" stroke-dasharray="7 6" />
+<text x="1120" y="1044" font-size="16" style="fill:#586a80">observación de ECS y logs</text>
+<text x="60" y="1492" font-size="19" font-weight="700" style="fill:#147d70">04</text>
+<text x="112" y="1492" font-size="24" font-weight="700">RESULTADOS EN S3</text>
+<text x="112" y="1520" font-size="17" style="fill:#586a80">Productos observados: agruparlos aquí no demuestra el productor ni la secuencia de generación de cada carpeta.</text>
+<rect x="60" y="1540" width="2040" height="532" rx="22" fill="#edf2f9" stroke="#cbd6e4" stroke-width="1.5" />
+<text x="86" y="1577" font-size="22" font-weight="700">pon-prod-ml-iapol / PrediccionMdP / AÑO / SEMANA / CAD / UNIDAD /</text>
+<rect x="82" y="1601" width="380" height="416" rx="18" fill="#f0f2f6" stroke="#d4dbe5" stroke-width="1.5" />
+<rect x="82" y="1619" width="5" height="380" rx="2" fill="#758397" />
+<rect x="104" y="1622" width="203.56" height="29" rx="14" fill="#e9edf3" stroke="#e9edf3" stroke-width="1.5" />
+<text x="116" y="1643" font-size="16" font-weight="700" style="fill:#526174">SIN CONTROL PROPIO</text>
+<text x="105" y="1678" font-size="24" font-weight="700">Entrenamiento/</text>
+<text x="105" y="1716" font-size="18">CSV Hitrate / PAI y archivos</text>
+<text x="105" y="1743" font-size="18">bestModel TXT.</text>
+<text x="105" y="1780" font-size="18">Sin script dedicado a validar</text>
+<text x="105" y="1807" font-size="18">estas salidas.</text>
+<text x="105" y="1844" font-size="18">M06 observa modelos en logs; no</text>
+<text x="105" y="1871" font-size="18">sustituye su validación.</text>
+<rect x="486" y="1601" width="380" height="416" rx="18" fill="#ffffff" stroke="#b9d7cd" stroke-width="1.5" />
+<rect x="486" y="1619" width="5" height="380" rx="2" fill="#147d70" />
+<rect x="508" y="1622" width="153.96" height="29" rx="14" fill="#e5f4ee" stroke="#e5f4ee" stroke-width="1.5" />
+<text x="520" y="1643" font-size="16" font-weight="700" style="fill:#176b56">R03 · ACEPTADO</text>
+<text x="509" y="1678" font-size="24" font-weight="700">MatricesPrediccion/</text>
+<text x="509" y="1716" font-size="18">R03 · nombres PKL horarios y</text>
+<text x="509" y="1743" font-size="18">faltantes por día / hora.</text>
+<text x="509" y="1780" font-size="18">Sin lectura del contenido PKL;</text>
+<text x="509" y="1807" font-size="18">Turno/ queda fuera del control.</text>
+<text x="509" y="1844" font-size="18">Mejoras aplazadas por acuerdo.</text>
+<rect x="890" y="1601" width="380" height="416" rx="18" fill="#f7f9ff" stroke="#c4d0ec" stroke-width="1.5" />
+<rect x="890" y="1619" width="5" height="380" rx="2" fill="#4f6bb1" />
+<rect x="912" y="1622" width="153.96" height="29" rx="14" fill="#e7edff" stroke="#e7edff" stroke-width="1.5" />
+<text x="924" y="1643" font-size="16" font-weight="700" style="fill:#36569a">R01 · SOLO V2</text>
+<text x="913" y="1678" font-size="24" font-weight="700">Prediccion/</text>
+<text x="913" y="1716" font-size="18">validar_todas_siglas v2.py</text>
+<text x="913" y="1753" font-size="18">R01 · nombres GeoJSON y</text>
+<text x="913" y="1780" font-size="18">faltantes por día / hora.</text>
+<text x="913" y="1817" font-size="18">Dos CSV locales. Script</text>
+<text x="913" y="1844" font-size="18">existente; no modificado.</text>
+<rect x="1294" y="1601" width="380" height="416" rx="18" fill="#ffffff" stroke="#b9d7cd" stroke-width="1.5" />
+<rect x="1294" y="1619" width="5" height="380" rx="2" fill="#147d70" />
+<rect x="1316" y="1622" width="193.64" height="29" rx="14" fill="#e5f4ee" stroke="#e5f4ee" stroke-width="1.5" />
+<text x="1328" y="1643" font-size="16" font-weight="700" style="fill:#176b56">R02 · VALIDADO</text>
+<text x="1317" y="1678" font-size="24" font-weight="700">Optimizacion/</text>
+<text x="1317" y="1716" font-size="18">R02 · parejas, turnos y</text>
+<text x="1317" y="1743" font-size="18">variantes por unidad.</text>
+<text x="1317" y="1780" font-size="18">Lee GeoJSON: estructura,</text>
+<text x="1317" y="1807" font-size="18">identificadores y geometría</text>
+<text x="1317" y="1834" font-size="18">básica.</text>
+<text x="1317" y="1871" font-size="18">Referencia, caché y dos CSV</text>
+<text x="1317" y="1898" font-size="18">local / S3. Nacional: 376.580.</text>
+<rect x="1698" y="1601" width="380" height="416" rx="18" fill="#f0f2f6" stroke="#d4dbe5" stroke-width="1.5" />
+<rect x="1698" y="1619" width="5" height="380" rx="2" fill="#758397" />
+<rect x="1720" y="1622" width="153.96" height="29" rx="14" fill="#e9edf3" stroke="#e9edf3" stroke-width="1.5" />
+<text x="1732" y="1643" font-size="16" font-weight="700" style="fill:#526174">SOLO EJEMPLOS</text>
+<text x="1721" y="1678" font-size="24" font-weight="700">Hechos/</text>
+<text x="1721" y="1716" font-size="18">La carpeta local contiene</text>
+<text x="1721" y="1743" font-size="18">ejemplos GeoJSON.</text>
+<text x="1721" y="1780" font-size="18">Sin script validador dedicado.</text>
+<text x="1721" y="1817" font-size="18">La ausencia de geometría puede</text>
+<text x="1721" y="1844" font-size="18">representar ausencia de hechos.</text>
+<text x="86" y="2051" font-size="18" style="fill:#586a80">Optimización ya revisa GeoJSON; matrices y predicciones conservan su alcance actual de nombres y presencia.</text>
+<path d="M2100 942 H2123 V1560 H2105" fill="none" stroke="#526880" stroke-width="2.4" marker-end="url(#arr)" />
+<text x="2144" y="1105" font-size="16" style="fill:#586a80" transform="rotate(90 2144 1105)">ECS / Fargate → resultados en S3</text>
+<text x="60" y="2130" font-size="19" font-weight="700" style="fill:#147d70">05</text>
+<text x="112" y="2130" font-size="24" font-weight="700">INFORMES Y REFERENCIA FIJA DE PROBABILIDADES</text>
+<text x="112" y="2158" font-size="17" style="fill:#586a80">P identifica la referencia consultada por el predictor vía Athena; lectura confirmada en DECAU.</text>
+<rect x="60" y="2182" width="480" height="290" rx="18" fill="#ffffff" stroke="#b9d7cd" stroke-width="1.5" />
+<rect x="60" y="2200" width="5" height="254" rx="2" fill="#147d70" />
+<rect x="82" y="2203" width="54.76" height="29" rx="14" fill="#e5f4ee" stroke="#e5f4ee" stroke-width="1.5" />
+<text x="94" y="2224" font-size="16" font-weight="700" style="fill:#176b56">M02</text>
+<text x="83" y="2259" font-size="24" font-weight="700">Regla de informes</text>
+<text x="83" y="2297" font-size="18">generacion_informes_anticipaciones</text>
+<text x="83" y="2334" font-size="18">M02 · horario, disparos, fallos y manejo</text>
+<text x="83" y="2361" font-size="18">de entrega.</text>
+<rect x="580" y="2182" width="480" height="290" rx="18" fill="#ffffff" stroke="#b9d7cd" stroke-width="1.5" />
+<rect x="580" y="2200" width="5" height="254" rx="2" fill="#147d70" />
+<rect x="602" y="2203" width="54.76" height="29" rx="14" fill="#e5f4ee" stroke="#e5f4ee" stroke-width="1.5" />
+<text x="614" y="2224" font-size="16" font-weight="700" style="fill:#176b56">M02</text>
+<text x="603" y="2259" font-size="24" font-weight="700">Lambda de informes</text>
+<text x="603" y="2297" font-size="18">pon_prod_xcrime_informes_anticipaciones</text>
+<text x="603" y="2334" font-size="18">M02 · invocaciones, errores, límites y</text>
+<text x="603" y="2361" font-size="18">duración.</text>
+<rect x="1100" y="2182" width="480" height="290" rx="18" fill="#ffffff" stroke="#b9d7cd" stroke-width="1.5" />
+<rect x="1100" y="2200" width="5" height="254" rx="2" fill="#147d70" />
+<rect x="1122" y="2203" width="54.76" height="29" rx="14" fill="#e5f4ee" stroke="#e5f4ee" stroke-width="1.5" />
+<text x="1134" y="2224" font-size="16" font-weight="700" style="fill:#176b56">M04</text>
+<text x="1123" y="2259" font-size="24" font-weight="700">Job Glue de informes</text>
+<text x="1123" y="2297" font-size="18">pon-prod-xcrime-informes-anticipaciones</text>
+<text x="1123" y="2334" font-size="18">M04 · inicio, fin, estados y errores.</text>
+<text x="1123" y="2371" font-size="18">No valida contenido ni entrega del</text>
+<text x="1123" y="2398" font-size="18">informe.</text>
+<rect x="1620" y="2182" width="480" height="290" rx="18" fill="#f0f2f6" stroke="#d4dbe5" stroke-width="1.5" />
+<rect x="1620" y="2200" width="5" height="254" rx="2" fill="#758397" />
+<rect x="1642" y="2203" width="193.64" height="29" rx="14" fill="#e9edf3" stroke="#e9edf3" stroke-width="1.5" />
+<text x="1654" y="2224" font-size="16" font-weight="700" style="fill:#526174">M07 · OPCIONAL</text>
+<text x="1643" y="2259" font-size="24" font-weight="700">probabilidaddelito</text>
+<text x="1643" y="2297" font-size="18">Referencia fija; proporciones por cuadrante.</text>
+<text x="1643" y="2334" font-size="18">Lectura del predictor confirmada en DECAU.</text>
+<text x="1643" y="2371" font-size="18">M07: diagnóstico opcional de metadata.</text>
+<path d="M540 2327 H576" fill="none" stroke="#526880" stroke-width="2.4" marker-end="url(#arr)" />
+<path d="M1060 2327 H1096" fill="none" stroke="#526880" stroke-width="2.4" marker-end="url(#arr)" stroke-dasharray="7 6" />
+<text x="587" y="2501" font-size="16" style="fill:#586a80">La relación Lambda → job de informes es funcional; su llamada exacta no se auditó en esta revisión.</text>
+<text x="60" y="2560" font-size="19" font-weight="700" style="fill:#147d70">06</text>
+<text x="112" y="2560" font-size="24" font-weight="700">INFORMES DEL MONITOREO Y LÍMITES OPERATIVOS</text>
+<rect x="60" y="2590" width="2040" height="166" rx="18" fill="#ffffff" stroke="#dce3ed" stroke-width="1.5" />
+<text x="84" y="2626" font-size="21" font-weight="700">M01–M06: CSV local y S3, carpetas 01…06. M07 opcional: 07. Fecha de ejecución en Bogotá.</text>
+<text x="84" y="2662" font-size="20">R01 (V2): dos CSV locales. R02: dos CSV locales / S3, carpeta 08. R03: ZIP con CSV locales.</text>
+<text x="84" y="2698" font-size="20">100% del alcance funcional aceptado; la ejecución automática y las alertas pertenecen a la etapa posterior.</text>
+<text x="84" y="2734" font-size="18" style="fill:#586a80">Continua: flujo documentado / funcional. Discontinua: consulta del monitor o relación por confirmar (según etiqueta).</text>
+<text x="60" y="2807" font-size="17" style="fill:#586a80">Alcance: carpetas 1, 2, 3 y 5 de 3-Prediccion. Se excluye 4-Anticipacion-Demanda.</text>
+<text x="60" y="2833" font-size="16" style="fill:#586a80">M = monitor de procesos · R = validador de resultados · IDs repetidos = mismo script en varias etapas.</text>
+<circle cx="2050" cy="716" r="15" fill="#e8efff" stroke="#5573be" stroke-width="2" /><text x="2044" y="722" font-size="17" fill="#36569a" font-weight="700">P</text><circle cx="2060" cy="2220" r="15" fill="#e8efff" stroke="#5573be" stroke-width="2" /><text x="2054" y="2226" font-size="17" fill="#36569a" font-weight="700">P</text><path id="conector-probabilidades-a-ecs" d="M2050 731 V746" fill="none" stroke="#526880" stroke-width="2.4" marker-end="url(#arr)" /><text x="1926" y="721" font-size="16" fill="#586a80">referencia P</text><text x="1643" y="2410" font-size="18" fill="#172c46">Sin actualización semanal obligatoria.</text><text x="509" y="1881" font-size="18" fill="#172c46">_var.pkl: nombre inválido.</text><text x="1317" y="1935" font-size="18" fill="#172c46">446 avisos; sin lecturas pendientes.</text></svg>

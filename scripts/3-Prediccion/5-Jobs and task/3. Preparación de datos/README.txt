@@ -1,72 +1,60 @@
 PREPARACIÓN DE DATOS
 ====================
 
-Archivo: monitor_procesos_upstream.py
+Script: monitor_procesos_upstream.py
 
 PARA QUÉ SIRVE
 
-Revisa los servicios que preparan información antes de la predicción.
-Ayuda a encontrar fallos en la limpieza o señales de que las fuentes están
-limitando solicitudes.
+Revisa los servicios que limpian y preparan la información antes de la predicción.
+Permite encontrar errores de ejecución o señales de solicitudes limitadas.
 
 QUÉ REVISA
 
-- Las tareas visibles del cluster de limpieza:
-  pon-prod-xcrime-datacleaning-cluster.
-- El estado y la última ejecución del crawler que actualiza el catálogo:
-  pon-prod-xcrime-datacleaning-glue-crawler.
-- El estado y las señales de solicitudes limitadas en las tres tablas
-  históricas DynamoDB de llamadas, comparendos y delitos.
+- Tareas visibles de pon-prod-xcrime-datacleaning-cluster.
+- Estado y última ejecución de pon-prod-xcrime-datacleaning-glue-crawler.
+- Estado y métricas de solicitudes limitadas de las tablas DynamoDB:
+  pon_prod_llamada_siglas_historico,
+  pon_prod_comparendo_siglas_historico y
+  pon_prod_delito_siglas_historico.
 
-Las ejecuciones de los jobs que actualizan fuentes, estructura y geometrías
-se revisan con monitor_glue_jobs.py, en la carpeta 4.
+Los jobs que actualizan fuentes, estructura y geometrías se revisan con
+monitor_glue_jobs.py, en la carpeta 4.
 
 CÓMO EJECUTARLO EN CLOUDSHELL
 
+Carga el .py en $HOME y ejecuta:
+
   python3 "$HOME/monitor_procesos_upstream.py" \
+    --region us-east-1 \
     --dias 8 \
     --salida "$HOME/salida"
 
-Los ocho días corresponden a las métricas. Las tareas ECS y la última
-ejecución del crawler tienen la disponibilidad descrita más abajo.
+Los ocho días corresponden a las métricas. ECS muestra tareas que aún conserva;
+del crawler se revisa solo su última ejecución disponible.
 
-QUÉ INFORME ENTREGA
+QUÉ ENTREGA Y DÓNDE
 
-Genera informe_procesos_upstream.csv.
+Genera un CSV: informe_procesos_upstream.csv.
+Filtra tipo_registro=RESUMEN para ver una fila por recurso. CONTROL explica los
+hallazgos; DETALLE y CONTEXTO conservan la evidencia y la cobertura de lectura.
 
-En Excel, filtra tipo_registro=RESUMEN para ver una fila por recurso.
-CONTROL explica los hallazgos; DETALLE conserva la información observada.
-CONTEXTO registra el período y las limitaciones de la lectura.
-
-Destino S3:
-
-FECHA corresponde al día de ejecución en hora de Bogotá, aunque se revisen datos de un período anterior.
+S3:
   s3://pon-prod-ml-iapol/ValidationReports/03-MonitorProcesosUpstream/FECHA/HORA/
 
-Copia local:
+Local:
   $HOME/salida/procesos_upstream/FECHA/HORA/informe_procesos_upstream.csv
 
-CÓMO INTERPRETARLO
+FECHA/HORA es la ejecución en Bogotá. Si falla la subida, conserva la copia local.
 
-Revisa la columna Control y los mensajes de cada recurso.
-Una FALLA puede señalar un error de la tarea de limpieza o de la última
-ejecución del crawler. Las solicitudes limitadas en DynamoDB son una señal
-para revisar la capacidad de atención de la fuente.
+CÓMO LEER EL RESULTADO
 
-SIN DATOS en una métrica no demuestra ausencia de problemas ni significa
-que hubo cero solicitudes limitadas.
+FALLA puede indicar un error de la limpieza o de la última ejecución del crawler.
+Las solicitudes limitadas en DynamoDB indican una condición para revisar.
+SIN DATOS no significa cero limitaciones ni ausencia de problemas.
 
-LÍMITES DEL RESULTADO
+ACTIVE o SUCCEEDED no garantizan que los datos estén actualizados. No lee los
+registros de negocio; el volumen y la calidad se revisan con datos de entrada.
+El comando puede devolver salida 0 aunque haya una FALLA en el informe:
+revisa siempre la columna Control.
 
-- ECS solo muestra las tareas que todavía conserva; no es un historial completo.
-- Del crawler se consulta la última ejecución, no todas las ejecuciones de la semana.
-- Un estado ACTIVE o un último SUCCEEDED no garantizan que los datos estén actualizados.
-- No lee los registros de negocio ni mide la calidad de la tabla de entrada;
-  esa revisión corresponde a monitor_datos_entrada.py.
-
-Que el comando termine sin error no garantiza que no haya hallazgos:
-este monitor puede devolver salida 0 y conservar una FALLA observada en el CSV.
-Revisa siempre la columna Control.
-
-El script no arranca tareas ni crawlers. Guarda el informe en S3 y conserva
-la copia local si no logra subirlo.
+No arranca tareas ni crawlers, no habilita métricas y no crea alarmas.

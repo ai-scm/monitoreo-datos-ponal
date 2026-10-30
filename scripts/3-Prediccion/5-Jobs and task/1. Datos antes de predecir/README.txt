@@ -1,24 +1,25 @@
 DATOS ANTES DE PREDECIR
 ======================
 
-Archivo: monitor_datos_entrada.py
+Script: monitor_datos_entrada.py
 
 PARA QUÉ SIRVE
 
-Ayuda a detectar cambios o problemas en los datos antes de generar predicciones.
-Consulta la tabla pon-prod-mdp.mdp_limpio y presenta los resultados por sigla,
-unidad y fuente de datos (RNMC, SECAD y SIEDCO).
+Detecta cambios en la información disponible antes de generar predicciones.
+Consulta pon-prod-mdp.mdp_limpio por CAD, unidad y fuente: RNMC, SECAD y SIEDCO.
 
 QUÉ REVISA
 
-- Cuántos registros hay en los últimos 15 días completos y en los 15 anteriores.
-- Si el volumen bajó respecto al período anterior.
-- La última fecha encontrada dentro del período y los días sin registros.
-- Coordenadas vacías o fuera de los rangos válidos de latitud y longitud.
+- Registros de los últimos 15 días completos frente a los 15 anteriores.
+- Caídas de volumen, última fecha del período y días sin registros.
+- Coordenadas vacías o fuera de los rangos de latitud y longitud.
+- Distribución diaria de registros por unidad y fuente.
 
-El día de ejecución queda fuera de las dos ventanas, para comparar días completos.
+El día de ejecución no entra en las dos ventanas comparadas.
 
 CÓMO EJECUTARLO EN CLOUDSHELL
+
+Carga el .py en $HOME y ejecuta:
 
   unset ATHENA_OUTPUT_S3
 
@@ -36,52 +37,39 @@ CÓMO EJECUTARLO EN CLOUDSHELL
     --ejecutar --timeout 600 \
     --salida "$HOME/salida"
 
-Este comando revisa las unidades observadas de todas las siglas.
-Para limitar una prueba a una sigla, añade --filtrar-sigla MEPAS.
-Al ejecutar el script sin opciones solo se consulta el esquema; no se evalúan datos.
+Revisa las unidades observadas de todas las siglas. Para una prueba añade
+--filtrar-sigla MEPAS. Sin argumentos, solo descubre el esquema de la tabla;
+no evalúa datos. La consulta Athena puede generar consumo por datos leídos.
 
-QUÉ INFORMES ENTREGA
+QUÉ ENTREGA Y DÓNDE
 
 Genera dos CSV:
 
-  general.csv
-    Resumen de volumen, recencia y calidad, junto con todos los controles.
-    En Excel, filtra tipo_registro:
-      RESUMEN: indicadores por sigla, unidad y BD.
-      CONTROL: estados y motivos, incluidos los controles generales de alcance.
+  general.csv: indicadores y controles. Filtra tipo_registro=RESUMEN para
+  las cifras por CAD/unidad/BD y CONTROL para los estados y sus motivos.
 
-  diario.csv
-    Conteo por día, sigla, unidad y BD. Sirve para ubicar los días sin datos
-    o ver cuándo empezó una caída de volumen.
+  diario.csv: conteos por día, útiles para ubicar caídas y días sin registros.
 
-Destino S3:
-
-FECHA corresponde al día de ejecución en hora de Bogotá, aunque se revisen datos de un período anterior.
+S3:
   s3://pon-prod-ml-iapol/ValidationReports/01-MonitorDatosEntrada/FECHA/HORA/
 
 Copias locales:
   $HOME/salida/general_datos_entrada_FECHA_HORA.csv
   $HOME/salida/diario_datos_entrada_FECHA_HORA.csv
 
-CÓMO INTERPRETARLO
+FECHA/HORA corresponde a la ejecución en Bogotá. Los archivos internos de
+Athena quedan en _athena/ dentro del destino de consulta de la ejecución.
+Si falla la subida de informes, conserva los CSV locales.
 
-Empieza por los controles FALLA o AVISO de general.csv. Usa diario.csv para
-revisar la distribución de registros. "Base insuficiente" significa que hay
-pocos registros anteriores para comparar el volumen con confianza.
+CÓMO LEER EL RESULTADO
 
-Un cero o una caída no demuestran por sí solos un problema de carga: una unidad
-puede tener pocos incidentes o recibir registros con retraso.
+Empieza por FALLA, AVISO e INCOMPLETO en general.csv. "Base insuficiente"
+significa que hay pocos registros anteriores para comparar con confianza.
+Una caída o un cero necesitan contexto: puede haber poca frecuencia o carga tardía.
 
-LÍMITES DEL RESULTADO
+La fecha del hecho no confirma cuándo se cargó el registro. El filtro temporal
+excluye fechas nulas, no interpretables y futuras; su calidad global queda
+NO EVALUADA en este modo. Sin catálogo esperado no detecta todas las unidades
+totalmente ausentes. Los rangos de coordenadas no prueban pertenencia territorial.
 
-- La fecha de un hecho no demuestra cuándo se cargó al sistema.
-- En este modo, el filtro temporal excluye fechas nulas, no interpretables y
-  futuras. Su calidad global queda indicada como NO EVALUADA.
-- Sin una lista de unidades esperadas, no identifica todas las unidades
-  completamente ausentes de la tabla.
-- Revisar rangos de coordenadas no confirma que un punto pertenezca a su unidad.
-- Los límites de aviso son orientativos y se pueden configurar.
-
-Los datos de origen no se modifican. Se guardan los informes y los archivos
-internos de consulta de Athena. Si la subida falla, las copias locales quedan
-disponibles. --no-export desactiva la exportación de informes.
+El script guarda informes y consulta datos; no modifica la tabla ni envía alertas.

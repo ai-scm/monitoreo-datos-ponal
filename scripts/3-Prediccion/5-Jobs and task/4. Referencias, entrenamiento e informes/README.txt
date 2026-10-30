@@ -1,83 +1,71 @@
 REFERENCIAS, ENTRENAMIENTO E INFORMES
-=====================================
+====================================
 
-Archivo: monitor_glue_jobs.py
+Script: monitor_glue_jobs.py
 
 PARA QUÉ SIRVE
 
-Revisa si los procesos Glue configurados arrancaron, siguen ejecutándose,
-terminaron o fallaron. Reúne en un solo informe los procesos de actualización,
-entrenamiento e informes.
+Reúne en un solo informe las ejecuciones de los siete jobs Glue configurados.
+Muestra si arrancaron, siguen abiertos, terminaron o fallaron.
 
 QUÉ REVISA
 
-Los siete jobs están organizados en tres grupos:
+Referencia:
+  pon-prod-xcrime-update-fuentes-internas
+  pon-prod-xcrime-update-estructura-nal
+  pon-prod-xcrime-update-geometrias-nal
 
-  Referencia
-    Actualización de fuentes internas, estructura nacional y geometrías.
+Entrenamiento:
+  pon_prod_xcrime_train_models_job
+  pon_prod_xcrime_homologacion_job
+  pon_prod_xcrime_consume_models_job
 
-  Entrenamiento
-    Entrenamiento, homologación y consumo de modelos.
+Informes:
+  pon-prod-xcrime-informes-anticipaciones
 
-  Informes
-    Generación de informes de anticipaciones.
-
-Para cada job muestra el último estado, inicio, fin, duración y errores.
-También cuenta los estados observados dentro del período de revisión.
-Un fallo del período sigue visible aunque una ejecución posterior haya sido exitosa.
+Para cada job muestra último estado, inicio, fin, duración y errores.
+Cuenta los estados de la ventana; un fallo permanece visible aunque después
+haya una ejecución exitosa.
 
 CÓMO EJECUTARLO EN CLOUDSHELL
 
+Carga el .py en $HOME y ejecuta:
+
   python3 "$HOME/monitor_glue_jobs.py" \
+    --region us-east-1 \
     --dias 8 \
     --historial-completo \
     --salida "$HOME/salida"
 
-El comando recorre el historial disponible y evalúa una ventana de ocho días.
-Puede tardar si hay muchas ejecuciones.
+Recorre el historial disponible y evalúa ocho días. Puede tardar si hay muchos
+registros. Para limitarlo, sustituye --historial-completo por
+--max-ejecuciones 5000; si faltan páginas, el informe lo indica.
+Para revisar solo un grupo, añade --grupo referencia, --grupo entrenamiento
+o --grupo informes. Sin esa opción revisa los tres.
 
-Para revisar solo un grupo, añade una de estas opciones al mismo comando:
-  --grupo referencia
-  --grupo entrenamiento
-  --grupo informes
+QUÉ ENTREGA Y DÓNDE
 
-QUÉ INFORME ENTREGA
+Genera un CSV: informe_glue_jobs.csv.
+Filtra tipo_registro=RESUMEN. DETALLE contiene las ejecuciones seleccionadas;
+CONTROL y CONTEXTO explican hallazgos y cobertura.
 
-Genera informe_glue_jobs.csv.
-
-En Excel, filtra tipo_registro=RESUMEN para la vista principal.
-DETALLE contiene las ejecuciones seleccionadas; CONTROL explica los hallazgos.
-CONTEXTO registra el período y la cobertura de lectura.
-
-Destino S3:
-
-FECHA corresponde al día de ejecución en hora de Bogotá, aunque se revisen datos de un período anterior.
+S3:
   s3://pon-prod-ml-iapol/ValidationReports/04-MonitorGlueJobs/FECHA/HORA/
 
-Copia local:
+Local:
   $HOME/salida/glue_jobs/FECHA/HORA/informe_glue_jobs.csv
 
-CÓMO INTERPRETARLO
+FECHA/HORA es la ejecución en Bogotá. Si falla la subida, conserva el CSV local.
 
-Revisa dos columnas:
+CÓMO LEER EL RESULTADO
 
-  Control: si se encontraron fallos u otras situaciones que requieren revisión.
-  Cobertura: si se pudo leer toda la información o quedó una parte pendiente.
+Revisa Control y Cobertura por separado: una lectura parcial puede contener
+fallos confirmados. El último estado puede ser anterior a la ventana; consulta
+también los conteos del período.
 
-FALLA se refiere a ejecuciones del período evaluado. El último estado mostrado
-puede ser anterior a ese período; consulta también los conteos de la ventana.
-Una lectura parcial conserva los fallos que sí fueron observados.
+SUCCEEDED significa éxito reportado por Glue; no certifica calidad ni uso del
+modelo o del informe producido. Sin una frecuencia confirmada, no haber
+ejecuciones recientes no demuestra un disparo perdido. Las duraciones son
+informativas, sin un máximo estándar.
 
-LÍMITES DEL RESULTADO
-
-- SUCCEEDED significa que Glue reportó éxito; no prueba calidad, actualidad,
-  entrega ni uso de los datos o modelos producidos.
-- Sin una frecuencia esperada confirmada, no haber ejecuciones recientes no
-  demuestra que se haya perdido un disparo.
-- La duración se muestra como información, sin un límite máximo estándar.
-- No confirma el orden ni las dependencias reales entre jobs y predicciones.
-- El CSV contiene el detalle seleccionado, no una copia de todo el historial.
-
-Este script ya reúne referencias, entrenamiento e informes; se ejecuta de
-forma independiente. No lanza ni corrige jobs. Guarda el CSV en S3 y conserva
-su copia local si falla la subida.
+Este script no lanza ni corrige jobs, y no envía notificaciones.

@@ -1,6 +1,38 @@
-Optimizacion_26241_20261003_1_F_B01.geojson
-Optimizacion_26241_20261003_1_F_CP01.geojson
-Optimizacion_26241_20261003_2_F_B01.geojson
-Optimizacion_26241_20261003_2_F_CP01.geojson
-Optimizacion_26241_20261003_3_F_B01.geojson
-Optimizacion_26241_20261003_3_F_CP01.geojson
+PATRON
+Optimizacion_<UNIDAD>_<YYYYMMDD>_<TURNO>_F_B<nn>.geojson
+Optimizacion_<UNIDAD>_<YYYYMMDD>_<TURNO>_F_CP<nn>.geojson
+
+Cada fecha/turno/indice debe tener ambos archivos B y CP.
+El indice positivo tiene al menos dos digitos; no se exige empezar en 01
+ni tener todos los indices intermedios.
+
+CALENDARIO PARA SEMANA 20261026
+Turno 1: 20261025 a 20261031.
+Turnos 2 y 3: 20261026 a 20261101.
+
+EJEMPLOS DE PAREJAS
+Optimizacion_51716_20261025_1_F_B01.geojson
+Optimizacion_51716_20261025_1_F_CP01.geojson
+Optimizacion_51606_20261026_2_F_B04.geojson
+Optimizacion_51606_20261026_2_F_CP04.geojson
+Optimizacion_51162_20261026_2_F_B16.geojson
+Optimizacion_51162_20261026_2_F_CP16.geojson
+
+REFERENCIA OBSERVADA, NO CONTRATO DE ENTREGA
+MEPER: 3570 archivos por semana, sumando los perfiles de 43 unidades.
+MEPER/51716: 01; 42 archivos.
+MEVAL/51047: 01..06; 252 archivos.
+DECAQ/51606: 04..14; 462 archivos.
+METUN/51162: 16..26; 462 archivos.
+DEBOY/52597: 01,02,03,04,05,06,08; 294 archivos.
+MEBUC/60760: variantes segun fecha/turno; 306 o 298 archivos.
+
+referencia_optimizacion.json conserva patrones observados en las semanas
+20261012 y 20261019. No acredita entregas obligatorias en todos los ciclos.
+
+INFORMES
+general.csv: filtrar tipo_registro=RESUMEN_SIGLA para una fila por CAD/semana,
+con archivos_esperados_min/max, archivos encontrados y nombres_invalidos.
+El rango respeta las variantes de cada unidad; sin referencia completa no
+se inventa un total. RESUMEN conserva el desglose por unidad y CONTROL los motivos.
+detalle.csv: archivo y motivo exacto de cada nombre o contenido defectuoso.
