@@ -524,6 +524,90 @@ def marcar_sin_sigla(filas_siglas, novedades, sin_siglas, que='hechos', codigo='
 # --------------------------------------------------------------------------------------
 # Salida
 # --------------------------------------------------------------------------------------
+# --------------------------------------------------------------------------------------
+# Contraste con la fuente (vista consolidada de SECAD)
+# --------------------------------------------------------------------------------------
+# Lo que lee el ETL de las capas (Lambda pon-prod-scheduler-capas-secad): misma vista y mismas
+# categorias. La particion CDC (YEAR/MONTH/DAY) es el dia UTC de llegada, asi que se toman las de la
+# ventana y la del dia siguiente. MEBOG no sale de SECAD (PremierOne) y no entra en el contraste.
+VISTA_FUENTE = '"pon-prod-raw-secad"."v_pedido_atendido_consolidada"'
+_RINA = "('RIÑA', 'Riña', 'riña')"
+_HV = "('HURTO CALIFICADO', 'hurto calificado', 'Hurto Calificado', 'Hurto calificado', 'HOMICIDIO', 'Homicidio', 'homicidio')"
+FILTRO_FUENTE = {
+    'secad-rinas': f'("MOTIVO" IN {_RINA} OR "cod_inicial_desc" IN {_RINA})',
+    'secad-hurtos-violento-y-homicidio': f'("MOTIVO" IN {_HV} OR "cod_inicial_desc" IN {_HV})',
+    'secad-hurtos-general': '(' + ' OR '.join(f'"{c}" LIKE \'%{p}%\'' for c in ('MOTIVO', 'cod_inicial_desc')
+                                              for p in ('hurto', 'HURTO', 'Hurto')) + ')',
+}
+SIGLAS_FUERA_DE_SECAD = {'MEBOG'}
+MIN_FUENTE_SIGLA = 5          # llamadas en la fuente para exigir que la sigla aparezca en la capa
+MIN_COBERTURA_DIA = 0.9       # la capa debe tener al menos el 90 % de las llamadas de la fuente cada dia
+
+
+def construir_sql_fuente(dias, capas):
+    """Llamadas distintas (sitio_graba + NUME_LLAMADA) por sigla de origen, dia y capa en la vista de SECAD."""
+    llave = 'cast("SITIO_GRABA" as varchar) || \'-\' || cast("NUME_LLAMADA" as varchar)'
+    conteos = ',\n  '.join(f'count(DISTINCT CASE WHEN {FILTRO_FUENTE[c]} THEN {llave} END) AS "{c}"' for c in capas)
+    desde, hasta = dias[0], dias[-1] + timedelta(days=1)
+    lista = ', '.join(f"DATE '{d}'" for d in dias)
+    return (f'SELECT upper("SIGLA") AS sigla, cast(date("FECHA_CASO") AS varchar) AS dia,\n  {conteos}\n'
+            f'FROM {VISTA_FUENTE}\n'
+            f'WHERE date_parse("YEAR" || \'-\' || "MONTH" || \'-\' || "DAY", \'%Y-%m-%d\') BETWEEN DATE \'{desde}\' AND DATE \'{hasta}\'\n'
+            f'  AND date("FECHA_CASO") IN ({lista})\n'
+            f'GROUP BY 1, 2')
+
+
+def parsear_fuente(filas, capas):
+    """Filas de Athena -> {capa: {sigla: {dia: llamadas}}}."""
+    res = {c: {} for c in capas}
+    for r in filas:
+        for c in capas:
+            n = _entero(r.get(c))
+            if n:
+                res[c].setdefault((r.get('sigla') or '').strip(), {})[r.get('dia')] = n
+    return res
+
+
+def contrastar_fuente(fuente, obs, v, capas):
+    """Compara la vista de origen con la capa. Detecta siglas con llamadas en la fuente que no llegan a la capa
+    (p. ej. una vista que las excluye) y dias en que la capa tiene menos del 90 % de la fuente en todo el pais.
+    Por sigla se compara el total de la ventana: el ETL reasigna llamadas a la sigla donde cae el punto, asi que
+    una sigla puede tener menos que la fuente sin que falte nada."""
+    novedades = []
+    for capa in capas:
+        en_capa = {}
+        for sigla, unidades in obs.get(capa, {}).items():
+            for serie in unidades.values():
+                for d, a in serie.items():
+                    if d in v.dias and sigla not in SIGLAS_FUERA_DE_SECAD:
+                        n = a.llamadas if a.llamadas is not None else a.puntos
+                        en_capa.setdefault(sigla, {}).setdefault(d, 0)
+                        en_capa[sigla][d] += n
+        src = fuente.get(capa, {})
+        for sigla in sorted(src):
+            n_src = sum(src[sigla].get(d, 0) for d in v.dias)
+            n_capa = sum(en_capa.get(sigla, {}).values())
+            if n_src >= MIN_FUENTE_SIGLA and n_capa == 0:
+                novedades.append(dict(nivel='SIGLA', estado=FALLA, sigla=sigla, unidad_id='', unidad='', tipo='', capa=capa,
+                                      codigo='FUENTE_CON_DATOS_CAPA_VACIA',
+                                      mensaje=f'la vista de SECAD tiene {n_src} llamadas de la sigla en la ventana y la capa ninguna',
+                                      contexto='el dato existe en la fuente: revisar la consulta del ETL (Lambda) y las vistas',
+                                      sigla_sin_datos=''))
+        cortos = []
+        for d in v.dias:
+            n_src = sum(s.get(d, 0) for s in src.values())
+            n_capa = sum(s.get(d, 0) for s in en_capa.values())
+            if n_src >= 20 and n_capa < MIN_COBERTURA_DIA * n_src:
+                cortos.append(f'{d} ({n_capa} de {n_src})')
+        if cortos:
+            novedades.append(dict(nivel='NACIONAL', estado=FALLA, sigla='', unidad_id='', unidad='', tipo='', capa=capa,
+                                  codigo='CAPA_INCOMPLETA_VS_FUENTE',
+                                  mensaje='dias con menos del 90 % de las llamadas de la fuente: ' + ', '.join(cortos),
+                                  contexto='particiones sin registrar, job sin correr o llamadas que el ETL descarta',
+                                  sigla_sin_datos=''))
+    return novedades
+
+
 def escribir_csv(ruta, filas, columnas=None):
     columnas = columnas or (list(filas[0]) if filas else [])
     with open(ruta, 'w', newline='', encoding='utf-8-sig') as f:
@@ -628,6 +712,8 @@ def parser():
     p.add_argument('--no-export', action='store_true', help='No escribe archivos')
     p.add_argument('--max-lineas', type=int, default=80, help='Unidades a listar en consola (80)')
     p.add_argument('--detallado', action='store_true', help='Imprime tambien el SQL')
+    p.add_argument('--sin-fuente', action='store_true',
+                   help='No contrasta con la vista de origen de SECAD (ahorra ~4 GB de escaneo en Athena)')
     return p
 
 
@@ -701,16 +787,20 @@ def ejecutar(a):
                 col_llamada = sc.COLUMNA_LLAMADA
         llamada[capa] = col_llamada
         sqls[capa] = construir_sql(a.database, tabla, a.columnas, dias_sql, ahora, a.siglas, col_llamada, cols)
+    sql_fuente = None if a.sin_fuente else construir_sql_fuente([date.fromisoformat(d) for d in v.dias], a.capas)
     if glue:
         print('[INFO] Esquema Glue verificado: ' + ', '.join(f'{sc.CAPAS[c][0]} (llamada: {llamada[c] or "no"})' for c in a.capas))
 
     salida = Path(a.salida)
     if not a.no_export:
         salida.mkdir(parents=True, exist_ok=True)
-        (salida / f'consultas_secad_{marca}.sql').write_text('\n;\n'.join(f'-- {c}\n{s}' for c, s in sqls.items()), encoding='utf-8')
+        todas = dict(sqls, **({'fuente (vista de SECAD)': sql_fuente} if sql_fuente else {}))
+        (salida / f'consultas_secad_{marca}.sql').write_text('\n;\n'.join(f'-- {c}\n{s}' for c, s in todas.items()), encoding='utf-8')
     if a.solo_sql or a.detallado:
         for capa, sql in sqls.items():
             print(f'\n-- {capa}\n{sql}')
+        if sql_fuente:
+            print(f'\n-- fuente (vista de SECAD)\n{sql_fuente}')
     if a.solo_sql:
         print('[INFO] --solo-sql: no se ejecuto nada en Athena.')
         return 0
@@ -728,7 +818,22 @@ def ejecutar(a):
             print(f'[AVISO] {sc.CAPAS[capa][0]} no devolvio filas para la ventana; revisa particiones, siglas y columnas.')
 
     filas_siglas, filas_unidades, novedades = analizar(obs, arbol, v, umbrales, a.capas, a.siglas)
+    if sql_fuente:
+        filas_fuente, info = athena.ejecutar({'fuente': sql_fuente})['fuente']
+        escaneado = info.get('Statistics', {}).get('DataScannedInBytes', 0)
+        stats['fuente'] = dict(grupos=len(filas_fuente), bytes_escaneados=escaneado, query_id=info.get('QueryExecutionId'))
+        print(f'[INFO] Vista de origen de SECAD: {len(filas_fuente)} grupos sigla/dia, {escaneado / 1024 ** 2:.1f} MiB escaneados')
+        fuente = parsear_fuente(filas_fuente, a.capas)
+        if a.siglas:
+            fuente = {c: {s: x for s, x in f.items() if s in a.siglas} for c, f in fuente.items()}
+        contraste = contrastar_fuente(fuente, obs, v, a.capas)
+        novedades = [n for n in contraste if n['nivel'] == 'SIGLA'] + novedades + [n for n in contraste if n['nivel'] != 'SIGLA']
     imprimir(filas_siglas, filas_unidades, novedades, a.capas, v, a.max_lineas)
+    nacionales = [n for n in novedades if n['nivel'] == 'NACIONAL']
+    if nacionales:
+        print('\n=== CONTRASTE CON LA VISTA DE ORIGEN (todo el pais) ===')
+        for n in nacionales:
+            print(f'  [{n["estado"]}] {CORTO[n["capa"]]} | {n["codigo"]}: {n["mensaje"]}')
 
     if not a.no_export:
         escribir_csv(salida / f'resumen_siglas_{marca}.csv', filas_siglas)
