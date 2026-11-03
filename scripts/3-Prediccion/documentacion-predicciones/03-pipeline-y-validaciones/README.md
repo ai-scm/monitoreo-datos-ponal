@@ -4,14 +4,20 @@ Actualizado al **30 de octubre de 2026**. Incluye las carpetas 1, 2, 3 y 5 de
 `3-Prediccion`; excluye `4-Anticipacion-Demanda`. Para los resultados de
 `Prediccion/` se considera únicamente **`validar_todas_siglas v2.py`**.
 
+**Actualización R03 del 3 de noviembre de 2026:** el validador de matrices ahora
+lee el contenido PKL, revisa grilla y valores numéricos y permite continuar desde
+caché. La [guía actual de matrices](../../3-Scripts-Adicionales/MatricesPrediccion/README.md)
+detalla esos controles. Los gráficos y paquetes fechados el 30 de octubre conservan
+la captura documental de esa fecha.
+
 ## Estado del alcance
 
 **100% del alcance funcional aceptado para esta etapa:** nueve scripts de uso
 habitual —M01–M06 y R01–R03— y un diagnóstico opcional, M07. Se conservan los diez
 archivos. El generador documental D01 no forma parte de ese conteo.
 
-Matrices se acepta con sus controles actuales y las mejoras detectadas quedan
-para después. M07 sale de la ejecución habitual: `probabilidaddelito` se trata
+Matrices amplía sus controles el 3 de noviembre con lectura del contenido.
+M07 sale de la ejecución habitual: `probabilidaddelito` se trata
 como referencia fija, sin una obligación de actualización semanal.
 
 El porcentaje expresa avance y aceptación del alcance acordado. La implementación
@@ -59,7 +65,7 @@ ni significa que un monitor lance al siguiente.
 | M07 | [monitor_freshness_probabilidaddelito.py](../../5-Jobs%20and%20task/7.%20Actualidad%20de%20la%20tabla%20de%20probabilidades/monitor_freshness_probabilidaddelito.py#L257) | Diagnostico de esquema Glue y fuente S3: listado, tamano y ultima modificacion. No aplica una obligacion de actualizacion semanal. | **Diagnostico opcional; no bloquea el cierre.** Uso por la tarea de prediccion DECAU confirmado en Athena/CloudTrail/ECS. Se trata como referencia fija; no se define frecuencia de recalculo ni se valida contenido con el comando de metadata. |
 | R01 | [validar_todas_siglas v2.py](../../1-Ejecucion-Prediccion/Prediccion/script%20s3/validar_todas_siglas%20v2.py#L150) | GeoJSON directos: nombres, unidad/fecha/hora y cobertura esperada de 24 horas por dia. Seleccion de rango semanal y dos CSV locales por ejecucion. | **Aceptado en alcance actual.** No lee contenido ni revisa Turno/ o PuntosApoyo. Enumera solo unidades existentes y utiliza calendario lunes-domingo. |
 | R02 | [validador_optimizacion_cloudshell.py](../../2-Zonas-Atencion-Fusion/Optimizacion/validador_optimizacion_cloudshell.py#L330) | Semana actual y siguiente; nombres, parejas B/CP, calendario y variantes por unidad. Contenido GeoJSON, inventario previo y cache reanudable; general.csv y detalle.csv locales/S3. | **Aceptado en alcance actual.** Prueba nacional completa el 2026-10-30: 54 CAD, 4705 unidades-semana y 376580 archivos; 446 AVISO, cero FALLA y cero lecturas pendientes. Referencia observada, no entrega obligatoria; geometria basica, sin certificacion del algoritmo. |
-| R03 | [validador_matrices_cloudshell.py](../../3-Scripts-Adicionales/MatricesPrediccion/validador_matrices_cloudshell.py#L171) | Nombres PKL directos, unidad/fecha/hora y faltantes por dia/hora; ZIP con dos CSV locales. | **Aceptado en alcance actual.** Alcance actual aceptado; mejoras posteriores. No lee contenido PKL ni valida tamano; excluye subcarpetas Turno/. Nombres Prediccion_..._var.pkl se reportan invalidos. Calendario fijo de siete dias; errores de lectura por unidad se muestran en consola. |
+| R03 | [validador_matrices_cloudshell.py](../../3-Scripts-Adicionales/MatricesPrediccion/validador_matrices_cloudshell.py) | Nombres, cobertura horaria y contenido PKL: grilla 2D, celdas, máscara, valores no finitos/negativos y avisos por falta de contraste. Caché reanudable y ZIP con dos CSV locales. | **Contenido ampliado el 2026-11-03.** Marcador -1 fuera de zona excluido; formatos no soportados y límites quedan NO EVALUADO. Conserva calendario de siete días y exclusión de subcarpetas/_var.pkl. No certifica calidad estadística ni posición contra el polígono real. |
 
 Las funciones y sus líneas están actualizadas en `cobertura_scripts.csv`.
 Los límites describen lo que hace el código actual; el cierre no convierte una
@@ -81,7 +87,7 @@ M07 conserva su diagnóstico de esquema y objetos S3; ese modo no lee las filas.
 
 - **Predicción V2:** nombres GeoJSON y presencia de horas en hijos directos de `Prediccion/`. No abre el contenido ni revisa `Turno/` o `PuntosApoyo`.
 - **Optimización:** semana actual y siguiente, nombres, pares B/CP, calendario y contenido GeoJSON básico. La prueba nacional del 30 de octubre terminó con 376.580 archivos revisados, 446 AVISO, cero FALLA y cero lecturas pendientes. Los avisos siguen requiriendo interpretación.
-- **Matrices:** nombres PKL y faltantes horarios de los siete días de la carpeta semanal. Por defecto revisa la semana siguiente. No lee el contenido PKL y excluye subcarpetas. Los nombres `Prediccion_..._var.pkl` se reportan como inválidos; no se ignoran. Mejoras posteriores acordadas.
+- **Matrices:** nombres PKL, faltantes horarios, integridad de la grilla y valores numéricos. Desde el 3 de noviembre lee contenido, separa -1 fuera de zona y avisa por valores constantes/cero. Por defecto revisa la semana siguiente; excluye subcarpetas y sigue reportando nombres `_var.pkl` como inválidos. Las lecturas pendientes se conservan explícitas y se puede continuar desde caché.
 - **Modelos:** cuenta declaraciones observadas por CAD/tarea, no solicitudes ni predicciones únicas. Uniform se interpreta junto con la cobertura de logs.
 - `Entrenamiento/` y `Hechos/` permanecen como contexto, fuera de los tres validadores de resultados acordados; no se contabilizan como nuevos pendientes.
 - Las tareas que desaparecieron de ECS no se declaran finalizadas únicamente por sus logs. La conservación continua de estado y las notificaciones quedan en la implementación operativa posterior.
@@ -161,7 +167,7 @@ flowchart TB
   aux -. "referencias del predictor" .-> ecs
   subgraph D["S3 · PrediccionMdP / ANO / SEMANA / CAD / UNIDAD"]
     pred["Prediccion/<br/>R01 · validar_todas_siglas v2.py<br/>Nombres GeoJSON y faltantes por hora<br/>Dos CSV locales; script sin modificar"]
-    matrix["MatricesPrediccion/<br/>R03 · validador_matrices_cloudshell.py<br/>Nombres PKL horarios y faltantes<br/>Alcance actual aceptado; sin lectura PKL"]
+    matrix["MatricesPrediccion/<br/>R03 · validador_matrices_cloudshell.py<br/>Nombres, faltantes y contenido PKL<br/>Grilla, valores y contraste; caché reanudable"]
     train["Entrenamiento/<br/>CSV Hitrate/PAI y bestModel TXT<br/>SIN validador dedicado de estas salidas"]
     opt["Optimizacion/<br/>R02 · validador_optimizacion_cloudshell.py<br/>Semana actual y siguiente; nombres y GeoJSON<br/>Prueba nacional completa: 376580 archivos"]
     hechos["Hechos/<br/>Solo ejemplos locales<br/>SIN script validador"]

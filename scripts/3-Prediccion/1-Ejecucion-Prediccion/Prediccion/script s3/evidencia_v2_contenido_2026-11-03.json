@@ -1,0 +1,165 @@
+{
+  "fecha": "2026-11-03",
+  "version": "v2-contenido-2026-11-03.1",
+  "original_intacto": {
+    "archivo": "validar_todas_siglas v2.py",
+    "sha256": "e0c49e86cf20b6deda21a2209474660474b8eff52d308fa52e6ddef3a4085613"
+  },
+  "formato": {
+    "tipo": "FeatureCollection",
+    "geometrias_observadas": [
+      "Polygon",
+      "MultiPolygon"
+    ],
+    "propiedades_contrastadas": [
+      "id_unidadbase",
+      "prediction_date",
+      "intensity_val"
+    ],
+    "CAD": "opcional; contrastado si aparece",
+    "calendario": "Se conserva la regla V2: 7 dias desde la carpeta semanal, 24 horas por dia; sin conversion horaria"
+  },
+  "fuente_generador": {
+    "imagen_digest": "sha256:83ea3bbbfef167bfa0882de5b188a6baa6a1ffef3ae327f6be1c70287b76bbc8",
+    "archivos": [
+      {
+        "ruta_imagen": "code/Sci-XCrimeGeneradorCuadrantes/prediccion_process.py",
+        "sha256": "d01fee9d81bde52efcee71028154fe6c46d611cbf3525e7e1ecea75da9bce7fe",
+        "referencias": [
+          {
+            "linea": 971,
+            "codigo": "predDateName = predictionDate.strftime(\"%Y%m%d\")+'_'+'{:04d}'.format(hour*100)"
+          },
+          {
+            "linea": 972,
+            "codigo": "nameFilePrefix = 'Prediccion_'+str(int(idBase))+'_'+predDateName"
+          },
+          {
+            "linea": 1001,
+            "codigo": "resultsPathS3+'Prediccion/'+nameFilePrefix+'.geojson',"
+          },
+          {
+            "linea": 1003,
+            "codigo": "predDateName,bucket,unique=nameFilePrefix,CAD=CAD,pred=True,mdp=True)"
+          }
+        ]
+      },
+      {
+        "ruta_imagen": "code/Sci-XCrimeGeneradorCuadrantes/scripts/prediction/predictionutilities.py",
+        "sha256": "7fb322e45c2c6098d20d4a0ee4ed67e9d0fa140acc85e05de0cd9c48d2312b99",
+        "referencias": [
+          {
+          "linea": 1385,
+          "codigo": "predic = 255.0*((predic-min(predVector))/(max(predVector)-min(predVector)))"
+          },
+          {
+            "linea": 1414,
+            "codigo": "if matCalls[j][i]!=-1:"
+          },
+          {
+            "linea": 1426,
+            "codigo": "\"intensity_val\": predic[j][i],"
+          },
+          {
+            "linea": 1427,
+            "codigo": "\"id_unidadbase\":comuna_id,"
+          },
+          {
+            "linea": 1428,
+            "codigo": "\"prediction_date\":prediction_date,"
+          },
+          {
+            "linea": 1470,
+            "codigo": "fc_2 = gpd.read_file(gj, crs=\"EPSG:4326\")#gpd.read_file(\"tmp.geojson\")"
+          },
+          {
+            "linea": 1496,
+            "codigo": "fc_2.intensity_val = fc_2.intensity_val.apply(lambda x: 0 if x<=10 else x)"
+          },
+          {
+            "linea": 1497,
+            "codigo": "fc_2 = fc_2.dissolve(by='intensity_val',aggfunc='first').reset_index(drop=False)"
+          },
+          {
+            "linea": 1530,
+            "codigo": "prediccion_geojson = geojson.dumps(fc_2)"
+          }
+        ]
+      }
+    ]
+  },
+  "muestras": [
+    {
+      "s3": "s3://pon-prod-ml-iapol/PrediccionMdP/2026/20261102/MEPER/51716/Prediccion/Prediccion_51716_20261102_0000.geojson",
+      "bytes": 54164,
+      "sha256": "525849b6330840a03e7f6bb1234785db8c6b51bae3c660a19407f7d55bb943b7",
+      "resultado": {
+        "contenido_estado": "OK",
+        "estado": "OK",
+        "geometrias_nulas": 0,
+        "anillos_invalidos": 0,
+        "coordenadas_invalidas": 0,
+        "unidad_distinta": 0,
+        "fecha_distinta": 0,
+        "cad_distinto": 0,
+        "propiedades_ausentes": 0,
+        "intensidades_invalidas": 0,
+        "intensidades_cero": 1,
+        "features": 4,
+        "tipos_geometria": "MultiPolygon:1;Polygon:3",
+        "intensidades_distintas": 4,
+        "intensidad_min": 0.0,
+        "intensidad_max": 255.0,
+        "sin_contraste": false,
+        "razon": "GeoJSON, poligonos, coordenadas, unidad, fecha e intensidades revisados"
+      }
+    },
+    {
+      "s3": "s3://pon-prod-ml-iapol/PrediccionMdP/2026/20261102/METIB/50330/Prediccion/Prediccion_50330_20261102_0000.geojson",
+      "bytes": 189852,
+      "sha256": "f2592dd127e83034662540da41deb6e1220142da054f801e72080e44da781f9d",
+      "resultado": {
+        "contenido_estado": "AVISO",
+        "estado": "AVISO",
+        "geometrias_nulas": 0,
+        "anillos_invalidos": 0,
+        "coordenadas_invalidas": 0,
+        "unidad_distinta": 0,
+        "fecha_distinta": 0,
+        "cad_distinto": 0,
+        "propiedades_ausentes": 0,
+        "intensidades_invalidas": 0,
+        "intensidades_cero": 1,
+        "features": 1,
+        "tipos_geometria": "Polygon:1",
+        "intensidades_distintas": 1,
+        "intensidad_min": 0,
+        "intensidad_max": 0,
+        "sin_contraste": true,
+        "razon": "Todas las intensidades son cero (1)"
+      }
+    }
+  ],
+  "prueba_aws": {
+    "transporte": "AWS CLI, perfil pon-prod; mismas funciones del validador, local sin boto3",
+    "solo_lectura": true,
+    "semana": "20261102",
+    "CAD": "MEPER",
+    "unidad": "51716",
+    "archivos_presentes": 168,
+    "lecturas_correctas": 5,
+    "no_evaluados_por_presupuesto": 163,
+    "horas_faltantes_segun_calendario_v2": [
+      {
+        "fecha": "20261108",
+        "horas": "2200;2300"
+      }
+    ],
+    "nota": "Hay 168 nombres observados; dos se encuentran antes del lunes de la carpeta y dos horas del domingo final faltan bajo la regla anterior. No se cambia ni se presupone otra convencion temporal."
+  },
+  "limites": [
+    "Muestras y prueba limitada por unidad; no certifican revision nacional",
+    "No mide precision estadistica ni infiere modelo Uniform",
+    "No valida topologia completa ni pertenencia al poligono oficial"
+  ]
+}

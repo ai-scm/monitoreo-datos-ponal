@@ -1,0 +1,90 @@
+{
+  "fecha": "2026-11-03",
+  "formato_observado": "open_cp.predictors.GridPredictionArray con _matrix numpy.ndarray, dtype f8, protocolo pickle 3",
+  "imagen_inspeccionada": "926162397524.dkr.ecr.us-east-1.amazonaws.com/pon-prod-xcrime-predicciones-repository@sha256:83ea3bbbfef167bfa0882de5b188a6baa6a1ffef3ae327f6be1c70287b76bbc8",
+  "referencias_generador": [
+    {
+      "archivo_imagen": "code/Sci-XCrimeGeneradorCuadrantes/prediccion_process.py",
+      "sha256_archivo": "d01fee9d81bde52efcee71028154fe6c46d611cbf3525e7e1ecea75da9bce7fe",
+      "referencias": [
+        {
+          "linea": 542,
+          "expresion": "key=resultsPathS3.replace(\"Prediccion/\",'MatricesPrediccion/')+'Prediccion_'+str(idRegion)+'_'+datePredFile+'_'+rh+'.pkl'"
+        },
+        {
+          "linea": 780,
+          "expresion": "key=resultsPathS3.replace(\"Prediccion/\",'')+'MatricesPrediccion/Turno/'+nameFilePrefix+'.pkl'"
+        },
+        {
+          "linea": 809,
+          "expresion": "key=resultsPathS3.replace(\"Prediccion/\",'')+'MatricesPrediccion/Turno/'+nameFilePrefix+'_var.pkl'"
+        },
+        {
+          "linea": 973,
+          "expresion": "key=resultsPathS3.replace(\"Prediccion/\",'')+'MatricesPrediccion/'+nameFilePrefix+'.pkl'"
+        },
+        {
+          "linea": 1420,
+          "expresion": "pathlib.Path(op.join(op.join(op.join(op.join(cur_dir,str(anio)),str(nameCAD)),str(idRegion)),\"MatricesPrediccion\")).mkdir(parents=True, exist_ok=True)"
+        },
+        {
+          "linea": 1424,
+          "expresion": "dirMatPred=op.join(op.join(op.join(op.join(cur_dir,str(anio)),str(nameCAD)),str(idRegion)),\"MatricesPrediccion\")"
+        }
+      ]
+    },
+    {
+      "archivo_imagen": "code/Sci-XCrimeGeneradorCuadrantes/scripts/optimization/mat_mng.py",
+      "sha256_archivo": "5b258bad152c437b56df30d74fbace04f3ca1000cea337a9ed18d7719adb2308",
+      "referencias": [
+        {
+          "linea": 176,
+          "expresion": "return np.where(zones_matrix == -1, -1, intensity_matrix)"
+        }
+      ]
+    },
+    {
+      "archivo_imagen": "code/Sci-XCrimeGeneradorCuadrantes/scripts/prediction2/predictionutilities.py",
+      "sha256_archivo": "a4cea51d05c04e5743d1809f77092fc40ad7133c838a61a378023c58fe2500bb",
+      "referencias": [
+        {
+          "linea": 1113,
+          "expresion": "predictBestModel.intensity_matrix[i][j]=-1"
+        }
+      ]
+    }
+  ],
+  "significado_menos_uno": "El generador asigna -1 a celdas enmascaradas/fuera de zona antes de guardar la prediccion. Se excluye de las intensidades.",
+  "muestras": [
+    {
+      "cad": "MEPER",
+      "unidad": "51716",
+      "semana": "20261102",
+      "forma": [
+        13,
+        12
+      ],
+      "resultado_contenido": "OK"
+    },
+    {
+      "cad": "METIB",
+      "unidad": "50330",
+      "semana": "20261102",
+      "forma": [
+        106,
+        101
+      ],
+      "resultado_contenido": "AVISO: intensidades constantes en celdas utilizables"
+    }
+  ],
+  "prueba_integracion_aws": {
+    "alcance": "Un listado completo de MEPER/51716 y cinco lecturas nuevas de PKL; adaptador AWS CLI local con la logica del validador.",
+    "presentes": 168,
+    "contenido_ok": 5,
+    "contenido_pendiente_por_presupuesto": 163,
+    "faltantes_segun_calendario_preexistente": 2,
+    "nota_calendario": "Hay archivos con fecha del domingo anterior y dos horas ausentes del ultimo domingo. Esta ampliacion conserva la regla horaria previa; no se determina la convencion temporal del productor.",
+    "cambios_en_aws": false
+  },
+  "limite": "Muestras y pruebas funcionales; no constituye una validacion nacional del contenido ni de la calidad predictiva."
+}

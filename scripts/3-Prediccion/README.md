@@ -43,7 +43,7 @@ al 30 de octubre de 2026. Distingue la versión vigente de los documentos histó
 | [monitor_freshness_probabilidaddelito.py](<5-Jobs and task/7. Actualidad de la tabla de probabilidades/README.txt>) | Diagnóstico opcional de la tabla de referencia; fuera de la ejecución habitual. | 1 CSV si se ejecuta. |
 | [validar_todas_siglas v2.py](<1-Ejecucion-Prediccion/Prediccion/script s3/README.md>) | Revisa nombres y horas faltantes de las predicciones GeoJSON. | 2 CSV locales. |
 | [validador_optimizacion_cloudshell.py](<2-Zonas-Atencion-Fusion/Optimizacion/README.md>) | Revisa nombres, parejas B/CP, cantidades y contenido de optimización. | 2 CSV. |
-| [validador_matrices_cloudshell.py](<3-Scripts-Adicionales/MatricesPrediccion/README.md>) | Revisa nombres y horas faltantes de las matrices PKL. | 2 CSV dentro de un ZIP local. |
+| [validador_matrices_cloudshell.py](<3-Scripts-Adicionales/MatricesPrediccion/README.md>) | Revisa nombres, horas faltantes y contenido numérico de las matrices PKL; avisa por resultados sin contraste. | 2 CSV dentro de un ZIP local; caché para continuar lecturas. |
 
 Las versiones V1 y el código de adaptación a Lambda de predicciones son material
 separado. La versión de referencia para esta lista es **V2**.
