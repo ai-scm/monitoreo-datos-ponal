@@ -10,7 +10,7 @@ correr en local por ahora.
 | SECAD: Hurto violento y homicidio (`secad-hurtos-violento-y-homicidio`) | `capa_11` |
 | SECAD: Hurto general (`secad-hurtos-general`) | `capa_12` |
 
-> **Estado:** 52 pruebas sin AWS y **ejecutado contra producción el 2026-10-28** (cuenta
+> **Estado:** 57 pruebas sin AWS y **ejecutado contra producción el 2026-10-28** (cuenta
 > `926162397524`): esquema, catálogo y consultas funcionan; una corrida completa de las 54 siglas
 > escanea ~2 MiB. Lo que esa corrida confirmó o corrigió está en "Supuestos" y "Cómo se alimentan
 > las capas".
@@ -96,6 +96,12 @@ tener casos en una semana.
 | `COORD_INVALIDA` | coordenadas nulas o fuera de lon −82…−66 / lat −5…15 (el BFF las descarta) | AVISO |
 | `HORA_INVALIDA` / `HORA_FUTURA` | `hora_caso` nula/ilegible, o > 24 h en el futuro | AVISO |
 | `DESFASE_PARTICION` | `hora_caso` cae en un día distinto al de su partición | AVISO |
+| `FUENTE_CON_DATOS_CAPA_VACIA` | la vista de origen (`pon-prod-raw-secad.v_pedido_atendido_consolidada`, la que lee el ETL) tiene ≥ 5 llamadas de la sigla en la ventana y la capa ninguna | FALLA (sigla) |
+| `CAPA_INCOMPLETA_VS_FUENTE` | un día de la ventana en que la capa tiene menos del 90 % de las llamadas de la vista de origen en todo el país | FALLA (nacional) |
+
+El contraste con la fuente se hace por defecto (una consulta más, ~3,5 GB escaneados); `--sin-fuente` lo omite. Por
+sigla se compara el total de la ventana, no día a día, porque el ETL reasigna llamadas a la sigla donde cae el punto
+(DECUN → MESOA/DESAB, DEANT → MEVAL). MEBOG no entra: sale de PremierOne, no de SECAD.
 
 Opciones del motor que usan las otras carpetas (SECAD no las activa): `dias_atipicos(…, por_dia_semana, rezago)` compara
 cada día nacional con la mediana de los mismos días de la semana (mínimo 3) y puede dejar fuera los últimos días, y
@@ -126,8 +132,9 @@ argumentos, 3 bloqueado/error AWS, 130 interrupción.
 
 ## Qué no hace
 
-- No valida el **origen** (Oracle on-prem, DMS, tablas crudas `pon-prod-raw-secad`): solo las
-  tablas que lee el mapa. Un hallazgo dice *dónde* falta el dato en la capa, no *por qué*.
+- No valida Oracle ni DMS: contrasta la capa con la vista de `pon-prod-raw-secad` que lee el ETL, así que distingue
+  "la fuente no lo tiene" de "el pipeline no lo cargó", pero no por qué falta en la fuente. Las causas investigadas
+  el 2026-10-29 están en [`informes/`](informes/).
 - No llama al BFF ni al front: no detecta fallas propias del servicio (por ejemplo, que ante un
   error de Athena responda 204 igual que ante "sin datos").
 - Un cero no prueba una falla de carga. Por eso es AVISO a nivel unidad y se compara con la

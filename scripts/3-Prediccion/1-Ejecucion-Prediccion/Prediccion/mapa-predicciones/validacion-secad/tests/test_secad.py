@@ -508,5 +508,44 @@ class Cli(unittest.TestCase):
         self.assertEqual(cm.exception.code, 2)
 
 
+class ContrasteFuente(unittest.TestCase):
+    V = vs.calcular_ventana(datetime(2026, 10, 29, 9), 7, date(2026, 10, 28))
+    R = 'secad-rinas'
+
+    def capa(self, por_sigla):
+        """por_sigla: {sigla: llamadas por dia} -> obs de una capa."""
+        return {self.R: {s: {'1': {d: vs.Acum(filas=n, llamadas=n, puntos=n) for d in self.V.dias}} for s, n in por_sigla.items()}}
+
+    def fuente(self, por_sigla):
+        return {self.R: {s: {d: n for d in self.V.dias} for s, n in por_sigla.items()}}
+
+    def test_sql_lee_la_vista_consolidada_con_la_particion_del_dia_siguiente(self):
+        sql = vs.construir_sql_fuente([date(2026, 10, 22), date(2026, 10, 28)], [self.R])
+        self.assertIn('v_pedido_atendido_consolidada', sql)
+        self.assertIn("BETWEEN DATE '2026-10-22' AND DATE '2026-10-29'", sql)
+        self.assertIn('"secad-rinas"', sql)
+
+    def test_sigla_con_fuente_y_capa_vacia_es_falla(self):
+        nov = vs.contrastar_fuente(self.fuente({'MENEV': 3, 'MECAL': 50}), self.capa({'MECAL': 50}), self.V, [self.R])
+        self.assertEqual([(n['sigla'], n['codigo'], n['estado']) for n in nov],
+                         [('MENEV', 'FUENTE_CON_DATOS_CAPA_VACIA', vs.FALLA)])
+
+    def test_reasignacion_a_otra_sigla_no_es_falla(self):
+        # DECUN atiende Soacha: la fuente las da como DECUN y la capa como MESOA; el total del pais cuadra
+        nov = vs.contrastar_fuente(self.fuente({'DECUN': 30}), self.capa({'DECUN': 10, 'MESOA': 20}), self.V, [self.R])
+        self.assertEqual(nov, [])
+
+    def test_dia_con_menos_del_90_por_ciento_es_falla_nacional(self):
+        obs = self.capa({'MECAL': 50})
+        obs[self.R]['MECAL']['1'][self.V.dias[-1]] = vs.Acum(filas=20, llamadas=20, puntos=20)
+        nov = vs.contrastar_fuente(self.fuente({'MECAL': 50}), obs, self.V, [self.R])
+        self.assertEqual([(n['nivel'], n['codigo']) for n in nov], [('NACIONAL', 'CAPA_INCOMPLETA_VS_FUENTE')])
+        self.assertIn(f'{self.V.dias[-1]} (20 de 50)', nov[0]['mensaje'])
+
+    def test_mebog_no_entra_en_el_contraste(self):
+        nov = vs.contrastar_fuente(self.fuente({'MECAL': 50}), self.capa({'MECAL': 50, 'MEBOG': 500}), self.V, [self.R])
+        self.assertEqual(nov, [])
+
+
 if __name__ == '__main__':
     unittest.main()
